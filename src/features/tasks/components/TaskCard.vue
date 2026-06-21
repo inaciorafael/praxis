@@ -25,9 +25,14 @@ const props = defineProps<Task>()
 const tags = useTagStore();
 const tasks = useTaskStore();
 const isUpdatingStatus = ref(false);
+const updatingChecklistItemIds = ref(new Set<string>());
 
 const taskTags: ComputedRef<Tag[]> = computed(() => tags.tagsByTask[props.id] ?? [])
 const isSelected = computed(() => tasks.selectedTaskId === props.id)
+
+const checklistItems = computed(() =>
+  tasks.checklistItemsByTaskId(props.id)
+);
 
 function selectTask() {
   tasks.selectTask(props.id);
@@ -45,6 +50,26 @@ async function toggleCompleted() {
   } finally {
     isUpdatingStatus.value = false;
   }
+}
+
+async function toggleChecklistItem(itemId: string, completed: boolean) {
+  if (updatingChecklistItemIds.value.has(itemId)) {
+    return;
+  }
+
+  updatingChecklistItemIds.value = new Set([...updatingChecklistItemIds.value, itemId]);
+
+  try {
+    await tasks.setChecklistItemCompleted(itemId, completed);
+  } finally {
+    const nextIds = new Set(updatingChecklistItemIds.value);
+    nextIds.delete(itemId);
+    updatingChecklistItemIds.value = nextIds;
+  }
+}
+
+function isChecklistItemUpdating(itemId: string) {
+  return updatingChecklistItemIds.value.has(itemId);
 }
 </script>
 
@@ -66,7 +91,15 @@ async function toggleCompleted() {
     @keydown.space.prevent="selectTask"
   >
     <div class="flex cursor-pointer flex-row gap-3 items-center">
+      <template v-if="checklistItems.length > 0">
+        <div class="flex flex-row gap-2">
+          <div class="bg-rose px-3 text-paper">{{ progress.completedItems }}/{{ progress.totalItems }}</div>
+          <div class="bg-sage px-3 text-paper">{{ progress.percentage }}%</div>
+        </div>
+      </template>
+
       <button
+        v-if="checklistItems.length === 0"
         type="button"
         :disabled="isUpdatingStatus"
         :aria-label="status === 'completed' ? 'Marcar tarefa como pendente' : 'Concluir tarefa'"
@@ -98,6 +131,38 @@ async function toggleCompleted() {
         <TaskTag v-bind="tag" />
       </template>
     </div>
+
+    <template v-if="checklistItems.length > 0">
+      <div v-for="item in checklistItems" :key="item.id" class="ml-5">
+        <button
+          type="button"
+          :disabled="isChecklistItemUpdating(item.id)"
+          class="flex flex-row items-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
+          :aria-label="item.status === 'completed' ? 'Marcar subtask como pendente' : 'Concluir subtask'"
+          :title="item.status === 'completed' ? 'Marcar subtask como pendente' : 'Concluir subtask'"
+          @click.stop="toggleChecklistItem(item.id, item.status !== 'completed')"
+        >
+          <div
+            :class="[
+              'h-6 w-6 rounded-md border flex items-center justify-center',
+              {
+                'bg-sage text-paper line-through': item.status === 'completed',
+              }
+            ]"
+          >
+            <Check v-if="item.status === 'completed'" :size="18" />
+          </div>
+          <span
+            :class="
+              {
+                'line-through': item.status === 'completed',
+              }
+            "
+          >{{ item.title }}</span>
+        </button>
+      </div>
+    </template>
+
 
     <span class="text-ink-soft text-body" v-if="notes">{{ notes }}</span>
 

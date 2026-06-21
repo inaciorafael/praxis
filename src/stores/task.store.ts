@@ -26,7 +26,7 @@ import type { TaskTimeline } from "@/shared/types/lifecycle";
 import type { CreateTaskInput, Task, TaskCollection, TaskListOptions, TaskListResult, TaskViewCounts, UpdateTaskInput } from "@/shared/types/task";
 import { useBadgeStore } from "@/stores/badge.store";
 import { useNotificationStore } from "@/stores/notification.store";
-import { todayLocalDate } from "@/shared/lib/tasks/task.rules";
+import { todayLocalDate, tomorrowLocalDate } from "@/shared/lib/tasks/task.rules";
 
 type TaskActiveView = "today" | "week" | "pending" | "overdue" | "upcoming" | "reminders" | "completed";
 type TaskListTarget = "myDay" | "myWeek" | "pending" | "overdue" | "upcoming" | "withReminders" | "completed";
@@ -73,7 +73,7 @@ export const useTaskStore = defineStore("tasks", {
     timelinesByTaskId: {},
     selectedTaskId: "",
     activeTaskView: "today",
-    activeWeekStartDate: todayLocalDate(),
+    activeWeekStartDate: tomorrowLocalDate(),
     createModalOpen: false,
     createContext: defaultCreateContext(),
     isReady: false,
@@ -89,6 +89,12 @@ export const useTaskStore = defineStore("tasks", {
       return this.selectedTaskId ? this.findTaskById(this.selectedTaskId) : null;
     },
 
+    checklistItemsByTaskId(taskId: string) {
+      return this.checklistItems
+        .filter((item) => item.taskId === taskId)
+        .sort((left, right) => left.sortOrder - right.sortOrder);
+    },
+
     async applyCollection(collection: TaskCollection) {
       this.tasks = collection.tasks;
       this.myDay = collection.myDay;
@@ -99,7 +105,7 @@ export const useTaskStore = defineStore("tasks", {
       this.withReminders = collection.withReminders;
       this.completed = collection.completed;
       this.checklistItems = collection.checklistItems;
-      this.viewCounts = countsFromCollection(collection);
+      this.viewCounts = countsFromCollection(collection, this.activeWeekStartDate);
       this.isReady = true;
       this.error = "";
       const notifications = useNotificationStore();
@@ -152,7 +158,7 @@ export const useTaskStore = defineStore("tasks", {
       this.timelinesByTaskId = {};
       this.selectedTaskId = "";
       this.activeTaskView = "today";
-      this.activeWeekStartDate = todayLocalDate();
+      this.activeWeekStartDate = tomorrowLocalDate();
       this.createModalOpen = false;
       this.createContext = defaultCreateContext();
       this.isReady = false;
@@ -169,7 +175,7 @@ export const useTaskStore = defineStore("tasks", {
 
     async hydrateViewCounts() {
       try {
-        this.applyViewCounts(await getTaskViewCounts());
+        this.applyViewCounts(await getTaskViewCounts(this.activeWeekStartDate));
       } catch (error) {
         this.error = error instanceof Error ? error.message : "Nao foi possivel carregar contadores de tarefas.";
       }
@@ -452,14 +458,60 @@ function defaultCreateContext(): TaskCreateContext {
   };
 }
 
-function countsFromCollection(collection: TaskCollection): Omit<TaskViewCounts, "badge"> {
+function countsFromCollection(collection: TaskCollection, weekStartDate: string): Omit<TaskViewCounts, "badge"> {
   return {
     today: collection.myDay.filter((task) => task.status === "pending").length,
-    week: collection.myWeek.length,
+    week: collection.myWeek.filter((task) => isPendingTaskInWeekBadgeScope(task, weekStartDate)).length,
     pending: collection.pending.length,
     overdue: collection.overdue.length,
     upcoming: collection.upcoming.length,
     reminders: collection.withReminders.length,
     completed: collection.completed.length,
   };
+}
+
+function isPendingTaskInWeekBadgeScope(task: Task, weekStartDate: string) {
+  if (task.status !== "pending") {
+    return false;
+  }
+
+  const weekStart = parseLocalDate(weekStartDate);
+
+  if (!weekStart) {
+    return false;
+  }
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+
+  return isDateInsideWindow(task.plannedFor, weekStart, weekEnd) || isDateInsideWindow(datePart(task.dueAt), weekStart, weekEnd);
+}
+
+function datePart(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const timezoneOffset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 10);
+}
+
+function parseLocalDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isDateInsideWindow(value: string | null, start: Date, end: Date) {
+  const date = parseLocalDate(value);
+  return Boolean(date && date >= start && date <= end);
 }

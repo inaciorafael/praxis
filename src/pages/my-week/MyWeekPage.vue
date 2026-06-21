@@ -3,11 +3,12 @@ import { computed, onMounted, ref } from "vue";
 import dayjs from "dayjs";
 
 import TaskCard from "@/features/tasks/components/TaskCard.vue";
+import { tomorrowLocalDate } from "@/shared/lib/tasks/task.rules";
 import type { Task } from "@/shared/types/task";
 import { useTaskStore } from "@/stores/task.store";
 
 const tasks = useTaskStore();
-const weekStartDate = dayjs().add(1, "day").format("YYYY-MM-DD");
+const weekStartDate = tomorrowLocalDate();
 const selectedDate = ref(weekStartDate);
 
 const weekDays = computed(() =>
@@ -90,14 +91,14 @@ function datePart(value: string | null) {
         :class="[
           'min-h-24 border px-3 py-2 text-left transition-colors',
           selectedDate === day.key
-            ? 'border-ink bg-selection text-ink'
+            ? 'border-black bg-black text-ink'
             : 'border-border bg-surface text-ink-soft hover:bg-hover hover:text-ink',
         ]"
         @click="selectDate(day.key)"
       >
-        <span class="block text-small font-semibold uppercase">{{ day.weekday }}</span>
-        <span class="block text-heading text-ink">{{ day.day }}</span>
-        <span class="block text-caption text-ink-soft">{{ day.month }}</span>
+        <span class="block text-small text-paper font-semibold uppercase">{{ day.weekday }}</span>
+        <span class="block text-heading text-paper">{{ day.day }}</span>
+        <span class="block text-caption text-paper">{{ day.month }}</span>
         <span v-if="day.count > 0" class="mt-2 inline-flex border border-border bg-paper px-2 py-0.5 text-caption text-ink">
           {{ day.count }}
         </span>

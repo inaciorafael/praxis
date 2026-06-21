@@ -266,6 +266,7 @@ pub fn get_task_view_counts(
     vault: tauri::State<'_, VaultStore>,
     badge_state: tauri::State<'_, BadgeStore>,
     today: String,
+    week_start_date: Option<String>,
 ) -> Result<TaskViewCounts, String> {
     let mut document = read_active_document(&vault)?;
     let mut tasks = read_tasks_from_document(&document)?;
@@ -287,13 +288,17 @@ pub fn get_task_view_counts(
         .iter()
         .filter(|task| is_task_in_my_day(task, &today))
         .count();
+    let week_start = week_start_date
+        .as_deref()
+        .filter(|value| parse_local_date(value).is_some())
+        .unwrap_or(&today);
     let badge = badge::set_badge_count(app, badge_state, today_count as u32)?;
 
     Ok(TaskViewCounts {
         today: today_count,
         week: tasks
             .iter()
-            .filter(|task| is_task_in_my_week(task, &today))
+            .filter(|task| is_task_in_week_badge_scope(task, week_start))
             .count(),
         pending: tasks
             .iter()
@@ -701,7 +706,7 @@ pub(crate) fn finish_task_collection(
         .count();
     let my_week = sorted_tasks
         .iter()
-        .filter(|task| is_task_in_my_week(task, today))
+        .filter(|task| is_task_in_week_view(task, today))
         .map(|task| task_view(task, &checklist_items, today))
         .collect::<Vec<_>>();
     let pending = sorted_tasks
@@ -938,6 +943,7 @@ fn is_task_in_today_view(task: &Task, today: &str) -> bool {
     planned_today || due_today || completed_today || pending_overdue
 }
 
+#[cfg(test)]
 fn is_task_in_my_week(task: &Task, today: &str) -> bool {
     if task.status == TaskStatus::Completed {
         return false;
@@ -993,6 +999,30 @@ fn is_task_in_week_view(task: &Task, today: &str) -> bool {
             .is_some_and(|date| date < today);
 
     planned_in_range || due_in_range || completed_in_range || pending_overdue
+}
+
+fn is_task_in_week_badge_scope(task: &Task, today: &str) -> bool {
+    if task.status != TaskStatus::Pending {
+        return false;
+    }
+
+    let Some(today) = parse_local_date(today) else {
+        return false;
+    };
+    let Some(week_end) = today.checked_add(time::Duration::days(6)) else {
+        return false;
+    };
+
+    task.planned_for
+        .as_deref()
+        .and_then(parse_local_date)
+        .is_some_and(|date| date >= today && date <= week_end)
+        || task
+            .due_at
+            .as_deref()
+            .and_then(date_part)
+            .and_then(parse_local_date)
+            .is_some_and(|date| date >= today && date <= week_end)
 }
 
 fn is_task_overdue(task: &Task, today: &str) -> bool {
@@ -1162,6 +1192,35 @@ mod tests {
         assert!(is_task_in_week_view(&completed_this_week, "2026-06-18"));
         assert!(!is_task_in_week_view(&completed_next_week, "2026-06-18"));
         assert!(!is_task_in_my_week(&completed_this_week, "2026-06-18"));
+    }
+
+    #[test]
+    fn week_badge_scope_counts_only_pending_tasks_inside_visible_week() {
+        let mut pending_this_week = task("pending-this-week", TaskStatus::Pending);
+        pending_this_week.planned_for = Some("2026-06-22".into());
+
+        let mut due_this_week = task("due-this-week", TaskStatus::Pending);
+        due_this_week.due_at = Some("2026-06-24T09:00:00Z".into());
+
+        let mut pending_overdue = task("pending-overdue", TaskStatus::Pending);
+        pending_overdue.due_at = Some("2026-06-20T09:00:00Z".into());
+
+        let mut completed_this_week = task("completed-this-week", TaskStatus::Completed);
+        completed_this_week.completed_at = Some("2026-06-23T18:00:00Z".into());
+
+        assert!(is_task_in_week_badge_scope(
+            &pending_this_week,
+            "2026-06-22"
+        ));
+        assert!(is_task_in_week_badge_scope(&due_this_week, "2026-06-22"));
+        assert!(!is_task_in_week_badge_scope(
+            &pending_overdue,
+            "2026-06-22"
+        ));
+        assert!(!is_task_in_week_badge_scope(
+            &completed_this_week,
+            "2026-06-22"
+        ));
     }
 
     #[test]

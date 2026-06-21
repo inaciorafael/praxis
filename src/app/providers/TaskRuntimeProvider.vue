@@ -4,7 +4,7 @@ import { useRoute } from "vue-router";
 
 import TaskCreateModal from "@/features/tasks/components/TaskCreateModal.vue";
 import { createTaskStatusScheduler } from "@/shared/lib/scheduler/task-status-scheduler";
-import { todayLocalDate } from "@/shared/lib/tasks/task.rules";
+import { todayLocalDate, tomorrowLocalDate } from "@/shared/lib/tasks/task.rules";
 import { useTaskStore } from "@/stores/task.store";
 
 const route = useRoute();
@@ -74,7 +74,7 @@ function taskViewFromRouteName(routeName: unknown) {
 
 function createContextFromRouteName(routeName: unknown) {
   const today = todayLocalDate();
-  const tomorrow = localDateFromOffset(1);
+  const tomorrow = tomorrowLocalDate();
 
   switch (routeName) {
     case "my-week":
@@ -121,13 +121,6 @@ function createContextFromRouteName(routeName: unknown) {
         dueDate: today,
       };
   }
-}
-
-function localDateFromOffset(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  const timezoneOffset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 10);
 }
 
 async function refreshAfterRuntimeWake() {

@@ -36,9 +36,7 @@ const checklistItems = computed(() => {
     return [];
   }
 
-  return tasks.checklistItems
-    .filter((item) => item.taskId === selectedTask.value?.id)
-    .sort((left, right) => left.sortOrder - right.sortOrder);
+  return tasks.checklistItemsByTaskId(selectedTask.value.id);
 });
 const canSave = computed(() => Boolean(selectedTask.value && title.value.trim() && !isSaving.value));
 
