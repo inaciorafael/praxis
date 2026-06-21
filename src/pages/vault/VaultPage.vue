@@ -2,14 +2,12 @@
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
-import { useTaskStore } from "@/stores/task.store";
 import { useVaultStore } from "@/stores/vault.store";
 import Input from "@/shared/ui/Input.vue";
 import { KeyRound } from "@lucide/vue";
 import BaseButton from "@/shared/ui/BaseButton.vue";
 
 const router = useRouter();
-const tasks = useTaskStore();
 const vault = useVaultStore();
 
 const dataFilePath = ref("");
@@ -30,10 +28,6 @@ watch(
   },
   { immediate: true },
 );
-
-function useSuggestedDataFilePath() {
-  dataFilePath.value = vault.suggestedPath;
-}
 
 function validateCurrentDataFile() {
   void vault.validate(dataFilePath.value);
@@ -60,7 +54,6 @@ async function enterApp(opened: boolean) {
     return;
   }
 
-  await tasks.hydrate();
   await router.replace({ name: "today" });
 }
 

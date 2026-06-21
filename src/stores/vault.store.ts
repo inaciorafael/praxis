@@ -31,6 +31,8 @@ export const useVaultStore = defineStore("vault", {
     activeDataFilePath: null,
     fileId: null,
     schemaVersion: null,
+    dataFileUpdatedAt: null,
+    dataFileModifiedAt: null,
     deviceId: "",
     credentialSaved: false,
     autoUnlockError: null,
@@ -49,6 +51,8 @@ export const useVaultStore = defineStore("vault", {
       this.activeDataFilePath = status.activeDataFilePath;
       this.fileId = status.fileId;
       this.schemaVersion = status.schemaVersion;
+      this.dataFileUpdatedAt = status.dataFileUpdatedAt;
+      this.dataFileModifiedAt = status.dataFileModifiedAt;
       this.deviceId = status.deviceId;
       this.credentialSaved = status.credentialSaved;
       this.autoUnlockError = status.autoUnlockError;

@@ -17,8 +17,8 @@ export async function listTodayTasks(options?: TaskListOptions) {
   return invoke<TaskListResult>("list_today_tasks", { today: todayLocalDate(), options });
 }
 
-export async function listWeekTasks(options?: TaskListOptions) {
-  return invoke<TaskListResult>("list_week_tasks", { today: todayLocalDate(), options });
+export async function listWeekTasks(options?: TaskListOptions, startDate = todayLocalDate()) {
+  return invoke<TaskListResult>("list_week_tasks", { today: startDate, options });
 }
 
 export async function listPendingTasks(options?: TaskListOptions) {

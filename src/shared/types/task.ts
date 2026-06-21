@@ -17,6 +17,7 @@ export type Task = {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  isOverdue: boolean;
   progress: TaskProgress;
 };
 

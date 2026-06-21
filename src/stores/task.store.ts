@@ -26,6 +26,16 @@ import type { TaskTimeline } from "@/shared/types/lifecycle";
 import type { CreateTaskInput, Task, TaskCollection, TaskListOptions, TaskListResult, TaskViewCounts, UpdateTaskInput } from "@/shared/types/task";
 import { useBadgeStore } from "@/stores/badge.store";
 import { useNotificationStore } from "@/stores/notification.store";
+import { todayLocalDate } from "@/shared/lib/tasks/task.rules";
+
+type TaskActiveView = "today" | "week" | "pending" | "overdue" | "upcoming" | "reminders" | "completed";
+type TaskListTarget = "myDay" | "myWeek" | "pending" | "overdue" | "upcoming" | "withReminders" | "completed";
+type TaskCreateContext = {
+  source: TaskActiveView;
+  label: string;
+  plannedFor: string | null;
+  dueDate: string | null;
+};
 
 type TaskStoreState = {
   tasks: Task[];
@@ -40,6 +50,10 @@ type TaskStoreState = {
   viewCounts: Omit<TaskViewCounts, "badge">;
   timelinesByTaskId: Record<string, TaskTimeline>;
   selectedTaskId: string;
+  activeTaskView: TaskActiveView;
+  activeWeekStartDate: string;
+  createModalOpen: boolean;
+  createContext: TaskCreateContext;
   isReady: boolean;
   error: string;
 };
@@ -58,11 +72,23 @@ export const useTaskStore = defineStore("tasks", {
     viewCounts: emptyViewCounts(),
     timelinesByTaskId: {},
     selectedTaskId: "",
+    activeTaskView: "today",
+    activeWeekStartDate: todayLocalDate(),
+    createModalOpen: false,
+    createContext: defaultCreateContext(),
     isReady: false,
     error: "",
   }),
 
   actions: {
+    findTaskById(taskId: string) {
+      return allKnownTasks(this).find((task) => task.id === taskId) ?? null;
+    },
+
+    getSelectedTask() {
+      return this.selectedTaskId ? this.findTaskById(this.selectedTaskId) : null;
+    },
+
     async applyCollection(collection: TaskCollection) {
       this.tasks = collection.tasks;
       this.myDay = collection.myDay;
@@ -88,7 +114,7 @@ export const useTaskStore = defineStore("tasks", {
       );
     },
 
-    async applyTaskList(result: TaskListResult, target: "myDay" | "myWeek" | "pending" | "overdue" | "upcoming" | "withReminders" | "completed") {
+    async applyTaskList(result: TaskListResult, target: TaskListTarget) {
       this[target] = result.tasks;
       this.checklistItems = mergeChecklistItemsForTasks(this.checklistItems, result.checklistItems, result.tasks.map((task) => task.id));
       this.isReady = true;
@@ -125,6 +151,10 @@ export const useTaskStore = defineStore("tasks", {
       this.viewCounts = emptyViewCounts();
       this.timelinesByTaskId = {};
       this.selectedTaskId = "";
+      this.activeTaskView = "today";
+      this.activeWeekStartDate = todayLocalDate();
+      this.createModalOpen = false;
+      this.createContext = defaultCreateContext();
       this.isReady = false;
       this.error = "";
     },
@@ -153,9 +183,11 @@ export const useTaskStore = defineStore("tasks", {
       }
     },
 
-    async hydrateWeek(options?: TaskListOptions) {
+    async hydrateWeek(options?: TaskListOptions, startDate?: string) {
       try {
-        await this.applyTaskList(await listWeekTasks(options), "myWeek");
+        const resolvedStartDate = startDate ?? this.activeWeekStartDate;
+        this.activeWeekStartDate = resolvedStartDate;
+        await this.applyTaskList(await listWeekTasks(options, resolvedStartDate), "myWeek");
       } catch (error) {
         this.error = error instanceof Error ? error.message : "Nao foi possivel carregar tarefas da semana.";
       }
@@ -199,6 +231,80 @@ export const useTaskStore = defineStore("tasks", {
       } catch (error) {
         this.error = error instanceof Error ? error.message : "Nao foi possivel carregar tarefas concluidas.";
       }
+    },
+
+    setActiveTaskView(view: TaskActiveView) {
+      this.activeTaskView = view;
+    },
+
+    setCreateContext(context: Partial<TaskCreateContext>) {
+      this.createContext = {
+        ...this.createContext,
+        ...context,
+      };
+    },
+
+    openCreateTaskModal(context?: Partial<TaskCreateContext>) {
+      if (context) {
+        this.setCreateContext(context);
+      }
+
+      this.createModalOpen = true;
+    },
+
+    closeCreateTaskModal() {
+      this.createModalOpen = false;
+    },
+
+    getSchedulerTasks() {
+      return this.getActiveTaskList();
+    },
+
+    getActiveTaskList(): Task[] {
+      switch (this.activeTaskView) {
+        case "today":
+          return this.myDay;
+        case "week":
+          return this.myWeek;
+        case "pending":
+          return this.pending;
+        case "overdue":
+          return this.overdue;
+        case "upcoming":
+          return this.upcoming;
+        case "reminders":
+          return this.withReminders;
+        case "completed":
+          return this.completed;
+      }
+    },
+
+    async refreshActiveTaskView() {
+      switch (this.activeTaskView) {
+        case "today":
+          await this.hydrateToday({ limit: 100 });
+          break;
+        case "week":
+          await this.hydrateWeek({ limit: 150 }, this.activeWeekStartDate);
+          break;
+        case "pending":
+          await this.hydratePending({ limit: 150 });
+          break;
+        case "overdue":
+          await this.hydrateOverdue({ limit: 150 });
+          break;
+        case "upcoming":
+          await this.hydrateUpcoming({ limit: 150 });
+          break;
+        case "reminders":
+          await this.hydrateWithReminders({ limit: 150 });
+          break;
+        case "completed":
+          await this.hydrateCompleted({ limit: 150 });
+          break;
+      }
+
+      await this.hydrateViewCounts();
     },
 
     async create(input: CreateTaskInput) {
@@ -288,8 +394,31 @@ export const useTaskStore = defineStore("tasks", {
     selectTask(taskId: string) {
       this.selectedTaskId = taskId;
     },
+
+    clearSelectedTask() {
+      this.selectedTaskId = "";
+    },
   },
 });
+
+function allKnownTasks(state: TaskStoreState): Task[] {
+  const tasksById = new Map<string, Task>();
+
+  for (const task of [
+    ...state.tasks,
+    ...state.myDay,
+    ...state.myWeek,
+    ...state.pending,
+    ...state.overdue,
+    ...state.upcoming,
+    ...state.withReminders,
+    ...state.completed,
+  ]) {
+    tasksById.set(task.id, task);
+  }
+
+  return [...tasksById.values()];
+}
 
 function mergeChecklistItemsForTasks(existing: ChecklistItem[], incoming: ChecklistItem[], taskIds: string[]) {
   const refreshedTaskIds = new Set(taskIds);
@@ -312,9 +441,20 @@ function emptyViewCounts(): Omit<TaskViewCounts, "badge"> {
   };
 }
 
+function defaultCreateContext(): TaskCreateContext {
+  const today = todayLocalDate();
+
+  return {
+    source: "today",
+    label: "Meu dia",
+    plannedFor: today,
+    dueDate: today,
+  };
+}
+
 function countsFromCollection(collection: TaskCollection): Omit<TaskViewCounts, "badge"> {
   return {
-    today: collection.myDay.length,
+    today: collection.myDay.filter((task) => task.status === "pending").length,
     week: collection.myWeek.length,
     pending: collection.pending.length,
     overdue: collection.overdue.length,

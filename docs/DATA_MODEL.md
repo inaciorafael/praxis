@@ -540,11 +540,14 @@ statuses that belong to today:
 
 Sort order:
 
-1. pending tasks with the nearest actionable date/time
-2. date-only tasks for the same day after tasks with explicit times
-3. tasks with later dates
-4. tasks without actionable dates
-5. completed tasks only in completed/all views, sorted by most recent completion
+1. pending overdue tasks
+2. pending tasks with `due_at`, from the nearest date/time to the farthest
+3. pending tasks without `due_at`, sorted by `created_at`
+4. completed tasks, sorted by most recent completion
+
+`due_at` is the official ordering field for task urgency. `reminder_at` is for notification
+delivery and reminder filters. `planned_for` is for view membership, such as Meu Dia and
+Minha Semana. The UI should render backend results in the returned order.
 
 ### Badge Count
 
@@ -594,17 +597,19 @@ Includes all tasks where:
 status = 'pending'
 ```
 
-Sort by nearest actionable date/time.
+Sort by the official task order: overdue first, then nearest `due_at`, then pending
+without `due_at` by `created_at`, then completed if the endpoint includes them.
 
 ### Overdue
 
 Includes pending tasks where:
 
 ```text
-due_at date < today
+due_at < now
 ```
 
-Sort by nearest actionable date/time.
+Sort by the official task order. Since this endpoint only returns overdue pending tasks,
+older due dates appear first.
 
 ### Upcoming
 
@@ -614,7 +619,8 @@ Includes pending tasks where:
 planned_for > today OR due_at date > today
 ```
 
-Sort by nearest actionable date/time.
+Sort by the official task order. Future tasks with `due_at` appear before tasks that are
+only planned through `planned_for`.
 
 This endpoint is intentionally narrow: it means "pending tasks scheduled for a future
 local date". If the product language changes later, this can be renamed to
@@ -628,7 +634,8 @@ Includes pending tasks where:
 reminder_at IS NOT NULL
 ```
 
-Sort by nearest actionable date/time.
+Sort by the official task order. A reminder does not outrank a due date; it only qualifies
+the task for this reminder-focused endpoint.
 
 ### Tag Filter
 

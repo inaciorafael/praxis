@@ -55,6 +55,7 @@ pub struct TaskView {
     completed_at: Option<String>,
     created_at: String,
     updated_at: String,
+    is_overdue: bool,
     progress: TaskProgress,
 }
 
@@ -691,43 +692,47 @@ pub(crate) fn finish_task_collection(
     let sorted_tasks = sorted_tasks_by_action_time(&tasks);
     let my_day = sorted_tasks
         .iter()
-        .filter(|task| is_task_in_my_day(task, today))
-        .map(|task| task_view(task, &checklist_items))
+        .filter(|task| is_task_in_today_view(task, today))
+        .map(|task| task_view(task, &checklist_items, today))
         .collect::<Vec<_>>();
+    let badge_count = sorted_tasks
+        .iter()
+        .filter(|task| is_task_in_my_day(task, today))
+        .count();
     let my_week = sorted_tasks
         .iter()
         .filter(|task| is_task_in_my_week(task, today))
-        .map(|task| task_view(task, &checklist_items))
+        .map(|task| task_view(task, &checklist_items, today))
         .collect::<Vec<_>>();
     let pending = sorted_tasks
         .iter()
         .filter(|task| task.status == TaskStatus::Pending)
-        .map(|task| task_view(task, &checklist_items))
+        .map(|task| task_view(task, &checklist_items, today))
         .collect::<Vec<_>>();
     let overdue = sorted_tasks
         .iter()
         .filter(|task| is_task_overdue(task, today))
-        .map(|task| task_view(task, &checklist_items))
+        .map(|task| task_view(task, &checklist_items, today))
         .collect::<Vec<_>>();
     let upcoming = sorted_tasks
         .iter()
         .filter(|task| is_task_upcoming(task, today))
-        .map(|task| task_view(task, &checklist_items))
+        .map(|task| task_view(task, &checklist_items, today))
         .collect::<Vec<_>>();
     let with_reminders = sorted_tasks
         .iter()
         .filter(|task| task.status == TaskStatus::Pending && task.reminder_at.is_some())
-        .map(|task| task_view(task, &checklist_items))
+        .map(|task| task_view(task, &checklist_items, today))
         .collect::<Vec<_>>();
     let completed = sorted_tasks
         .iter()
         .filter(|task| task.status == TaskStatus::Completed)
-        .map(|task| task_view(task, &checklist_items))
+        .map(|task| task_view(task, &checklist_items, today))
         .collect::<Vec<_>>();
-    let badge = badge::set_badge_count(app, badge_state, my_day.len() as u32)?;
+    let badge = badge::set_badge_count(app, badge_state, badge_count as u32)?;
     let task_views = sorted_tasks
         .iter()
-        .map(|task| task_view(task, &checklist_items))
+        .map(|task| task_view(task, &checklist_items, today))
         .collect::<Vec<_>>();
 
     Ok(TaskCollection {
@@ -797,7 +802,7 @@ fn list_task_result(
         .collect::<Vec<_>>();
     let task_views = selected_tasks
         .iter()
-        .map(|task| task_view(task, &selected_checklist_items))
+        .map(|task| task_view(task, &selected_checklist_items, &today))
         .collect::<Vec<_>>();
     let badge_count = sorted_tasks
         .iter()
@@ -824,7 +829,7 @@ fn paginate_tasks(tasks: Vec<Task>, options: Option<&TaskListOptions>) -> Vec<Ta
     }
 }
 
-fn task_view(task: &Task, checklist_items: &[ChecklistItem]) -> TaskView {
+fn task_view(task: &Task, checklist_items: &[ChecklistItem], today: &str) -> TaskView {
     TaskView {
         id: task.id.clone(),
         title: task.title.clone(),
@@ -838,6 +843,7 @@ fn task_view(task: &Task, checklist_items: &[ChecklistItem]) -> TaskView {
         completed_at: task.completed_at.clone(),
         created_at: task.created_at.clone(),
         updated_at: task.updated_at.clone(),
+        is_overdue: is_task_overdue(task, today),
         progress: checklist::progress_for_task(
             checklist_items,
             &task.id,
@@ -847,21 +853,25 @@ fn task_view(task: &Task, checklist_items: &[ChecklistItem]) -> TaskView {
 }
 
 fn sorted_tasks_by_action_time(tasks: &[Task]) -> Vec<Task> {
+    sorted_tasks_by_action_time_at(tasks, now_timestamp())
+}
+
+fn sorted_tasks_by_action_time_at(tasks: &[Task], now: i128) -> Vec<Task> {
     let mut sorted = tasks.to_vec();
 
-    sorted.sort_by(|left, right| compare_tasks_by_action_time(left, right));
+    sorted.sort_by(|left, right| compare_tasks_by_action_time_at(left, right, now));
     sorted
 }
 
-fn compare_tasks_by_action_time(left: &Task, right: &Task) -> std::cmp::Ordering {
-    let left_completed = left.status == TaskStatus::Completed;
-    let right_completed = right.status == TaskStatus::Completed;
+fn compare_tasks_by_action_time_at(left: &Task, right: &Task, now: i128) -> std::cmp::Ordering {
+    let left_bucket = task_sort_bucket(left, now);
+    let right_bucket = task_sort_bucket(right, now);
 
-    if left_completed != right_completed {
-        return left_completed.cmp(&right_completed);
+    if left_bucket != right_bucket {
+        return left_bucket.cmp(&right_bucket);
     }
 
-    if left_completed && right_completed {
+    if left.status == TaskStatus::Completed && right.status == TaskStatus::Completed {
         return task_completed_timestamp(right)
             .cmp(&task_completed_timestamp(left))
             .then(right.updated_at.cmp(&left.updated_at))
@@ -869,27 +879,31 @@ fn compare_tasks_by_action_time(left: &Task, right: &Task) -> std::cmp::Ordering
             .then(left.id.cmp(&right.id));
     }
 
-    task_action_timestamp(left)
-        .cmp(&task_action_timestamp(right))
-        .then(left.created_at.cmp(&right.created_at))
+    task_due_timestamp(left)
+        .cmp(&task_due_timestamp(right))
+        .then(task_created_timestamp(left).cmp(&task_created_timestamp(right)))
         .then(left.title.cmp(&right.title))
         .then(left.id.cmp(&right.id))
 }
 
-fn task_action_timestamp(task: &Task) -> i128 {
-    [
-        task.due_at.as_deref().and_then(parse_instant_timestamp),
-        task.reminder_at
-            .as_deref()
-            .and_then(parse_instant_timestamp),
-        task.planned_for
-            .as_deref()
-            .and_then(parse_local_date_end_timestamp),
-    ]
-    .into_iter()
-    .flatten()
-    .min()
-    .unwrap_or(i128::MAX)
+fn task_sort_bucket(task: &Task, now: i128) -> u8 {
+    if task.status == TaskStatus::Completed {
+        return 3;
+    }
+
+    match task_due_timestamp(task) {
+        Some(due_at) if due_at < now => 0,
+        Some(_) => 1,
+        None => 2,
+    }
+}
+
+fn task_due_timestamp(task: &Task) -> Option<i128> {
+    task.due_at.as_deref().and_then(parse_instant_timestamp)
+}
+
+fn task_created_timestamp(task: &Task) -> i128 {
+    parse_instant_timestamp(&task.created_at).unwrap_or(i128::MAX)
 }
 
 fn task_completed_timestamp(task: &Task) -> i128 {
@@ -982,6 +996,18 @@ fn is_task_in_week_view(task: &Task, today: &str) -> bool {
 }
 
 fn is_task_overdue(task: &Task, today: &str) -> bool {
+    is_task_overdue_at(task, today, now_timestamp())
+}
+
+fn is_task_overdue_at(task: &Task, today: &str, now: i128) -> bool {
+    if task.status != TaskStatus::Pending {
+        return false;
+    }
+
+    if let Some(due_at) = task_due_timestamp(task) {
+        return due_at < now;
+    }
+
     task.status == TaskStatus::Pending
         && task
             .due_at
@@ -1029,11 +1055,8 @@ fn parse_instant_timestamp(value: &str) -> Option<i128> {
         .map(|value| value.unix_timestamp_nanos())
 }
 
-fn parse_local_date_end_timestamp(value: &str) -> Option<i128> {
-    parse_local_date(value)?
-        .with_hms(23, 59, 59)
-        .ok()
-        .map(|value| value.assume_utc().unix_timestamp_nanos())
+fn now_timestamp() -> i128 {
+    OffsetDateTime::now_utc().unix_timestamp_nanos()
 }
 
 #[cfg(test)]
@@ -1165,43 +1188,80 @@ mod tests {
     }
 
     #[test]
+    fn task_view_derives_overdue_state() {
+        let mut overdue = task("overdue", TaskStatus::Pending);
+        overdue.due_at = Some("2026-06-17T09:00:00Z".into());
+
+        let mut completed_overdue = task("completed-overdue", TaskStatus::Completed);
+        completed_overdue.due_at = Some("2026-06-17T09:00:00Z".into());
+
+        assert!(task_view(&overdue, &[], "2026-06-18").is_overdue);
+        assert!(!task_view(&completed_overdue, &[], "2026-06-18").is_overdue);
+    }
+
+    #[test]
+    fn overdue_state_respects_due_time_on_current_day() {
+        let now = parse_instant_timestamp("2026-06-18T12:00:00Z").unwrap();
+
+        let mut earlier_today = task("earlier-today", TaskStatus::Pending);
+        earlier_today.due_at = Some("2026-06-18T09:00:00Z".into());
+
+        let mut later_today = task("later-today", TaskStatus::Pending);
+        later_today.due_at = Some("2026-06-18T18:00:00Z".into());
+
+        assert!(is_task_overdue_at(&earlier_today, "2026-06-18", now));
+        assert!(!is_task_overdue_at(&later_today, "2026-06-18", now));
+    }
+
+    #[test]
     fn sorts_tasks_by_nearest_action_date_and_time() {
-        let mut due_late = task("due-late", TaskStatus::Pending);
-        due_late.title = "C".into();
-        due_late.due_at = Some("2026-06-18T16:00:00Z".into());
-        due_late.created_at = "2026-06-18T00:03:00Z".into();
+        let now = parse_instant_timestamp("2026-06-18T12:00:00Z").unwrap();
 
-        let mut date_only_today = task("date-only", TaskStatus::Pending);
-        date_only_today.title = "D".into();
-        date_only_today.planned_for = Some("2026-06-18".into());
-        date_only_today.created_at = "2026-06-18T00:04:00Z".into();
+        let mut overdue_old = task("overdue-old", TaskStatus::Pending);
+        overdue_old.title = "A".into();
+        overdue_old.due_at = Some("2026-06-16T09:00:00Z".into());
+        overdue_old.created_at = "2026-06-18T00:01:00Z".into();
 
-        let mut due_early = task("due-early", TaskStatus::Pending);
-        due_early.title = "B".into();
-        due_early.due_at = Some("2026-06-18T08:00:00Z".into());
-        due_early.created_at = "2026-06-18T00:02:00Z".into();
+        let mut overdue_recent = task("overdue-recent", TaskStatus::Pending);
+        overdue_recent.title = "B".into();
+        overdue_recent.due_at = Some("2026-06-18T08:00:00Z".into());
+        overdue_recent.created_at = "2026-06-18T00:02:00Z".into();
 
-        let mut reminder_early = task("reminder-early", TaskStatus::Pending);
-        reminder_early.title = "A".into();
-        reminder_early.reminder_at = Some("2026-06-18T07:30:00Z".into());
-        reminder_early.created_at = "2026-06-18T00:01:00Z".into();
+        let mut due_soon = task("due-soon", TaskStatus::Pending);
+        due_soon.title = "C".into();
+        due_soon.due_at = Some("2026-06-18T13:00:00Z".into());
+        due_soon.created_at = "2026-06-18T00:03:00Z".into();
 
-        let mut future = task("future", TaskStatus::Pending);
-        future.title = "E".into();
-        future.planned_for = Some("2026-06-19".into());
-        future.created_at = "2026-06-18T00:05:00Z".into();
+        let mut due_later = task("due-later", TaskStatus::Pending);
+        due_later.title = "D".into();
+        due_later.due_at = Some("2026-06-19T09:00:00Z".into());
+        due_later.created_at = "2026-06-18T00:04:00Z".into();
+
+        let mut no_due_old = task("no-due-old", TaskStatus::Pending);
+        no_due_old.title = "E".into();
+        no_due_old.reminder_at = Some("2026-06-18T07:30:00Z".into());
+        no_due_old.created_at = "2026-06-10T00:00:00Z".into();
+
+        let mut no_due_new = task("no-due-new", TaskStatus::Pending);
+        no_due_new.title = "F".into();
+        no_due_new.planned_for = Some("2026-06-18".into());
+        no_due_new.created_at = "2026-06-17T00:00:00Z".into();
 
         let mut completed = task("completed", TaskStatus::Completed);
         completed.completed_at = Some("2026-06-18T20:00:00Z".into());
 
-        let sorted = sorted_tasks_by_action_time(&vec![
-            future,
-            completed,
-            date_only_today,
-            due_late,
-            reminder_early,
-            due_early,
-        ])
+        let sorted = sorted_tasks_by_action_time_at(
+            &vec![
+                no_due_new,
+                due_later,
+                completed,
+                overdue_recent,
+                no_due_old,
+                due_soon,
+                overdue_old,
+            ],
+            now,
+        )
         .into_iter()
         .map(|task| task.id)
         .collect::<Vec<_>>();
@@ -1209,14 +1269,37 @@ mod tests {
         assert_eq!(
             sorted,
             vec![
-                "reminder-early",
-                "due-early",
-                "due-late",
-                "date-only",
-                "future",
+                "overdue-old",
+                "overdue-recent",
+                "due-soon",
+                "due-later",
+                "no-due-old",
+                "no-due-new",
                 "completed"
             ]
         );
+    }
+
+    #[test]
+    fn completed_tasks_stay_last_and_use_recent_completion_first() {
+        let now = parse_instant_timestamp("2026-06-18T12:00:00Z").unwrap();
+
+        let mut pending = task("pending", TaskStatus::Pending);
+        pending.created_at = "2026-06-10T00:00:00Z".into();
+
+        let mut completed_old = task("completed-old", TaskStatus::Completed);
+        completed_old.completed_at = Some("2026-06-17T20:00:00Z".into());
+
+        let mut completed_recent = task("completed-recent", TaskStatus::Completed);
+        completed_recent.completed_at = Some("2026-06-18T20:00:00Z".into());
+
+        let sorted =
+            sorted_tasks_by_action_time_at(&vec![completed_old, pending, completed_recent], now)
+                .into_iter()
+                .map(|task| task.id)
+                .collect::<Vec<_>>();
+
+        assert_eq!(sorted, vec!["pending", "completed-recent", "completed-old"]);
     }
 
     #[test]

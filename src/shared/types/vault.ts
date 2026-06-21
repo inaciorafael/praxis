@@ -19,6 +19,8 @@ export type VaultStatus = {
   activeDataFilePath: string | null;
   fileId: string | null;
   schemaVersion: number | null;
+  dataFileUpdatedAt: string | null;
+  dataFileModifiedAt: string | null;
   deviceId: string;
   credentialSaved: boolean;
   autoUnlockError: string | null;

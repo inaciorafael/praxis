@@ -20,6 +20,8 @@ export type VaultHealth = {
   selectedDataFilePath: string | null;
   fileId: string | null;
   schemaVersion: number | null;
+  dataFileUpdatedAt: string | null;
+  dataFileModifiedAt: string | null;
   credentialSaved: boolean;
   autoUnlockError: string | null;
 };

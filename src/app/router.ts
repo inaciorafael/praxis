@@ -2,8 +2,6 @@ import { createRouter, createWebHashHistory } from "vue-router";
 
 import TodayPage from "@/pages/today/TodayPage.vue";
 import VaultPage from "@/pages/vault/VaultPage.vue";
-import { useTagStore } from "@/stores/tag.store";
-import { useTaskStore } from "@/stores/task.store";
 import { useVaultStore } from "@/stores/vault.store";
 import PublicLayout from "./layouts/PublicLayout.vue";
 import AppLayout from "./layouts/AppLayout.vue";
@@ -97,12 +95,7 @@ router.beforeEach(async (to) => {
   }
 
   if (to.name === "vault" && vault.active) {
-    await Promise.all([useTaskStore().hydrateToday(), useTagStore().hydrate()]);
     return { name: "today" };
-  }
-
-  if (to.meta.requiresVault) {
-    await Promise.all([useTaskStore().hydrateToday(), useTagStore().hydrate()]);
   }
 
   return true;

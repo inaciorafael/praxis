@@ -60,6 +60,8 @@ pub struct VaultHealth {
     selected_data_file_path: Option<String>,
     file_id: Option<String>,
     schema_version: Option<u32>,
+    data_file_updated_at: Option<String>,
+    data_file_modified_at: Option<String>,
     credential_saved: bool,
     auto_unlock_error: Option<String>,
 }
@@ -156,6 +158,8 @@ pub fn get_app_health(
             selected_data_file_path: vault_status.selected_data_file_path,
             file_id: vault_status.file_id,
             schema_version: vault_status.schema_version,
+            data_file_updated_at: vault_status.data_file_updated_at,
+            data_file_modified_at: vault_status.data_file_modified_at,
             credential_saved: vault_status.credential_saved,
             auto_unlock_error: vault_status.auto_unlock_error,
         },

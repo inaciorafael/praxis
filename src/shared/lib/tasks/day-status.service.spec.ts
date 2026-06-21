@@ -73,6 +73,7 @@ function task(overrides: Partial<Task> = {}): Task {
     completedAt: overrides.completedAt ?? null,
     createdAt: overrides.createdAt ?? "2026-06-18T12:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-06-18T12:00:00.000Z",
+    isOverdue: overrides.isOverdue ?? false,
     progress: overrides.progress ?? {
       totalItems: 0,
       completedItems: overrides.status === "completed" ? 1 : 0,

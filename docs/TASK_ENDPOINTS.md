@@ -187,7 +187,7 @@ Inclui apenas:
 
 ```text
 status = pending
-dueAt date < today
+dueAt < now
 ```
 
 ### listUpcomingTasks()
@@ -297,11 +297,17 @@ O backend Rust ordena as tasks antes de retornar.
 
 Regras:
 
-- pendentes aparecem antes de concluidas
-- pendentes sao ordenadas pela data/hora mais proxima entre `dueAt`, `reminderAt` e `plannedFor`
-- `plannedFor` sem hora e tratado como fim do dia
-- tasks sem data acionavel aparecem depois das agendadas
-- concluidas sao ordenadas por conclusao mais recente
+- pendentes vencidas aparecem primeiro
+- pendentes com `dueAt` futuro aparecem depois, da data/hora mais proxima para a mais distante
+- pendentes sem `dueAt` aparecem depois das tasks com vencimento, ordenadas por `createdAt`
+- concluidas aparecem por ultimo, ordenadas por conclusao mais recente
+
+Observacoes:
+
+- `dueAt` e o campo oficial de vencimento e manda na prioridade da lista
+- `reminderAt` nao muda a ordem principal; ele serve para notificacao e filtros de lembrete
+- `plannedFor` nao muda a ordem principal; ele serve para pertencer ao Meu Dia/Minha Semana
+- a UI deve renderizar na ordem recebida da API, sem reordenar localmente
 
 ## Badge
 
@@ -318,6 +324,7 @@ Conta:
 - pendentes planejadas para hoje
 - pendentes com vencimento hoje
 - pendentes vencidas antes de hoje
+- pendentes cujo horario de vencimento de hoje ja passou
 
 Nao conta:
 

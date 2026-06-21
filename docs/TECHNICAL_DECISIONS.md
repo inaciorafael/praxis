@@ -163,10 +163,11 @@ Task ordering rule:
 - `list_upcoming_tasks` means pending tasks scheduled for a future local date.
 - Badge counting remains a separate pending-only rule: pending tasks planned for today, due today, or overdue.
 - Do not duplicate or override the default order in page components unless a user-selected sort mode exists.
-- Pending task lists sort by nearest actionable date/time.
-- The actionable timestamp is the earliest of `dueAt`, `reminderAt`, and `plannedFor`.
-- `plannedFor` is date-only and sorts as the end of that day, so explicit due/reminder times appear first.
-- Tasks without actionable dates sort after scheduled tasks.
+- Pending task lists sort by the official urgency order: overdue first, then nearest `dueAt`, then tasks without `dueAt` by `createdAt`.
+- `dueAt` is the only field that defines due urgency and overdue state.
+- `reminderAt` is for notifications and reminder filters; it must not outrank a due date.
+- `plannedFor` is for view membership, such as Meu Dia and Minha Semana; it must not outrank a due date.
+- Tasks without `dueAt` sort after due tasks.
 - Completed tasks sort after pending tasks in all-task collections and by most recent `completedAt` in completed collections.
 
 ## 7. Minimal Organization Model

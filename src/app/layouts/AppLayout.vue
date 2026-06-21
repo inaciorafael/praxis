@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
+import TaskRuntimeProvider from '@/app/providers/TaskRuntimeProvider.vue';
 import AppAside from '../shell/AppAside.vue';
+import TaskEditorPanel from '@/features/tasks/components/TaskEditorPanel.vue';
 import { useTagStore } from '@/stores/tag.store';
+import { useTaskStore } from '@/stores/task.store';
 
 const tags = useTagStore()
+const tasks = useTaskStore()
+const hasSelectedTask = computed(() => Boolean(tasks.selectedTaskId))
 
 onMounted(async () => {
   if (!tags.isReady) {
@@ -19,8 +24,15 @@ onMounted(async () => {
       <AppAside />
     </aside>
 
-    <main class="h-screen p-10 overflow-y-auto col-span-10 bg-paper">
-      <RouterView />
+    <main :class="[
+      'h-screen overflow-y-auto bg-paper p-10',
+      hasSelectedTask ? 'col-span-7' : 'col-span-10'
+    ]">
+      <TaskRuntimeProvider>
+        <RouterView />
+      </TaskRuntimeProvider>
     </main>
+
+    <TaskEditorPanel v-if="hasSelectedTask" class="col-span-3" />
   </div>
 </template>

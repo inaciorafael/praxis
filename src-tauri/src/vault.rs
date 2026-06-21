@@ -100,6 +100,8 @@ pub struct VaultStatus {
     pub(crate) active_data_file_path: Option<String>,
     pub(crate) file_id: Option<String>,
     pub(crate) schema_version: Option<u32>,
+    pub(crate) data_file_updated_at: Option<String>,
+    pub(crate) data_file_modified_at: Option<String>,
     pub(crate) device_id: String,
     pub(crate) credential_saved: bool,
     pub(crate) auto_unlock_error: Option<String>,
@@ -401,6 +403,7 @@ fn unlock_data_file(
 
 pub(crate) fn vault_status(app: &AppHandle, state: &VaultStore) -> Result<VaultStatus, String> {
     let settings = load_settings(app)?;
+    let selected_data_file_path = settings.selected_data_file_path.clone();
     let (active, auto_unlock_error) = state
         .0
         .lock()
@@ -412,22 +415,39 @@ pub(crate) fn vault_status(app: &AppHandle, state: &VaultStore) -> Result<VaultS
                         active.path.to_string_lossy().to_string(),
                         active.header.file_id.clone(),
                         active.header.schema_version,
-                        active.key.len(),
+                        active.header.updated_at.clone(),
+                        data_file_modified_at(&active.path),
                     )
                 }),
                 state.auto_unlock_error.clone(),
             )
         })
         .unwrap_or((None, None));
-    let credential_saved = active.is_some()
-        || selected_file_credential_saved(app, settings.selected_data_file_path.as_deref());
+    let credential_saved =
+        active.is_some() || selected_file_credential_saved(app, selected_data_file_path.as_deref());
+    let inactive_updated_at = active
+        .is_none()
+        .then(|| data_file_updated_at(selected_data_file_path.as_deref()))
+        .flatten();
+    let inactive_modified_at = active
+        .is_none()
+        .then(|| data_file_modified_at_from_str(selected_data_file_path.as_deref()))
+        .flatten();
 
     Ok(VaultStatus {
         active: active.is_some(),
-        selected_data_file_path: settings.selected_data_file_path,
+        selected_data_file_path,
         active_data_file_path: active.as_ref().map(|active| active.0.clone()),
         file_id: active.as_ref().map(|active| active.1.clone()),
         schema_version: active.as_ref().map(|active| active.2),
+        data_file_updated_at: active
+            .as_ref()
+            .map(|active| active.3.clone())
+            .or(inactive_updated_at),
+        data_file_modified_at: active
+            .as_ref()
+            .and_then(|active| active.4.clone())
+            .or(inactive_modified_at),
         device_id: settings.device_id,
         credential_saved,
         auto_unlock_error,
@@ -641,6 +661,25 @@ fn file_fingerprint(path: &Path) -> Result<FileFingerprint, String> {
         len: metadata.len(),
         modified_ms: modified.as_millis(),
     })
+}
+
+fn data_file_updated_at(path: Option<&str>) -> Option<String> {
+    let path = Path::new(path?);
+    read_data_file(path)
+        .ok()
+        .and_then(|file| validate_header(file.header).ok())
+        .map(|header| header.updated_at)
+}
+
+fn data_file_modified_at_from_str(path: Option<&str>) -> Option<String> {
+    data_file_modified_at(Path::new(path?))
+}
+
+fn data_file_modified_at(path: &Path) -> Option<String> {
+    fs::metadata(path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(system_time_to_iso)
 }
 
 fn safety_copy_info(path: PathBuf) -> Result<Option<SafetyCopyInfo>, String> {
