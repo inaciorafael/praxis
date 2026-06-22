@@ -7,6 +7,7 @@ import {
 	downloadAndInstallAppUpdate,
 	type AppUpdateInfo,
 } from "@/shared/lib/app/app-update.service";
+import { seedShowcaseData } from "@/shared/lib/tasks/task.service";
 import { useAppStore } from "@/stores/app.store";
 import { useBadgeStore } from "@/stores/badge.store";
 import { useNotificationStore } from "@/stores/notification.store";
@@ -22,6 +23,8 @@ const updateInfo = ref<AppUpdateInfo | null>(null);
 const updateStatus = ref("");
 const isCheckingUpdate = ref(false);
 const isInstallingUpdate = ref(false);
+const showcaseStatus = ref("");
+const isSeedingShowcase = ref(false);
 
 const config = computed(() => app.config);
 const dataFilePath = computed(() =>
@@ -69,6 +72,28 @@ async function toggleBadge(enabled: boolean) {
 
 async function reloadVault() {
 	await vault.reloadFromDisk();
+}
+
+async function prepareShowcase() {
+	if (isSeedingShowcase.value) {
+		return;
+	}
+
+	isSeedingShowcase.value = true;
+	showcaseStatus.value = "Preparando dados de showcase...";
+
+	try {
+		await tasks.applyCollection(await seedShowcaseData());
+		await Promise.all([tasks.hydrateViewCounts(), vault.hydrate()]);
+		showcaseStatus.value = "Showcase pronto. O cofre aberto foi substituido por dados ilustrativos.";
+	} catch (error) {
+		showcaseStatus.value =
+			error instanceof Error
+				? error.message
+				: "Nao foi possivel preparar o showcase.";
+	} finally {
+		isSeedingShowcase.value = false;
+	}
 }
 
 async function checkUpdate() {
@@ -324,6 +349,29 @@ function maskPath(value: string | null) {
           <span class="text-body font-semibold text-ink">{{ notifications.permissionGranted ? "Concedida" : "Pendente" }}</span>
         </div>
         <span class="text-body text-ink-soft">Permissão do sistema operacional para exibir lembretes.</span>
+      </div>
+    </div>
+
+    <div class="grid border border-border bg-surface">
+      <div class="flex items-center justify-between gap-6 p-4">
+        <div class="grid gap-1">
+          <span class="text-heading">Showcase para GitHub</span>
+          <span class="text-body text-ink-soft">
+            Substitui os dados do cofre aberto por tarefas ilustrativas para screenshots.
+          </span>
+          <span v-if="showcaseStatus" class="text-body font-semibold text-ink">
+            {{ showcaseStatus }}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          class="border border-brick bg-paper px-3 py-2 text-body font-semibold text-brick hover:bg-hover disabled:pointer-events-none disabled:opacity-50"
+          :disabled="!vault.active || isSeedingShowcase"
+          @click="prepareShowcase"
+        >
+          {{ isSeedingShowcase ? "Preparando..." : "Preparar showcase" }}
+        </button>
       </div>
     </div>
 

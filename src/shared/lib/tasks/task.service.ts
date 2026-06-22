@@ -156,3 +156,7 @@ export async function deleteChecklistItem(id: string) {
 export async function listTaskTimeline(taskId: string) {
 	return invoke<TaskTimeline>("list_task_timeline", { taskId });
 }
+
+export async function seedShowcaseData() {
+	return invoke<TaskCollection>("seed_showcase_data", { today: todayLocalDate() });
+}

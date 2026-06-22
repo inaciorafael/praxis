@@ -6,6 +6,7 @@ mod native_reminders;
 mod notification_launch;
 mod recurrence;
 mod reminders;
+mod showcase;
 mod tags;
 mod tasks;
 mod tray;
@@ -135,6 +136,7 @@ pub fn run() {
             checklist::reorder_checklist_items,
             reminders::list_reminders,
             reminders::mark_reminder_fired,
+            showcase::seed_showcase_data,
             tags::list_tags,
             tags::create_tag,
             tags::update_tag,
