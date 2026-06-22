@@ -16,11 +16,13 @@ const APP_CONFIG_FILE: &str = "app-config.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct AppConfig {
     pub start_with_windows: bool,
     pub start_minimized: bool,
     pub minimize_to_tray_when_unlocked: bool,
     pub notifications_enabled: bool,
+    pub badge_enabled: bool,
 }
 
 impl Default for AppConfig {
@@ -30,6 +32,7 @@ impl Default for AppConfig {
             start_minimized: true,
             minimize_to_tray_when_unlocked: true,
             notifications_enabled: true,
+            badge_enabled: true,
         }
     }
 }
@@ -41,6 +44,7 @@ pub struct AppConfigPatch {
     start_minimized: Option<bool>,
     minimize_to_tray_when_unlocked: Option<bool>,
     notifications_enabled: Option<bool>,
+    badge_enabled: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -121,9 +125,19 @@ pub fn update_app_config(app: AppHandle, patch: AppConfigPatch) -> Result<AppCon
         config.notifications_enabled = value;
     }
 
+    if let Some(value) = patch.badge_enabled {
+        config.badge_enabled = value;
+    }
+
     apply_autostart(&app, config.start_with_windows)?;
     save_app_config(&app, &config)?;
     Ok(config)
+}
+
+pub fn is_badge_enabled(app: &AppHandle) -> bool {
+    load_app_config(app)
+        .map(|config| config.badge_enabled)
+        .unwrap_or(true)
 }
 
 #[tauri::command]

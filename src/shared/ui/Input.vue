@@ -1,18 +1,18 @@
 <script lang="ts" setup>
-  defineOptions({
-    inheritAttrs: false,
-  })
+defineOptions({
+	inheritAttrs: false,
+});
 
-  defineProps<{
-    label?: string
-    modelValue?: string
-  }>()
+defineProps<{
+	label?: string;
+	modelValue?: string;
+}>();
 
-  const emit = defineEmits<{
-    'update:modelValue': [value: string];
-  }>()
+const emit = defineEmits<{
+	"update:modelValue": [value: string];
+}>();
 
-  const hasError = false;
+const hasError = false;
 </script>
 
 <template>

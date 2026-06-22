@@ -1,111 +1,113 @@
 import type {
-  SchedulerTask,
-  TaskStatusScheduler,
-  TaskStatusSchedulerOptions,
+	SchedulerTask,
+	TaskStatusScheduler,
+	TaskStatusSchedulerOptions,
 } from "./task-status-scheduler.types";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const RESYNC_GRACE_MS = 250;
 
 export function createTaskStatusScheduler(
-  options: TaskStatusSchedulerOptions,
+	options: TaskStatusSchedulerOptions,
 ): TaskStatusScheduler {
-  let timerId: ReturnType<typeof setTimeout> | null = null;
-  let started = false;
-  let runningRefresh = false;
+	let timerId: ReturnType<typeof setTimeout> | null = null;
+	let started = false;
+	let runningRefresh = false;
 
-  function clearTimer() {
-    if (!timerId) {
-      return;
-    }
+	function clearTimer() {
+		if (!timerId) {
+			return;
+		}
 
-    clearTimeout(timerId);
-    timerId = null;
-  }
+		clearTimeout(timerId);
+		timerId = null;
+	}
 
-  function scheduleNext() {
-    clearTimer();
+	function scheduleNext() {
+		clearTimer();
 
-    if (!started) {
-      return;
-    }
+		if (!started) {
+			return;
+		}
 
-    const nextDueAt = getNextDueAt(options.getTasks());
+		const nextDueAt = getNextDueAt(options.getTasks());
 
-    if (!nextDueAt) {
-      return;
-    }
+		if (!nextDueAt) {
+			return;
+		}
 
-    const delay = Math.max(nextDueAt - Date.now() + RESYNC_GRACE_MS, 0);
-    const safeDelay = Math.min(delay, MAX_TIMEOUT_MS);
+		const delay = Math.max(nextDueAt - Date.now() + RESYNC_GRACE_MS, 0);
+		const safeDelay = Math.min(delay, MAX_TIMEOUT_MS);
 
-    timerId = setTimeout(() => {
-      void refreshAndReschedule();
-    }, safeDelay);
-  }
+		timerId = setTimeout(() => {
+			void refreshAndReschedule();
+		}, safeDelay);
+	}
 
-  async function refreshAndReschedule() {
-    if (!started || runningRefresh) {
-      return;
-    }
+	async function refreshAndReschedule() {
+		if (!started || runningRefresh) {
+			return;
+		}
 
-    runningRefresh = true;
+		runningRefresh = true;
 
-    try {
-      await options.onDueStateMayHaveChanged();
-    } finally {
-      runningRefresh = false;
+		try {
+			await options.onDueStateMayHaveChanged();
+		} finally {
+			runningRefresh = false;
 
-      if (started) {
-        scheduleNext();
-      }
-    }
-  }
+			if (started) {
+				scheduleNext();
+			}
+		}
+	}
 
-  function start() {
-    if (started) {
-      return;
-    }
+	function start() {
+		if (started) {
+			return;
+		}
 
-    started = true;
-    scheduleNext();
-  }
+		started = true;
+		scheduleNext();
+	}
 
-  function stop() {
-    started = false;
-    clearTimer();
-  }
+	function stop() {
+		started = false;
+		clearTimer();
+	}
 
-  function reschedule() {
-    if (!started) {
-      return;
-    }
+	function reschedule() {
+		if (!started) {
+			return;
+		}
 
-    scheduleNext();
-  }
+		scheduleNext();
+	}
 
-  return {
-    start,
-    stop,
-    reschedule,
-  };
+	return {
+		start,
+		stop,
+		reschedule,
+	};
 }
 
 function getNextDueAt(tasks: SchedulerTask[]) {
-  const now = Date.now();
+	const now = Date.now();
 
-  return tasks
-    .filter((task) => task.status === "pending")
-    .map((task) => parseDueAt(task.dueAt))
-    .filter((dueAt): dueAt is number => dueAt !== null && dueAt > now)
-    .sort((left, right) => left - right)[0] ?? null;
+	return (
+		tasks
+			.filter((task) => task.status === "pending")
+			.map((task) => parseDueAt(task.dueAt))
+			.filter((dueAt): dueAt is number => dueAt !== null && dueAt > now)
+			.sort((left, right) => left - right)[0] ?? null
+	);
 }
 
 function parseDueAt(value: string | null) {
-  if (!value) {
-    return null;
-  }
+	if (!value) {
+		return null;
+	}
 
-  const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) ? timestamp : null;
+	const timestamp = new Date(value).getTime();
+	return Number.isFinite(timestamp) ? timestamp : null;
 }

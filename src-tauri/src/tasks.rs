@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 use time::{Date, Month, OffsetDateTime};
@@ -73,13 +73,13 @@ pub struct CreateTaskInput {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateTaskInput {
     title: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_text_field")]
     notes: Option<Option<String>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_text_field")]
     planned_for: Option<Option<String>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_text_field")]
     due_at: Option<Option<String>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_text_field")]
     reminder_at: Option<Option<String>>,
 }
 
@@ -1392,6 +1392,22 @@ mod tests {
             "2026-06-18T15:00:00Z"
         );
     }
+
+    #[test]
+    fn update_task_input_distinguishes_null_from_missing_fields() {
+        let input: UpdateTaskInput = serde_json::from_value(serde_json::json!({
+            "title": "Enviar proposta",
+            "dueAt": null,
+            "reminderAt": null
+        }))
+        .unwrap();
+
+        assert_eq!(input.title.as_deref(), Some("Enviar proposta"));
+        assert_eq!(input.notes, None);
+        assert_eq!(input.planned_for, None);
+        assert_eq!(input.due_at, Some(None));
+        assert_eq!(input.reminder_at, Some(None));
+    }
 }
 
 fn normalize_optional_text(value: Option<String>) -> Option<String> {
@@ -1404,6 +1420,23 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
             Some(value.to_string())
         }
     })
+}
+
+fn deserialize_optional_text_field<'de, D>(
+    deserializer: D,
+) -> Result<Option<Option<String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+
+    match value {
+        Value::Null => Ok(Some(None)),
+        Value::String(value) => Ok(Some(Some(value))),
+        _ => serde_json::from_value::<Option<String>>(value)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
 }
 
 fn initial_task_events(

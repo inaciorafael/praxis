@@ -5,41 +5,41 @@ import { buildDayStatus } from "@/shared/lib/tasks/day-status.service";
 import type { Task } from "@/shared/types/task";
 
 const props = defineProps<{
-  tasks: Task[];
-  warningWindowMinutes?: number;
+	tasks: Task[];
+	warningWindowMinutes?: number;
 }>();
 
 const now = ref(new Date());
 let timer: number | undefined;
 
 const status = computed(() =>
-  buildDayStatus(props.tasks, now.value, {
-    warningWindowMinutes: props.warningWindowMinutes,
-  }),
+	buildDayStatus(props.tasks, now.value, {
+		warningWindowMinutes: props.warningWindowMinutes,
+	}),
 );
 
 const levelClasses = computed(() => {
-  if (status.value.level === "critical") {
-    return "border-brick bg-brick/15 text-ink";
-  }
+	if (status.value.level === "critical") {
+		return "border-brick bg-brick/15 text-ink";
+	}
 
-  if (status.value.level === "warning") {
-    return "border-amber bg-amber/15 text-ink";
-  }
+	if (status.value.level === "warning") {
+		return "border-amber bg-amber/15 text-ink";
+	}
 
-  return "border-sage bg-sage/10 text-ink";
+	return "border-sage bg-sage/10 text-ink";
 });
 
 onMounted(() => {
-  timer = window.setInterval(() => {
-    now.value = new Date();
-  }, 30_000);
+	timer = window.setInterval(() => {
+		now.value = new Date();
+	}, 30_000);
 });
 
 onBeforeUnmount(() => {
-  if (timer) {
-    window.clearInterval(timer);
-  }
+	if (timer) {
+		window.clearInterval(timer);
+	}
 });
 </script>
 

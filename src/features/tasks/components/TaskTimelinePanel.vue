@@ -1,55 +1,58 @@
 <script setup lang="ts">
-import type { LifecycleEvent, LifecycleValueChange } from "@/shared/types/lifecycle";
+import type {
+	LifecycleEvent,
+	LifecycleValueChange,
+} from "@/shared/types/lifecycle";
 
 defineProps<{
-  events: LifecycleEvent[];
+	events: LifecycleEvent[];
 }>();
 
 function formatEventDate(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
+	return new Intl.DateTimeFormat("pt-BR", {
+		dateStyle: "short",
+		timeStyle: "short",
+	}).format(new Date(value));
 }
 
 function eventDetails(event: LifecycleEvent) {
-  if (!event.metadata) {
-    return "";
-  }
+	if (!event.metadata) {
+		return "";
+	}
 
-  if ("dueAt" in event.metadata && event.metadata.dueAt) {
-    return describeChange("Vencimento", event.metadata.dueAt);
-  }
+	if ("dueAt" in event.metadata && event.metadata.dueAt) {
+		return describeChange("Vencimento", event.metadata.dueAt);
+	}
 
-  if ("scheduledAt" in event.metadata && event.metadata.scheduledAt) {
-    return describeChange("Lembrete", event.metadata.scheduledAt);
-  }
+	if ("scheduledAt" in event.metadata && event.metadata.scheduledAt) {
+		return describeChange("Lembrete", event.metadata.scheduledAt);
+	}
 
-  if ("plannedFor" in event.metadata && event.metadata.plannedFor) {
-    return describeChange("Planejamento", event.metadata.plannedFor);
-  }
+	if ("plannedFor" in event.metadata && event.metadata.plannedFor) {
+		return describeChange("Planejamento", event.metadata.plannedFor);
+	}
 
-  if ("name" in event.metadata && event.metadata.name) {
-    return describeChange("Nome", event.metadata.name);
-  }
+	if ("name" in event.metadata && event.metadata.name) {
+		return describeChange("Nome", event.metadata.name);
+	}
 
-  return "";
+	return "";
 }
 
 function describeChange(label: string, change: LifecycleValueChange) {
-  if (change.from && change.to) {
-    return `${label}: ${change.from} -> ${change.to}`;
-  }
+	if (change.from && change.to) {
+		return `${label}: ${change.from} -> ${change.to}`;
+	}
 
-  if (change.to) {
-    return `${label}: ${change.to}`;
-  }
+	if (change.to) {
+		return `${label}: ${change.to}`;
+	}
 
-  if (change.from) {
-    return `${label} removido`;
-  }
+	if (change.from) {
+		return `${label} removido`;
+	}
 
-  return "";
+	return "";
 }
 </script>
 

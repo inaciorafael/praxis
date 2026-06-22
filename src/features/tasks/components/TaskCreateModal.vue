@@ -13,121 +13,131 @@ const titleInput = ref<HTMLInputElement | null>(null);
 const title = ref("");
 const notes = ref("");
 const dueTime = ref("");
+const useContextDueDate = ref(true);
 const reminderAt = ref("");
 const tagId = ref("");
 const checklistText = ref("");
 const isCreating = ref(false);
 
-const canCreate = computed(() => Boolean(title.value.trim() && !isCreating.value));
+const canCreate = computed(() =>
+	Boolean(title.value.trim() && !isCreating.value),
+);
 const contextLabel = computed(() => tasks.createContext.label);
 const dueDateLabel = computed(() => {
-  if (!tasks.createContext.dueDate) {
-    return "Sem vencimento definido pelo contexto";
-  }
+	if (!tasks.createContext.dueDate) {
+		return "Sem vencimento definido pelo contexto";
+	}
 
-  return dayjs(tasks.createContext.dueDate).format("DD/MM/YYYY");
+	return dayjs(tasks.createContext.dueDate).format("DD/MM/YYYY");
 });
 
 watch(
-  () => tasks.createModalOpen,
-  async (open) => {
-    if (!open) {
-      return;
-    }
+	() => tasks.createModalOpen,
+	async (open) => {
+		if (!open) {
+			return;
+		}
 
-    resetForm();
-    await nextTick();
-    titleInput.value?.focus();
-  },
+		resetForm();
+		await nextTick();
+		titleInput.value?.focus();
+	},
 );
 
 async function createTask() {
-  if (!canCreate.value) {
-    return;
-  }
+	if (!canCreate.value) {
+		return;
+	}
 
-  const previousTaskIds = new Set(tasks.tasks.map((task) => task.id));
-  isCreating.value = true;
+	const previousTaskIds = new Set(tasks.tasks.map((task) => task.id));
+	isCreating.value = true;
 
-  try {
-    const created = await tasks.create({
-      title: title.value,
-      notes: notes.value || null,
-      plannedFor: tasks.createContext.plannedFor,
-      dueAt: contextDueAt(),
-      reminderAt: toIsoDateTime(reminderAt.value),
-    });
+	try {
+		const created = await tasks.create({
+			title: title.value,
+			notes: notes.value || null,
+			plannedFor: tasks.createContext.plannedFor,
+			dueAt: contextDueAt(),
+			reminderAt: toIsoDateTime(reminderAt.value),
+		});
 
-    if (!created) {
-      return;
-    }
+		if (!created) {
+			return;
+		}
 
-    const createdTask = tasks.tasks.find((task) => !previousTaskIds.has(task.id));
+		const createdTask = tasks.tasks.find(
+			(task) => !previousTaskIds.has(task.id),
+		);
 
-    if (!createdTask) {
-      tasks.closeCreateTaskModal();
-      return;
-    }
+		if (!createdTask) {
+			tasks.closeCreateTaskModal();
+			return;
+		}
 
-    if (tagId.value) {
-      await tags.assignToTask(createdTask.id, tagId.value);
-    }
+		if (tagId.value) {
+			await tags.assignToTask(createdTask.id, tagId.value);
+		}
 
-    for (const itemTitle of checklistItemsFromText(checklistText.value)) {
-      await tasks.createChecklistItem({
-        taskId: createdTask.id,
-        title: itemTitle,
-      });
-    }
+		for (const itemTitle of checklistItemsFromText(checklistText.value)) {
+			await tasks.createChecklistItem({
+				taskId: createdTask.id,
+				title: itemTitle,
+			});
+		}
 
-    await tasks.refreshActiveTaskView();
-    tasks.closeCreateTaskModal();
-  } finally {
-    isCreating.value = false;
-  }
+		await tasks.refreshActiveTaskView();
+		tasks.closeCreateTaskModal();
+	} finally {
+		isCreating.value = false;
+	}
 }
 
 function contextDueAt() {
-  const dueDate = tasks.createContext.dueDate;
+	const dueDate = tasks.createContext.dueDate;
 
-  if (!dueDate) {
-    return null;
-  }
+	if (!dueDate || !useContextDueDate.value) {
+		return null;
+	}
 
-  return toIsoDateTime(`${dueDate}T${dueTime.value || "23:59"}`);
+	return toIsoDateTime(`${dueDate}T${dueTime.value || "23:59"}`);
 }
 
 function closeModal() {
-  if (isCreating.value) {
-    return;
-  }
+	if (isCreating.value) {
+		return;
+	}
 
-  tasks.closeCreateTaskModal();
+	tasks.closeCreateTaskModal();
 }
 
 function resetForm() {
-  title.value = "";
-  notes.value = "";
-  dueTime.value = "";
-  reminderAt.value = "";
-  tagId.value = "";
-  checklistText.value = "";
+	title.value = "";
+	notes.value = "";
+	dueTime.value = "";
+	useContextDueDate.value = Boolean(tasks.createContext.dueDate);
+	reminderAt.value = "";
+	tagId.value = "";
+	checklistText.value = "";
+}
+
+function clearReminderAt() {
+	reminderAt.value = "";
 }
 
 function toIsoDateTime(value: string) {
-  if (!value) {
-    return null;
-  }
+	if (!value) {
+		return null;
+	}
 
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+	const date = new Date(value);
+	return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function checklistItemsFromText(value: string) {
-  return value
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+	return value
+		.split(/\r?\n/)
+		.map((item) => item.trim())
+		.filter(Boolean);
 }
 </script>
 
@@ -169,22 +179,43 @@ function checklistItemsFromText(value: string) {
 
         <div class="grid grid-cols-2 gap-3">
           <label class="grid gap-1">
-            <span class="font-semibold text-ink">Hora do vencimento</span>
+            <div class="flex items-center justify-between gap-3">
+              <span class="font-semibold text-ink">Vencimento</span>
+              <button
+                v-if="tasks.createContext.dueDate"
+                type="button"
+                class="text-caption font-semibold text-ink-soft hover:text-brick"
+                @click="useContextDueDate = !useContextDueDate"
+              >
+                {{ useContextDueDate ? "Remover" : "Usar contexto" }}
+              </button>
+            </div>
             <input
               v-model="dueTime"
               type="time"
+              :disabled="!useContextDueDate"
               class="border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus:border-accent"
             />
           </label>
 
-          <label class="grid gap-1">
-            <span class="font-semibold text-ink">Lembrete</span>
+          <div class="grid gap-1">
+            <div class="flex items-center justify-between gap-3">
+              <span class="font-semibold text-ink">Lembrete</span>
+              <button
+                v-if="reminderAt"
+                type="button"
+                class="text-caption font-semibold text-ink-soft hover:text-brick"
+                @click="clearReminderAt"
+              >
+                Remover
+              </button>
+            </div>
             <input
               v-model="reminderAt"
               type="datetime-local"
               class="border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus:border-accent"
             />
-          </label>
+          </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">

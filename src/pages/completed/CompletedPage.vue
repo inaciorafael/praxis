@@ -7,8 +7,8 @@ import { useTaskStore } from "@/stores/task.store";
 const tasks = useTaskStore();
 
 onMounted(async () => {
-  tasks.setActiveTaskView("completed");
-  await tasks.hydrateCompleted({ limit: 150 });
+	tasks.setActiveTaskView("completed");
+	await tasks.hydrateCompleted({ limit: 150 });
 });
 </script>
 

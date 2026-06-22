@@ -4,6 +4,7 @@ import { X } from "@lucide/vue";
 
 import BaseButton from "@/shared/ui/BaseButton.vue";
 import Input from "@/shared/ui/Input.vue";
+import TaskTimelinePanel from "@/features/tasks/components/TaskTimelinePanel.vue";
 import type { ChecklistItem } from "@/shared/types/checklist";
 import { useTagStore } from "@/stores/tag.store";
 import { useTaskStore } from "@/stores/task.store";
@@ -18,189 +19,225 @@ const reminderAt = ref("");
 const newChecklistItem = ref("");
 const checklistTitles = ref<Record<string, string>>({});
 const isSaving = ref(false);
+const isLoadingTimeline = ref(false);
 
 const selectedTask = computed(() => tasks.getSelectedTask());
 const selectedTaskTags = computed(() => {
-  if (!selectedTask.value) {
-    return new Set<string>();
-  }
+	if (!selectedTask.value) {
+		return new Set<string>();
+	}
 
-  return new Set(
-    tags.taskTags
-      .filter((relation) => relation.taskId === selectedTask.value?.id)
-      .map((relation) => relation.tagId),
-  );
+	return new Set(
+		tags.taskTags
+			.filter((relation) => relation.taskId === selectedTask.value?.id)
+			.map((relation) => relation.tagId),
+	);
 });
 const checklistItems = computed(() => {
-  if (!selectedTask.value) {
-    return [];
-  }
+	if (!selectedTask.value) {
+		return [];
+	}
 
-  return tasks.checklistItemsByTaskId(selectedTask.value.id);
+	return tasks.checklistItemsByTaskId(selectedTask.value.id);
 });
-const canSave = computed(() => Boolean(selectedTask.value && title.value.trim() && !isSaving.value));
+const selectedTaskTimeline = computed(() => {
+	const task = selectedTask.value;
+
+	if (!task) {
+		return [];
+	}
+
+	return tasks.timelinesByTaskId[task.id]?.events ?? [];
+});
+const canSave = computed(() =>
+	Boolean(selectedTask.value && title.value.trim() && !isSaving.value),
+);
 
 watch(
-  selectedTask,
-  (task) => {
-    if (!task) {
-      resetForm();
-      return;
-    }
+	selectedTask,
+	(task) => {
+		if (!task) {
+			resetForm();
+			return;
+		}
 
-    title.value = task.title;
-    notes.value = task.notes ?? "";
-    plannedFor.value = task.plannedFor ?? "";
-    dueAt.value = toDatetimeLocal(task.dueAt);
-    reminderAt.value = toDatetimeLocal(task.reminderAt);
-    syncChecklistTitles(checklistItems.value);
-  },
-  { immediate: true },
+		title.value = task.title;
+		notes.value = task.notes ?? "";
+		plannedFor.value = task.plannedFor ?? "";
+		dueAt.value = toDatetimeLocal(task.dueAt);
+		reminderAt.value = toDatetimeLocal(task.reminderAt);
+		syncChecklistTitles(checklistItems.value);
+		void loadSelectedTaskTimeline(task.id);
+	},
+	{ immediate: true },
 );
 
 watch(checklistItems, (items) => {
-  syncChecklistTitles(items);
+	syncChecklistTitles(items);
 });
 
 async function saveTask() {
-  const task = selectedTask.value;
+	const task = selectedTask.value;
 
-  if (!task || !canSave.value) {
-    return;
-  }
+	if (!task || !canSave.value) {
+		return;
+	}
 
-  isSaving.value = true;
+	isSaving.value = true;
 
-  try {
-    await tasks.update(task.id, {
-      title: title.value,
-      notes: notes.value || null,
-      plannedFor: plannedFor.value || null,
-      dueAt: toIsoDateTime(dueAt.value),
-      reminderAt: toIsoDateTime(reminderAt.value),
-    });
-  } finally {
-    isSaving.value = false;
-  }
+	try {
+		await tasks.update(task.id, {
+			title: title.value,
+			notes: notes.value || null,
+			plannedFor: plannedFor.value || null,
+			dueAt: toIsoDateTime(dueAt.value),
+			reminderAt: toIsoDateTime(reminderAt.value),
+		});
+	} finally {
+		isSaving.value = false;
+	}
 }
 
 async function toggleCompleted() {
-  const task = selectedTask.value;
+	const task = selectedTask.value;
 
-  if (!task) {
-    return;
-  }
+	if (!task) {
+		return;
+	}
 
-  await tasks.setCompleted(task.id, task.status !== "completed");
+	await tasks.setCompleted(task.id, task.status !== "completed");
 }
 
 async function toggleTag(tagId: string, checked: boolean) {
-  const task = selectedTask.value;
+	const task = selectedTask.value;
 
-  if (!task) {
-    return;
-  }
+	if (!task) {
+		return;
+	}
 
-  if (checked) {
-    await tags.assignToTask(task.id, tagId);
-    return;
-  }
+	if (checked) {
+		await tags.assignToTask(task.id, tagId);
+		return;
+	}
 
-  await tags.removeFromTask(task.id, tagId);
+	await tags.removeFromTask(task.id, tagId);
 }
 
 async function createChecklistItem() {
-  const task = selectedTask.value;
-  const itemTitle = newChecklistItem.value.trim();
+	const task = selectedTask.value;
+	const itemTitle = newChecklistItem.value.trim();
 
-  if (!task || !itemTitle) {
-    return;
-  }
+	if (!task || !itemTitle) {
+		return;
+	}
 
-  const created = await tasks.createChecklistItem({
-    taskId: task.id,
-    title: itemTitle,
-  });
+	const created = await tasks.createChecklistItem({
+		taskId: task.id,
+		title: itemTitle,
+	});
 
-  if (created) {
-    newChecklistItem.value = "";
-  }
+	if (created) {
+		newChecklistItem.value = "";
+	}
 }
 
 async function saveChecklistItem(item: ChecklistItem) {
-  const itemTitle = checklistTitles.value[item.id]?.trim();
+	const itemTitle = checklistTitles.value[item.id]?.trim();
 
-  if (!itemTitle || itemTitle === item.title) {
-    return;
-  }
+	if (!itemTitle || itemTitle === item.title) {
+		return;
+	}
 
-  await tasks.updateChecklistItem(item.id, {
-    title: itemTitle,
-  });
+	await tasks.updateChecklistItem(item.id, {
+		title: itemTitle,
+	});
 }
 
 async function toggleChecklistItem(item: ChecklistItem, checked: boolean) {
-  await tasks.setChecklistItemCompleted(item.id, checked);
+	await tasks.setChecklistItemCompleted(item.id, checked);
 }
 
 async function deleteChecklistItem(item: ChecklistItem) {
-  await tasks.deleteChecklistItem(item.id);
+	await tasks.deleteChecklistItem(item.id);
 }
 
 async function deleteSelectedTask() {
-  const task = selectedTask.value;
+	const task = selectedTask.value;
 
-  if (!task) {
-    return;
-  }
+	if (!task) {
+		return;
+	}
 
-  await tasks.delete(task.id);
-  tasks.clearSelectedTask();
+	await tasks.delete(task.id);
+	tasks.clearSelectedTask();
+}
+
+async function loadSelectedTaskTimeline(taskId: string) {
+	isLoadingTimeline.value = true;
+
+	try {
+		await tasks.loadTimeline(taskId);
+	} finally {
+		if (selectedTask.value?.id === taskId) {
+			isLoadingTimeline.value = false;
+		}
+	}
+}
+
+function clearDueAt() {
+	dueAt.value = "";
+}
+
+function clearReminderAt() {
+	reminderAt.value = "";
 }
 
 function closePanel() {
-  tasks.clearSelectedTask();
+	tasks.clearSelectedTask();
 }
 
 function syncChecklistTitles(items: ChecklistItem[]) {
-  checklistTitles.value = items.reduce<Record<string, string>>((index, item) => {
-    index[item.id] = checklistTitles.value[item.id] ?? item.title;
-    return index;
-  }, {});
+	checklistTitles.value = items.reduce<Record<string, string>>(
+		(index, item) => {
+			index[item.id] = checklistTitles.value[item.id] ?? item.title;
+			return index;
+		},
+		{},
+	);
 }
 
 function resetForm() {
-  title.value = "";
-  notes.value = "";
-  plannedFor.value = "";
-  dueAt.value = "";
-  reminderAt.value = "";
-  newChecklistItem.value = "";
-  checklistTitles.value = {};
+	title.value = "";
+	notes.value = "";
+	plannedFor.value = "";
+	dueAt.value = "";
+	reminderAt.value = "";
+	newChecklistItem.value = "";
+	checklistTitles.value = {};
 }
 
 function toDatetimeLocal(value: string | null) {
-  if (!value) {
-    return "";
-  }
+	if (!value) {
+		return "";
+	}
 
-  const date = new Date(value);
+	const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
+	if (Number.isNaN(date.getTime())) {
+		return "";
+	}
 
-  const timezoneOffset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
+	const timezoneOffset = date.getTimezoneOffset() * 60_000;
+	return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
 }
 
 function toIsoDateTime(value: string) {
-  if (!value) {
-    return null;
-  }
+	if (!value) {
+		return null;
+	}
 
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+	const date = new Date(value);
+	return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 </script>
 
@@ -251,23 +288,43 @@ function toIsoDateTime(value: string) {
           </label>
         </div>
 
-        <label class="grid gap-1">
-          <span class="font-semibold text-ink">Vencimento</span>
+        <div class="grid gap-1">
+          <div class="flex items-center justify-between gap-3">
+            <span class="font-semibold text-ink">Vencimento</span>
+            <button
+              v-if="dueAt"
+              type="button"
+              class="text-caption font-semibold text-ink-soft hover:text-brick"
+              @click="clearDueAt"
+            >
+              Remover
+            </button>
+          </div>
           <input
             v-model="dueAt"
             type="datetime-local"
             class="border border-border bg-paper px-3 py-2 text-body text-ink outline-none focus:border-accent"
           />
-        </label>
+        </div>
 
-        <label class="grid gap-1">
-          <span class="font-semibold text-ink">Lembrete</span>
+        <div class="grid gap-1">
+          <div class="flex items-center justify-between gap-3">
+            <span class="font-semibold text-ink">Lembrete</span>
+            <button
+              v-if="reminderAt"
+              type="button"
+              class="text-caption font-semibold text-ink-soft hover:text-brick"
+              @click="clearReminderAt"
+            >
+              Remover
+            </button>
+          </div>
           <input
             v-model="reminderAt"
             type="datetime-local"
             class="border border-border bg-paper px-3 py-2 text-body text-ink outline-none focus:border-accent"
           />
-        </label>
+        </div>
 
         <BaseButton
           :disabled="!canSave"
@@ -331,6 +388,22 @@ function toIsoDateTime(value: string) {
             </button>
           </div>
         </div>
+      </div>
+
+      <div class="grid gap-3 border-t border-border pt-4">
+        <div class="grid gap-1">
+          <span class="text-heading">Timeline</span>
+          <span class="text-body text-ink-soft">Histórico de alterações e eventos da tarefa.</span>
+        </div>
+
+        <div v-if="isLoadingTimeline" class="border border-border bg-paper p-3 text-body text-ink-soft">
+          Carregando timeline...
+        </div>
+
+        <TaskTimelinePanel
+          v-else
+          :events="selectedTaskTimeline"
+        />
       </div>
 
       <div class="border-t border-border pt-4">

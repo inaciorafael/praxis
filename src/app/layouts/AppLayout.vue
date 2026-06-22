@@ -1,21 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
-import TaskRuntimeProvider from '@/app/providers/TaskRuntimeProvider.vue';
-import AppAside from '../shell/AppAside.vue';
-import TaskEditorPanel from '@/features/tasks/components/TaskEditorPanel.vue';
-import { useTagStore } from '@/stores/tag.store';
-import { useTaskStore } from '@/stores/task.store';
+import { computed, onMounted } from "vue";
+import TaskRuntimeProvider from "@/app/providers/TaskRuntimeProvider.vue";
+import AppAside from "../shell/AppAside.vue";
+import TaskEditorPanel from "@/features/tasks/components/TaskEditorPanel.vue";
+import { useTagStore } from "@/stores/tag.store";
+import { useTaskStore } from "@/stores/task.store";
 
-const tags = useTagStore()
-const tasks = useTaskStore()
-const hasSelectedTask = computed(() => Boolean(tasks.selectedTaskId))
+const tags = useTagStore();
+const tasks = useTaskStore();
+const hasSelectedTask = computed(() => Boolean(tasks.selectedTaskId));
 
 onMounted(async () => {
-  if (!tags.isReady) {
-    await tags.hydrate();
-  }
-})
-
+	if (!tags.isReady) {
+		await tags.hydrate();
+	}
+});
 </script>
 
 <template>

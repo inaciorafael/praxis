@@ -1,0 +1,48 @@
+name: Main Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-release:
+    name: Build Windows release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and publish GitHub Release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: npm run tauri --
+          tagName: main-${{ github.run_number }}
+          releaseName: Praxis main build ${{ github.run_number }}
+          releaseBody: |
+            Build automático gerado a partir da branch main.
+
+            Commit: ${{ github.sha }}
+          releaseDraft: false
+          prerelease: false
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: false
+          updaterJsonPreferNsis: true

@@ -10,93 +10,100 @@ import PendingPage from "@/pages/pending/PendingPage.vue";
 import OverduePage from "@/pages/overdue/OverduePage.vue";
 import RemindersPage from "@/pages/reminders/RemindersPage.vue";
 import CompletedPage from "@/pages/completed/CompletedPage.vue";
+import SettingsPage from "@/pages/settings/SettingsPage.vue";
 
 export const router = createRouter({
-  history: createWebHashHistory(),
-  routes: [
-    {
-      path: "/",
-      component: PublicLayout,
-      children: [
-        {
-          path: "",
-          redirect: { name: "vault" },
-        },
-        {
-          path: "vault",
-          name: "vault",
-          component: VaultPage,
-          meta: { public: true },
-        },
-      ]
-    },
-    {
-      path: "/app",
-      component: AppLayout,
-      meta: { requiresVault: true },
-      children: [
-        {
-          path: "today",
-          name: "today",
-          component: TodayPage,
-        },
-        {
-          path: "my-week",
-          name: "my-week",
-          component: MyWeekPage,
-        },
+	history: createWebHashHistory(),
+	routes: [
+		{
+			path: "/",
+			component: PublicLayout,
+			children: [
+				{
+					path: "",
+					redirect: { name: "vault" },
+				},
+				{
+					path: "vault",
+					name: "vault",
+					component: VaultPage,
+					meta: { public: true },
+				},
+			],
+		},
+		{
+			path: "/app",
+			component: AppLayout,
+			meta: { requiresVault: true },
+			children: [
+				{
+					path: "today",
+					name: "today",
+					component: TodayPage,
+				},
+				{
+					path: "my-week",
+					name: "my-week",
+					component: MyWeekPage,
+				},
 
-        {
-          path: "pending",
-          name: "pending",
-          component: PendingPage,
-        },
+				{
+					path: "pending",
+					name: "pending",
+					component: PendingPage,
+				},
 
-        {
-          path: "overdue",
-          name: "overdue",
-          component: OverduePage,
-        },
+				{
+					path: "overdue",
+					name: "overdue",
+					component: OverduePage,
+				},
 
-        {
-          path: "reminders",
-          name: "reminders",
-          component: RemindersPage,
-        },
+				{
+					path: "reminders",
+					name: "reminders",
+					component: RemindersPage,
+				},
 
-        {
-          path: "completed",
-          name: "completed",
-          component: CompletedPage,
-        },
+				{
+					path: "completed",
+					name: "completed",
+					component: CompletedPage,
+				},
 
-        {
-          path: ":pathMatch(.*)*",
-          redirect: { name: "today" },
-        }
-      ]
-    },
-    {
-      path: "/:pathMatch(.*)*",
-      redirect: { name: "today" },
-    },
-  ],
+				{
+					path: "settings",
+					name: "settings",
+					component: SettingsPage,
+				},
+
+				{
+					path: ":pathMatch(.*)*",
+					redirect: { name: "today" },
+				},
+			],
+		},
+		{
+			path: "/:pathMatch(.*)*",
+			redirect: { name: "today" },
+		},
+	],
 });
 
 router.beforeEach(async (to) => {
-  const vault = useVaultStore();
+	const vault = useVaultStore();
 
-  if (!vault.isReady) {
-    await vault.hydrate();
-  }
+	if (!vault.isReady) {
+		await vault.hydrate();
+	}
 
-  if (to.meta.requiresVault && !vault.active) {
-    return { name: "vault" };
-  }
+	if (to.meta.requiresVault && !vault.active) {
+		return { name: "vault" };
+	}
 
-  if (to.name === "vault" && vault.active) {
-    return { name: "today" };
-  }
+	if (to.name === "vault" && vault.active) {
+		return { name: "today" };
+	}
 
-  return true;
+	return true;
 });

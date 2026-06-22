@@ -9,28 +9,27 @@ import { useBadgeStore } from "@/stores/badge.store";
 import { Hash, RefreshCw } from "@lucide/vue";
 import dayjs from "dayjs";
 
-const vault = useVaultStore()
-const tasks = useTaskStore()
-const tags = useTagStore()
-const badge = useBadgeStore()
-const router = useRouter()
+const vault = useVaultStore();
+const tasks = useTaskStore();
+const tags = useTagStore();
+const badge = useBadgeStore();
+const router = useRouter();
 
-function getBadgeCount(key: AppNavigationItem['badgeKey']) {
-  if (!key) {
-    return 0;
-  }
+function getBadgeCount(key: AppNavigationItem["badgeKey"]) {
+	if (!key) {
+		return 0;
+	}
 
-  return tasks.viewCounts[key] ?? 0;
+	return tasks.viewCounts[key] ?? 0;
 }
 
 async function lockVault() {
-  await vault.close();
-  tasks.resetLocal();
-  tags.resetLocal();
-  await badge.clear();
-  await router.replace({ name: "vault" });
+	await vault.close();
+	tasks.resetLocal();
+	tags.resetLocal();
+	await badge.clear();
+	await router.replace({ name: "vault" });
 }
-
 </script>
 
 <template>

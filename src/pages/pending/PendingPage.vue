@@ -7,8 +7,8 @@ import { useTaskStore } from "@/stores/task.store";
 const tasks = useTaskStore();
 
 onMounted(async () => {
-  tasks.setActiveTaskView("pending");
-  await tasks.hydratePending({ limit: 150 });
+	tasks.setActiveTaskView("pending");
+	await tasks.hydratePending({ limit: 150 });
 });
 </script>
 

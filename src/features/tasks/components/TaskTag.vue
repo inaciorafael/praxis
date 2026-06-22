@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { pickTagColorByName } from '@/shared/lib/tags/tag-color';
-import { Tag } from '@/shared/types/tag';
+import { pickTagColorByName } from "@/shared/lib/tags/tag-color";
+import { Tag } from "@/shared/types/tag";
 
-const props = defineProps<Tag>()
+const props = defineProps<Tag>();
 
-const tagStyle = pickTagColorByName(props.name)
+const tagStyle = pickTagColorByName(props.name);
 </script>
 
 <template>

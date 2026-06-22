@@ -15,82 +15,94 @@ const dataFilePassword = ref("");
 const passwordIsVisible = ref(false);
 const isSubmitting = ref(false);
 
-const vaultPath = computed(() => vault.activeDataFilePath ?? vault.selectedDataFilePath ?? "nenhum arquivo selecionado");
-const canSubmit = computed(() => Boolean(dataFilePath.value.trim() && dataFilePassword.value.trim() && !isSubmitting.value));
-const canCreate = computed(() => Boolean(dataFilePassword.value.trim() && !isSubmitting.value));
+const vaultPath = computed(
+	() =>
+		vault.activeDataFilePath ??
+		vault.selectedDataFilePath ??
+		"nenhum arquivo selecionado",
+);
+const canSubmit = computed(() =>
+	Boolean(
+		dataFilePath.value.trim() &&
+			dataFilePassword.value.trim() &&
+			!isSubmitting.value,
+	),
+);
+const canCreate = computed(() =>
+	Boolean(dataFilePassword.value.trim() && !isSubmitting.value),
+);
 
 watch(
-  () => [vault.selectedDataFilePath, vault.suggestedPath],
-  ([selectedPath, suggestedPath]) => {
-    if (!dataFilePath.value) {
-      dataFilePath.value = selectedPath || suggestedPath || "";
-    }
-  },
-  { immediate: true },
+	() => [vault.selectedDataFilePath, vault.suggestedPath],
+	([selectedPath, suggestedPath]) => {
+		if (!dataFilePath.value) {
+			dataFilePath.value = selectedPath || suggestedPath || "";
+		}
+	},
+	{ immediate: true },
 );
 
 function validateCurrentDataFile() {
-  void vault.validate(dataFilePath.value);
+	void vault.validate(dataFilePath.value);
 }
 
 async function selectExistingDataFile() {
-  const selectedPath = await vault.selectExistingDataFile();
+	const selectedPath = await vault.selectExistingDataFile();
 
-  if (selectedPath) {
-    dataFilePath.value = selectedPath;
-  }
+	if (selectedPath) {
+		dataFilePath.value = selectedPath;
+	}
 }
 
 async function selectNewDataFile() {
-  const selectedPath = await vault.selectNewDataFile();
+	const selectedPath = await vault.selectNewDataFile();
 
-  if (selectedPath) {
-    dataFilePath.value = selectedPath;
-  }
+	if (selectedPath) {
+		dataFilePath.value = selectedPath;
+	}
 }
 
 async function enterApp(opened: boolean) {
-  if (!opened) {
-    return;
-  }
+	if (!opened) {
+		return;
+	}
 
-  await router.replace({ name: "today" });
+	await router.replace({ name: "today" });
 }
 
 async function createCurrentDataFile() {
-  if (!dataFilePath.value.trim()) {
-    await selectNewDataFile();
-  }
+	if (!dataFilePath.value.trim()) {
+		await selectNewDataFile();
+	}
 
-  if (!canCreate.value || !dataFilePath.value.trim()) {
-    return;
-  }
+	if (!canCreate.value || !dataFilePath.value.trim()) {
+		return;
+	}
 
-  isSubmitting.value = true;
-  await enterApp(
-    await vault.create({
-      path: dataFilePath.value.trim(),
-      password: dataFilePassword.value,
-    }),
-  );
-  isSubmitting.value = false;
+	isSubmitting.value = true;
+	await enterApp(
+		await vault.create({
+			path: dataFilePath.value.trim(),
+			password: dataFilePassword.value,
+		}),
+	);
+	isSubmitting.value = false;
 }
 
 async function openCurrentDataFile() {
-  if (!canSubmit.value) {
-    return;
-  }
+	if (!canSubmit.value) {
+		return;
+	}
 
-  isSubmitting.value = true;
-  await enterApp(
-    await vault.open({
-      path: dataFilePath.value.trim(),
-      password: dataFilePassword.value,
-    }),
-  );
-  isSubmitting.value = false;
+	isSubmitting.value = true;
+	await enterApp(
+		await vault.open({
+			path: dataFilePath.value.trim(),
+			password: dataFilePassword.value,
+		}),
+	);
+	isSubmitting.value = false;
 }
-
 </script>
 
 <template>

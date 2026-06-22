@@ -7,8 +7,8 @@ import { useTaskStore } from "@/stores/task.store";
 const tasks = useTaskStore();
 
 onMounted(async () => {
-  tasks.setActiveTaskView("overdue");
-  await tasks.hydrateOverdue({ limit: 150 });
+	tasks.setActiveTaskView("overdue");
+	await tasks.hydrateOverdue({ limit: 150 });
 });
 </script>
 

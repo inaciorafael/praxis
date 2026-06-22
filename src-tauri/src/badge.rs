@@ -3,6 +3,8 @@ use std::{fs, path::PathBuf, sync::Mutex};
 use serde::{Deserialize, Serialize};
 use tauri::{image::Image, AppHandle, Manager, WebviewWindow};
 
+use crate::app_config;
+
 const BADGE_FILE: &str = "badge-count.json";
 const MAIN_WINDOW: &str = "main";
 
@@ -23,8 +25,14 @@ pub struct BadgeSnapshot {
 }
 
 #[tauri::command]
-pub fn get_badge_count(state: tauri::State<'_, BadgeStore>) -> BadgeSnapshot {
-    snapshot(state.0.lock().map(|state| state.count).unwrap_or_default())
+pub fn get_badge_count(app: AppHandle, state: tauri::State<'_, BadgeStore>) -> BadgeSnapshot {
+    let count = if app_config::is_badge_enabled(&app) {
+        state.0.lock().map(|state| state.count).unwrap_or_default()
+    } else {
+        0
+    };
+
+    snapshot(count)
 }
 
 #[tauri::command]
@@ -34,14 +42,19 @@ pub fn set_badge_count(
     count: u32,
 ) -> Result<BadgeSnapshot, String> {
     let count = count.min(999);
-    persist_badge_count(&app, count)?;
+    let visible_count = if app_config::is_badge_enabled(&app) {
+        count
+    } else {
+        0
+    };
+    persist_badge_count(&app, visible_count)?;
 
     if let Ok(mut state) = state.0.lock() {
-        state.count = count;
+        state.count = visible_count;
     }
 
-    let _ = apply_badge_count(&app, count);
-    Ok(snapshot(count))
+    let _ = apply_badge_count(&app, visible_count);
+    Ok(snapshot(visible_count))
 }
 
 #[tauri::command]
