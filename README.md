@@ -33,19 +33,19 @@ Praxis is not trying to replace a full project management suite. It is a focused
 
 ## Screenshots
 
-### Minha semana
+### My week
 
 Plan the next seven days starting tomorrow. Tasks stay grouped by day, completed tasks remain visible in context, and the badge counts only pending tasks in the visible week.
 
 ![Praxis week view](docs/assets/praxis-week.png)
 
-### Vencidas and task editor
+### Overdue and task editor
 
 Select a task to open a right-side editor with title, notes, status, due date, reminder, tags, checklist, and timeline.
 
 ![Praxis task editor](docs/assets/praxis-editor.png)
 
-### Lembretes
+### Reminders
 
 Reminders are grouped by urgency, including overdue reminders, today, tomorrow, this week, and later.
 
@@ -63,13 +63,13 @@ Reminders are grouped by urgency, including overdue reminders, today, tomorrow, 
 
 ### Today-first workflow
 
-- **Meu dia** shows tasks planned for today, due today, overdue tasks, and completed work from the day.
+- **My day** shows tasks planned for today, due today, overdue tasks, and completed work from the day.
 - The app badge counts pending tasks that matter today.
 - The goal is to make the daily pending count easy to see and easy to clear.
 
 ### Week planning
 
-- **Minha semana** shows a seven-day window starting tomorrow.
+- **My week** shows a seven-day window starting tomorrow.
 - Each day has a compact calendar tile and task count.
 - Clicking a day filters tasks for that specific date.
 - Weekly badge counts only pending tasks inside the visible week.
