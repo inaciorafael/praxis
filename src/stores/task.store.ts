@@ -616,18 +616,26 @@ function isPendingTaskInWeekBadgeScope(task: Task, weekStartDate: string) {
 	}
 
 	const weekStart = parseLocalDate(weekStartDate);
+	const today = parseLocalDate(todayLocalDate());
 
-	if (!weekStart) {
+	if (!weekStart || !today) {
 		return false;
 	}
 
-	const weekEnd = new Date(weekStart);
+	const effectiveStart = weekStart <= today ? addDays(today, 1) : weekStart;
+	const weekEnd = new Date(effectiveStart);
 	weekEnd.setDate(weekEnd.getDate() + 6);
 
 	return (
-		isDateInsideWindow(task.plannedFor, weekStart, weekEnd) ||
-		isDateInsideWindow(datePart(task.dueAt), weekStart, weekEnd)
+		isDateInsideWindow(task.plannedFor, effectiveStart, weekEnd) ||
+		isDateInsideWindow(datePart(task.dueAt), effectiveStart, weekEnd)
 	);
+}
+
+function addDays(date: Date, days: number) {
+	const nextDate = new Date(date);
+	nextDate.setDate(nextDate.getDate() + days);
+	return nextDate;
 }
 
 function datePart(value: string | null) {

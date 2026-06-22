@@ -1006,23 +1006,34 @@ fn is_task_in_week_badge_scope(task: &Task, today: &str) -> bool {
         return false;
     }
 
-    let Some(today) = parse_local_date(today) else {
+    let Some(week_start) = parse_local_date(today) else {
         return false;
     };
-    let Some(week_end) = today.checked_add(time::Duration::days(6)) else {
+
+    let current_day = current_local_date();
+    let effective_start = if week_start <= current_day {
+        current_day
+            .checked_add(time::Duration::days(1))
+            .unwrap_or(week_start)
+    } else {
+        week_start
+    };
+
+    let Some(week_end) = effective_start.checked_add(time::Duration::days(6)) else {
         return false;
     };
 
     task.planned_for
         .as_deref()
         .and_then(parse_local_date)
-        .is_some_and(|date| date >= today && date <= week_end)
+        .is_some_and(|date| date >= effective_start && date <= week_end)
         || task
             .due_at
             .as_deref()
-            .and_then(date_part)
+            .and_then(local_date_part)
+            .as_deref()
             .and_then(parse_local_date)
-            .is_some_and(|date| date >= today && date <= week_end)
+            .is_some_and(|date| date >= effective_start && date <= week_end)
 }
 
 fn is_task_overdue(task: &Task, today: &str) -> bool {
@@ -1063,6 +1074,18 @@ fn is_task_upcoming(task: &Task, today: &str) -> bool {
 
 fn date_part(value: &str) -> Option<&str> {
     value.get(0..10)
+}
+
+fn local_date_part(value: &str) -> Option<String> {
+    let offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
+    local_date_part_at_offset(value, offset)
+}
+
+fn local_date_part_at_offset(value: &str, offset: time::UtcOffset) -> Option<String> {
+    OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
+        .ok()
+        .map(|date| date.to_offset(offset).date().to_string())
+        .or_else(|| value.get(0..10).map(str::to_string))
 }
 
 fn parse_local_date(value: &str) -> Option<Date> {
@@ -1196,31 +1219,66 @@ mod tests {
 
     #[test]
     fn week_badge_scope_counts_only_pending_tasks_inside_visible_week() {
+        let current_day = current_local_date();
+        let tomorrow = current_day
+            .checked_add(time::Duration::days(1))
+            .unwrap()
+            .to_string();
+        let later_this_week = current_day
+            .checked_add(time::Duration::days(2))
+            .unwrap()
+            .to_string();
+        let yesterday = current_day
+            .checked_sub(time::Duration::days(1))
+            .unwrap()
+            .to_string();
         let mut pending_this_week = task("pending-this-week", TaskStatus::Pending);
-        pending_this_week.planned_for = Some("2026-06-22".into());
+        pending_this_week.planned_for = Some(tomorrow.clone());
 
         let mut due_this_week = task("due-this-week", TaskStatus::Pending);
-        due_this_week.due_at = Some("2026-06-24T09:00:00Z".into());
+        due_this_week.due_at = Some(format!("{later_this_week}T09:00:00Z"));
 
         let mut pending_overdue = task("pending-overdue", TaskStatus::Pending);
-        pending_overdue.due_at = Some("2026-06-20T09:00:00Z".into());
+        pending_overdue.due_at = Some(format!("{yesterday}T09:00:00Z"));
 
         let mut completed_this_week = task("completed-this-week", TaskStatus::Completed);
-        completed_this_week.completed_at = Some("2026-06-23T18:00:00Z".into());
+        completed_this_week.completed_at = Some(format!("{tomorrow}T18:00:00Z"));
 
         assert!(is_task_in_week_badge_scope(
             &pending_this_week,
-            "2026-06-22"
+            &current_day.to_string()
         ));
-        assert!(is_task_in_week_badge_scope(&due_this_week, "2026-06-22"));
+        assert!(is_task_in_week_badge_scope(
+            &due_this_week,
+            &current_day.to_string()
+        ));
         assert!(!is_task_in_week_badge_scope(
             &pending_overdue,
-            "2026-06-22"
+            &current_day.to_string()
         ));
         assert!(!is_task_in_week_badge_scope(
             &completed_this_week,
-            "2026-06-22"
+            &current_day.to_string()
         ));
+    }
+
+    #[test]
+    fn week_badge_scope_excludes_today_when_start_date_is_today() {
+        let today = current_local_date().to_string();
+        let mut due_today = task("due-today", TaskStatus::Pending);
+        due_today.due_at = Some(format!("{today}T23:00:00Z"));
+
+        assert!(!is_task_in_week_badge_scope(&due_today, &today));
+    }
+
+    #[test]
+    fn local_date_part_uses_user_timezone_for_due_dates() {
+        let brazil_offset = time::UtcOffset::from_hms(-3, 0, 0).unwrap();
+
+        assert_eq!(
+            local_date_part_at_offset("2026-06-23T02:59:00Z", brazil_offset).as_deref(),
+            Some("2026-06-22")
+        );
     }
 
     #[test]
@@ -1547,4 +1605,10 @@ fn now_iso() -> Result<String, String> {
     time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
         .map_err(|error| error.to_string())
+}
+
+fn current_local_date() -> Date {
+    OffsetDateTime::now_local()
+        .unwrap_or_else(|_| OffsetDateTime::now_utc())
+        .date()
 }

@@ -74,10 +74,7 @@ export const useVaultStore = defineStore("vault", {
 				this.applyStatus(status);
 				this.suggestedPath = suggestedPath;
 			} catch (error) {
-				this.error =
-					error instanceof Error
-						? error.message
-						: "Nao foi possivel carregar o cofre.";
+				this.error = errorMessage(error, "Nao foi possivel carregar o cofre.");
 			}
 		},
 
@@ -85,10 +82,10 @@ export const useVaultStore = defineStore("vault", {
 			try {
 				this.applyStatus(await getVaultStatus());
 			} catch (error) {
-				this.error =
-					error instanceof Error
-						? error.message
-						: "Nao foi possivel atualizar o status do cofre.";
+				this.error = errorMessage(
+					error,
+					"Nao foi possivel atualizar o status do cofre.",
+				);
 			}
 		},
 
@@ -98,10 +95,7 @@ export const useVaultStore = defineStore("vault", {
 				this.error = "";
 				return this.validation;
 			} catch (error) {
-				this.error =
-					error instanceof Error
-						? error.message
-						: "Nao foi possivel validar o arquivo.";
+				this.error = errorMessage(error, "Nao foi possivel validar o arquivo.");
 				return null;
 			}
 		},
@@ -121,17 +115,16 @@ export const useVaultStore = defineStore("vault", {
 				this.error = "";
 				return selectedPath;
 			} catch (error) {
-				this.error =
-					error instanceof Error
-						? error.message
-						: "Nao foi possivel selecionar o cofre.";
+				this.error = errorMessage(error, "Nao foi possivel selecionar o cofre.");
 				return null;
 			}
 		},
 
-		async selectNewDataFile() {
+		async selectNewDataFile(defaultPath?: string) {
 			try {
-				const selectedPath = await selectNewDataFilePath(this.suggestedPath);
+				const selectedPath = await selectNewDataFilePath(
+					defaultPath || this.suggestedPath,
+				);
 
 				if (!selectedPath) {
 					return null;
@@ -142,10 +135,10 @@ export const useVaultStore = defineStore("vault", {
 				this.error = "";
 				return selectedPath;
 			} catch (error) {
-				this.error =
-					error instanceof Error
-						? error.message
-						: "Nao foi possivel escolher onde criar o cofre.";
+				this.error = errorMessage(
+					error,
+					"Nao foi possivel escolher onde criar o cofre.",
+				);
 				return null;
 			}
 		},
@@ -160,10 +153,10 @@ export const useVaultStore = defineStore("vault", {
 				this.safetyCopiesDir = dir;
 				this.error = "";
 			} catch (error) {
-				this.error =
-					error instanceof Error
-						? error.message
-						: "Nao foi possivel carregar copias de seguranca.";
+				this.error = errorMessage(
+					error,
+					"Nao foi possivel carregar copias de seguranca.",
+				);
 			}
 		},
 
@@ -172,10 +165,10 @@ export const useVaultStore = defineStore("vault", {
 				this.applyStatus(await reloadActiveDataFile());
 				return true;
 			} catch (error) {
-				this.error =
-					error instanceof Error
-						? error.message
-						: "Nao foi possivel recarregar o arquivo .praxis.";
+				this.error = errorMessage(
+					error,
+					"Nao foi possivel recarregar o arquivo .praxis.",
+				);
 				return false;
 			}
 		},
@@ -186,10 +179,10 @@ export const useVaultStore = defineStore("vault", {
 				this.validation = null;
 				return true;
 			} catch (error) {
-				this.error =
-					error instanceof Error
-						? error.message
-						: "Nao foi possivel criar o arquivo .praxis.";
+				this.error = errorMessage(
+					error,
+					"Nao foi possivel criar o arquivo .praxis.",
+				);
 				return false;
 			}
 		},
@@ -200,10 +193,10 @@ export const useVaultStore = defineStore("vault", {
 				this.validation = null;
 				return true;
 			} catch (error) {
-				this.error =
-					error instanceof Error
-						? error.message
-						: "Nao foi possivel abrir o arquivo .praxis.";
+				this.error = errorMessage(
+					error,
+					"Nao foi possivel abrir o arquivo .praxis.",
+				);
 				return false;
 			}
 		},
@@ -212,11 +205,20 @@ export const useVaultStore = defineStore("vault", {
 			try {
 				this.applyStatus(await closeDataFile());
 			} catch (error) {
-				this.error =
-					error instanceof Error
-						? error.message
-						: "Nao foi possivel bloquear o cofre.";
+				this.error = errorMessage(error, "Nao foi possivel bloquear o cofre.");
 			}
 		},
 	},
 });
+
+function errorMessage(error: unknown, fallback: string) {
+	if (error instanceof Error) {
+		return error.message;
+	}
+
+	if (typeof error === "string") {
+		return error;
+	}
+
+	return fallback;
+}

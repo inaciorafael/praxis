@@ -10,10 +10,14 @@ import BaseButton from "@/shared/ui/BaseButton.vue";
 const router = useRouter();
 const vault = useVaultStore();
 
+type VaultMode = "open" | "create";
+
 const dataFilePath = ref("");
 const dataFilePassword = ref("");
 const passwordIsVisible = ref(false);
 const isSubmitting = ref(false);
+const mode = ref<VaultMode>("open");
+const formError = ref("");
 
 const vaultPath = computed(
 	() =>
@@ -21,43 +25,71 @@ const vaultPath = computed(
 		vault.selectedDataFilePath ??
 		"nenhum arquivo selecionado",
 );
-const canSubmit = computed(() =>
+const canOpen = computed(() =>
 	Boolean(
 		dataFilePath.value.trim() &&
 			dataFilePassword.value.trim() &&
+			mode.value === "open" &&
 			!isSubmitting.value,
 	),
 );
 const canCreate = computed(() =>
-	Boolean(dataFilePassword.value.trim() && !isSubmitting.value),
+	Boolean(
+		dataFilePath.value.trim() &&
+			dataFilePassword.value.trim() &&
+			mode.value === "create" &&
+			!isSubmitting.value,
+	),
+);
+const canSubmit = computed(() =>
+	mode.value === "create" ? canCreate.value : canOpen.value,
+);
+const submitLabel = computed(() => {
+	if (isSubmitting.value) {
+		return mode.value === "create" ? "Criando cofre..." : "Abrindo cofre...";
+	}
+
+	return mode.value === "create" ? "Criar cofre e entrar" : "Abrir cofre";
+});
+const selectedModeLabel = computed(() =>
+	mode.value === "create" ? "Novo cofre" : "Cofre existente",
 );
 
 watch(
-	() => [vault.selectedDataFilePath, vault.suggestedPath],
-	([selectedPath, suggestedPath]) => {
+	() => vault.selectedDataFilePath,
+	(selectedPath) => {
 		if (!dataFilePath.value) {
-			dataFilePath.value = selectedPath || suggestedPath || "";
+			dataFilePath.value = selectedPath || "";
 		}
 	},
 	{ immediate: true },
 );
 
 function validateCurrentDataFile() {
+	if (mode.value !== "open") {
+		return;
+	}
+
+	formError.value = "";
 	void vault.validate(dataFilePath.value);
 }
 
 async function selectExistingDataFile() {
+	formError.value = "";
 	const selectedPath = await vault.selectExistingDataFile();
 
 	if (selectedPath) {
+		mode.value = "open";
 		dataFilePath.value = selectedPath;
 	}
 }
 
 async function selectNewDataFile() {
-	const selectedPath = await vault.selectNewDataFile();
+	formError.value = "";
+	const selectedPath = await vault.selectNewDataFile(dataFilePath.value);
 
 	if (selectedPath) {
+		mode.value = "create";
 		dataFilePath.value = selectedPath;
 	}
 }
@@ -71,37 +103,67 @@ async function enterApp(opened: boolean) {
 }
 
 async function createCurrentDataFile() {
+	await selectNewDataFile();
+
 	if (!dataFilePath.value.trim()) {
-		await selectNewDataFile();
+		return;
 	}
 
-	if (!canCreate.value || !dataFilePath.value.trim()) {
+	if (!dataFilePassword.value.trim()) {
+		formError.value = "Informe uma senha para criar o cofre.";
+		return;
+	}
+
+	await createSelectedDataFile();
+}
+
+async function createSelectedDataFile() {
+	if (!canCreate.value) {
 		return;
 	}
 
 	isSubmitting.value = true;
-	await enterApp(
-		await vault.create({
-			path: dataFilePath.value.trim(),
-			password: dataFilePassword.value,
-		}),
-	);
-	isSubmitting.value = false;
+	formError.value = "";
+
+	try {
+		await enterApp(
+			await vault.create({
+				path: dataFilePath.value.trim(),
+				password: dataFilePassword.value,
+			}),
+		);
+	} finally {
+		isSubmitting.value = false;
+	}
 }
 
 async function openCurrentDataFile() {
-	if (!canSubmit.value) {
+	if (!canOpen.value) {
 		return;
 	}
 
 	isSubmitting.value = true;
-	await enterApp(
-		await vault.open({
-			path: dataFilePath.value.trim(),
-			password: dataFilePassword.value,
-		}),
-	);
-	isSubmitting.value = false;
+	formError.value = "";
+
+	try {
+		await enterApp(
+			await vault.open({
+				path: dataFilePath.value.trim(),
+				password: dataFilePassword.value,
+			}),
+		);
+	} finally {
+		isSubmitting.value = false;
+	}
+}
+
+async function submitVault() {
+	if (mode.value === "create") {
+		await createSelectedDataFile();
+		return;
+	}
+
+	await openCurrentDataFile();
 }
 </script>
 
@@ -115,34 +177,58 @@ async function openCurrentDataFile() {
       <div class="flex mobile:w-[80%] tablet:w-[60%] desktop:w-[60%] flex-col gap-5">
         <span class="text-display">Acesse seu planejamento privado</span>
         <span class="text-ink-soft">Suas tarefas ficam locais, privadas e criptografadas.</span>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            :class="[
+              'border px-3 py-2 text-body font-semibold hover:bg-hover',
+              mode === 'open' ? 'border-accent bg-selection text-ink' : 'border-border bg-surface text-ink-soft'
+            ]"
+            @click="selectExistingDataFile"
+          >
+            Selecionar cofre
+          </button>
+
+          <button
+            type="button"
+            :class="[
+              'border px-3 py-2 text-body font-semibold hover:bg-hover',
+              mode === 'create' ? 'border-accent bg-selection text-ink' : 'border-border bg-surface text-ink-soft'
+            ]"
+            @click="createCurrentDataFile"
+          >
+            Criar novo cofre
+          </button>
+        </div>
+
         <Input
           v-model="dataFilePath"
-          label="Selecione o cofre"
+          :label="selectedModeLabel"
           placeholder="Caminho do arquivo .praxis"
           @blur="validateCurrentDataFile"
         >
           <template #suffix>
-            <button class="text-small font-semibold text-accent" type="button" @click="selectExistingDataFile">
-              selecionar
+            <button
+              class="text-small font-semibold text-accent"
+              type="button"
+              @click="mode === 'create' ? createCurrentDataFile() : selectExistingDataFile()"
+            >
+              {{ mode === "create" ? "criar em..." : "selecionar" }}
             </button>
-            <!-- <button class="text-small font-semibold text-accent" type="button" @click="selectNewDataFile"> -->
-            <!--   novo -->
-            <!-- </button> -->
-            <!-- <button class="text-small font-semibold text-accent" type="button" @click="useSuggestedDataFilePath"> -->
-            <!--   sugerido -->
-            <!-- </button> -->
           </template>
         </Input>
         <span class="break-all text-small text-ink-muted">{{ vaultPath }}</span>
-        <span v-if="vault.validation?.valid" class="text-small font-semibold text-sage">Cofre reconhecido.</span>
-        <span v-if="vault.validation?.error" class="text-small font-semibold text-brick">{{ vault.validation.error }}</span>
+        <span v-if="mode === 'open' && vault.validation?.valid" class="text-small font-semibold text-sage">Cofre reconhecido.</span>
+        <span v-if="mode === 'open' && vault.validation?.error" class="text-small font-semibold text-brick">{{ vault.validation.error }}</span>
+        <span v-if="mode === 'create' && dataFilePath" class="text-small font-semibold text-sage">Novo cofre será criado nesse caminho.</span>
 
         <Input
           v-model="dataFilePassword"
           label="Senha"
           placeholder="Digite sua senha"
           :type="passwordIsVisible ? 'text' : 'password'"
-          @keydown.enter.prevent="openCurrentDataFile"
+          @keydown.enter.prevent="submitVault"
         >
           <template #prefix>
             <KeyRound />
@@ -157,9 +243,9 @@ async function openCurrentDataFile() {
         <span>
           <strong class="text-purple">Escolha um cofre</strong> existente ou <strong class="text-purple">crie um novo</strong> para começar.
         </span>
+        <span v-if="formError" class="text-small font-semibold text-brick">{{ formError }}</span>
         <span v-if="vault.error" class="text-small font-semibold text-brick">{{ vault.error }}</span>
-        <BaseButton variant="success" label="Abrir cofre" :disabled="!canSubmit" @click="openCurrentDataFile" />
-        <BaseButton variant="ghost" label="Cadastrar novo cofre" :disabled="!canCreate" @click="createCurrentDataFile" />
+        <BaseButton variant="success" :label="submitLabel" :disabled="!canSubmit" @click="submitVault" />
       </div>
     </div>
   </section>
