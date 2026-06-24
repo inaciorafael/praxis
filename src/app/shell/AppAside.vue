@@ -6,7 +6,7 @@ import { useTaskStore } from "@/stores/task.store";
 import { useTagStore } from "@/stores/tag.store";
 import { useVaultStore } from "@/stores/vault.store";
 import { useBadgeStore } from "@/stores/badge.store";
-import { Hash, RefreshCw } from "@lucide/vue";
+import { LogOut, Plus, RefreshCw } from "@lucide/vue";
 import dayjs from "dayjs";
 
 const vault = useVaultStore();
@@ -30,64 +30,77 @@ async function lockVault() {
 	await badge.clear();
 	await router.replace({ name: "vault" });
 }
+
+function openFreeCreateModal() {
+	tasks.openFreeCreateTaskModal();
+}
 </script>
 
 <template>
-  <nav class="flex gap-1 p-3 flex-col justify-between h-full" aria-label="Navegacao principal">
+  <nav
+    class="flex h-full flex-col justify-between gap-1 overflow-y-auto p-3"
+    aria-label="Navegacao principal"
+  >
     <div>
+      <button
+        type="button"
+        class="mb-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-body font-semibold text-ink transition-colors hover:bg-hover"
+        @click="openFreeCreateModal"
+      >
+        <Plus :size="18" />
+        <span>Nova tarefa livre</span>
+      </button>
+
       <div class="flex flex-col gap-2">
         <RouterLink
           v-for="item in appNavigationItems"
           :key="item.to"
           :to="item.to"
-          class="flex min-h-10 items-center justify-between gap-2 rounded-md px-3 py-2 text-body font-semibold text-ink-soft transition-colors hover:bg-hover hover:text-ink"
-          active-class="bg-black text-paper hover:bg-black"
+          class="flex min-h-10 items-center justify-between gap-2 rounded-md px-3 py-2 text-body font-semibold text-ink-soft transition-colors"
+          active-class="bg-blue text-on-accent"
         >
-        <div class="flex flex-row items-center gap-2">
-          <component :is="item.icon" class="size-5 shrink-0" />
-          <span class="truncate">{{ item.label }}</span>
-        </div>
-        <span
-          v-if="getBadgeCount(item.badgeKey) > 0"
-          class="rounded-full border border-border bg-brick px-2 py-0.5 text-caption font-semibold text-paper"
-          >
-          {{ getBadgeCount(item.badgeKey) }}
-        </span>
-        </RouterLink>
-      </div>
-
-      <div class="flex flex-col py-3 gap-3">
-        <span class="text-heading">Minhas #tags</span>
-
-        <button class="flex flex-row items-center gap-1 px-3 py-2 hover:bg-hover" v-for="tag in tags.tags">
-          <div
-            :style="{ backgroundColor: tag.color }"
-            :class="[
-            'h-4 w-4 rounded flex items-center justify-center text-paper',
-            ]">
-            <Hash :size="10" />
+          <div class="flex flex-row items-center gap-2">
+            <component
+              :is="item.icon"
+              class="size-5 shrink-0"
+            />
+            <span class="truncate">{{ item.label }}</span>
           </div>
-          <span>{{ tag.name }}</span>
-        </button>
+          <span
+            v-if="getBadgeCount(item.badgeKey) > 0"
+            class="rounded-full border border-border bg-brick px-2 py-0.5 text-caption font-semibold text-on-accent"
+          >
+            {{ getBadgeCount(item.badgeKey) }}
+          </span>
+        </RouterLink>
       </div>
     </div>
 
     <div class="border-t flex flex-col gap-3 border-border py-3">
-      <div v-if="vault.active" class="flex text-sage font-semibold flex-row gap-2 items-center">
+      <div
+        v-if="vault.active"
+        class="flex text-sage font-semibold flex-row gap-2 items-center"
+      >
         <div class="h-2 w-2 rounded-full bg-sage"></div>
         <span class="text-small">Cofre Online</span>
       </div>
 
-      <div class="flex text-small font-semibold flex-row gap-2 items-center">
-        <RefreshCw :size="15" />
-        last synced
-        <span>{{ dayjs(vault.dataFileUpdatedAt).format('DD/MM/YYYY HH:mm A') }}</span>
+      <div
+        class="flex text-small font-semibold flex-row gap-2 items-center justify-between"
+      >
+        <div class="flex flex-row items-center gap-1">
+          <RefreshCw :size="15" />
+          last synced
+          <span>{{ dayjs(vault.dataFileUpdatedAt).format('DD/MM/YYYY HH:mm A') }}</span>
+        </div>
+
+        <button
+          class="text-on-accent bg-brick flex flex-row items-center p-2 rounded-xl"
+          @click="lockVault"
+        >
+          <LogOut :size="15" />
+        </button>
       </div>
-
-      <button class="bg-brick text-paper p-3 rounded-xl" @click="lockVault">
-        <span class="text-paper">Sair</span>
-      </button>
     </div>
-
   </nav>
 </template>

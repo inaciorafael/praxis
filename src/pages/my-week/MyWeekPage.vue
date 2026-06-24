@@ -6,6 +6,7 @@ import TaskCard from "@/features/tasks/components/TaskCard.vue";
 import { tomorrowLocalDate } from "@/shared/lib/tasks/task.rules";
 import type { Task } from "@/shared/types/task";
 import { useTaskStore } from "@/stores/task.store";
+import HelpKey from "@/features/help/components/HelpKey.vue";
 
 const tasks = useTaskStore();
 const weekStartDate = tomorrowLocalDate();
@@ -30,6 +31,12 @@ const weekDays = computed(() =>
 const selectedDayTasks = computed(() =>
 	tasks.myWeek.filter((task) => isTaskOnDate(task, selectedDate.value)),
 );
+const selectedDayPendingTasks = computed(() =>
+	selectedDayTasks.value.filter((task) => task.status === "pending"),
+);
+const selectedDayCompletedTasks = computed(() =>
+	selectedDayTasks.value.filter((task) => task.status === "completed"),
+);
 
 const selectedDayLabel = computed(() =>
 	dayjs(selectedDate.value).format("dddd[,] DD [de] MMMM"),
@@ -44,11 +51,6 @@ onMounted(async () => {
 function selectDate(date: string) {
 	selectedDate.value = date;
 	setWeekCreateContext(date);
-}
-
-function openCreateModal() {
-	setWeekCreateContext(selectedDate.value);
-	tasks.openCreateTaskModal();
 }
 
 function setWeekCreateContext(date: string) {
@@ -94,7 +96,7 @@ function datePart(value: string | null) {
         :key="day.key"
         class="flex flex-col gap-1 items-center"
       >
-        <span :class="[selectedDate === day.key ? 'font-semibold text-rose' : '']">{{
+        <span :class="[selectedDate === day.key ? 'font-semibold text-blue' : '']">{{
           day.weekday
         }}</span>
         <button
@@ -102,28 +104,30 @@ function datePart(value: string | null) {
           :class="[
             'w-30 h-30 transition-all flex flex-col border item-center justify-center relative',
             selectedDate === day.key
-              ? 'bg-rose border-rose'
-              : 'bg-transparent border-black hover:bg-hover',
+              ? 'bg-blue border-blue'
+              : 'bg-transparent border-ink hover:bg-hover',
           ]"
           @click="selectDate(day.key)"
         >
           <span
             :class="[
               'text-4xl',
-              selectedDate === day.key ? 'text-paper font-bold' : 'text-ink',
+              selectedDate === day.key ? 'text-on-accent font-bold' : 'text-ink',
             ]"
           >
             {{ day.day }}
           </span>
-          <span :class="[selectedDate === day.key ? 'text-paper' : 'text-ink']">
+          <span :class="[selectedDate === day.key ? 'text-on-accent' : 'text-ink']">
             {{ day.month }}
           </span>
 
           <div
             v-if="day.count > 0"
             :class="[
-              'absolute rounded-full flex items-center justify-center font-semibold bg-paper border -top-3 -right-3 w-8 h-8',
-              selectedDate === day.key ? 'text-rose border-rose' : 'text-ink border-ink',
+              'absolute rounded-full flex items-center justify-center font-semibold border -top-3 -right-3 w-8 h-8',
+              selectedDate === day.key
+                ? 'text-on-accent bg-blue border-on-accent'
+                : 'bg-paper text-ink border-ink',
             ]"
           >
             {{ day.count > 99 ? `+${99}` : day.count }}
@@ -132,17 +136,20 @@ function datePart(value: string | null) {
       </div>
     </div>
 
-    <div class="flex flex-col">
-      <span class="text-heading">{{ selectedDayLabel }}</span>
-      <span class="text-body text-ink-soft">{{ selectedDayTasks.length }} tarefa(s)</span>
+    <div class="flex flex-row items-center gap-5">
+      <div class="flex flex-col gap-2">
+        <span class="text-heading">{{ selectedDayLabel }}</span>
+        <div class="flex flex-row items-center gap-3">
+          <span class="text-body text-ink-soft"
+            >{{ selectedDayTasks.length }} tarefa(s)</span
+          >
+          <HelpKey
+            :keys="['Ctrl', 'N']"
+            label="Nova tarefa"
+          />
+        </div>
+      </div>
     </div>
-
-    <button
-      class="w-fit border border-border bg-surface px-4 py-2 text-body font-semibold text-ink hover:bg-hover"
-      @click="openCreateModal"
-    >
-      Nova tarefa para este dia
-    </button>
 
     <div
       v-if="selectedDayTasks.length === 0"
@@ -151,11 +158,40 @@ function datePart(value: string | null) {
       Nenhuma tarefa para este dia.
     </div>
 
-    <template
-      v-for="task in selectedDayTasks"
-      :key="task.id"
+    <section
+      v-if="selectedDayPendingTasks.length > 0"
+      class="grid gap-3"
     >
-      <TaskCard v-bind="task" />
-    </template>
+      <div class="flex items-center justify-between border-b border-border pb-2">
+        <span class="text-heading">Para fazer</span>
+        <span class="text-body text-ink-soft">
+          {{ selectedDayPendingTasks.length }}
+        </span>
+      </div>
+
+      <TaskCard
+        v-for="task in selectedDayPendingTasks"
+        :key="task.id"
+        v-bind="task"
+      />
+    </section>
+
+    <section
+      v-if="selectedDayCompletedTasks.length > 0"
+      class="grid gap-3"
+    >
+      <div class="flex items-center justify-between border-b border-border pb-2">
+        <span class="text-heading text-sage">Concluídas</span>
+        <span class="text-body text-ink-soft">
+          {{ selectedDayCompletedTasks.length }}
+        </span>
+      </div>
+
+      <TaskCard
+        v-for="task in selectedDayCompletedTasks"
+        :key="task.id"
+        v-bind="task"
+      />
+    </section>
   </section>
 </template>

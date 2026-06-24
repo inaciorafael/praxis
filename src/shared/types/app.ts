@@ -1,9 +1,13 @@
+export type AppTheme = "light" | "dark";
+
 export type AppConfig = {
+	theme: AppTheme;
 	startWithWindows: boolean;
 	startMinimized: boolean;
 	minimizeToTrayWhenUnlocked: boolean;
 	notificationsEnabled: boolean;
 	badgeEnabled: boolean;
+	completedTaskRetentionDays: number | null;
 };
 
 export type AppConfigPatch = Partial<AppConfig>;

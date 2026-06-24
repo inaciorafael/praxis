@@ -6,6 +6,7 @@ import { useVaultStore } from "@/stores/vault.store";
 import Input from "@/shared/ui/Input.vue";
 import { KeyRound } from "@lucide/vue";
 import BaseButton from "@/shared/ui/BaseButton.vue";
+import { takeDeferredAppNavigation } from "@/shared/lib/app/app-navigation.service";
 
 const router = useRouter();
 const vault = useVaultStore();
@@ -99,7 +100,7 @@ async function enterApp(opened: boolean) {
 		return;
 	}
 
-	await router.replace({ name: "today" });
+	await router.replace({ name: takeDeferredAppNavigation() ?? "today" });
 }
 
 async function createCurrentDataFile() {
@@ -169,7 +170,7 @@ async function submitVault() {
 
 <template>
   <section class="grid grid-cols-12 h-screen">
-    <div class="col-span-6 bg-black text-paper mobile:hidden desktop:flex items-center justify-center">
+    <div class="col-span-6 bg-ink text-paper mobile:hidden desktop:flex items-center justify-center">
       <span class="text-[6rem] font-semibold">Praxis</span>
     </div>
 

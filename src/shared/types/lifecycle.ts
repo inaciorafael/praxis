@@ -22,6 +22,8 @@ export type TaskLifecycleEventType =
 	| "taskReopened"
 	| "taskDeleted"
 	| "taskRestored"
+	| "taskArchived"
+	| "taskUnarchived"
 	| "taskRecurrenceGenerated"
 	| "checklistCompletedTask"
 	| "checklistReopenedTask";

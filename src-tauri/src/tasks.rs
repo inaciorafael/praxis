@@ -5,6 +5,7 @@ use time::{Date, Month, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::{
+    app_config,
     badge::{self, BadgeSnapshot, BadgeStore},
     checklist::{self, ChecklistItem, TaskProgress},
     lifecycle::{self, LifecycleActor, LifecycleEntityType, LifecycleEventInput},
@@ -29,6 +30,10 @@ pub struct Task {
     #[serde(default)]
     pub occurrence_date: Option<String>,
     pub completed_at: Option<String>,
+    #[serde(default)]
+    pub archived_at: Option<String>,
+    #[serde(default)]
+    pub retention_exempt: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -53,6 +58,7 @@ pub struct TaskView {
     recurrence_id: Option<String>,
     occurrence_date: Option<String>,
     completed_at: Option<String>,
+    archived_at: Option<String>,
     created_at: String,
     updated_at: String,
     is_overdue: bool,
@@ -118,6 +124,7 @@ pub struct TaskViewCounts {
     upcoming: usize,
     reminders: usize,
     completed: usize,
+    archived: usize,
     badge: BadgeSnapshot,
 }
 
@@ -148,6 +155,7 @@ pub fn generate_due_recurring_tasks(
     let mut document = read_active_document(&vault)?;
     let mut tasks = read_tasks_from_document(&document)?;
     let generated = recurrence::generate_due_tasks_in_document(&mut document, &mut tasks, &today)?;
+    let archived = apply_completed_archive_policy(&app, &mut document, &mut tasks)?;
 
     if generated > 0 {
         write_tasks_to_document(&mut document, &tasks)?;
@@ -155,7 +163,7 @@ pub fn generate_due_recurring_tasks(
 
     let reminder_sync = reminders::sync_task_reminders_in_document(&mut document, &tasks)?;
 
-    if generated > 0 || reminder_sync.changed {
+    if generated > 0 || archived > 0 || reminder_sync.changed {
         write_active_document(&vault, &mut document)?;
     }
 
@@ -187,16 +195,14 @@ pub fn list_week_tasks(
     vault: tauri::State<'_, VaultStore>,
     badge_state: tauri::State<'_, BadgeStore>,
     today: String,
+    start_date: String,
     options: Option<TaskListOptions>,
 ) -> Result<TaskListResult, String> {
-    list_task_result(
-        app,
-        vault,
-        badge_state,
-        today,
-        options,
-        is_task_in_week_view,
-    )
+    let view_start_date = start_date;
+
+    list_task_result(app, vault, badge_state, today, options, move |task, _| {
+        is_task_in_week_view(task, &view_start_date)
+    })
 }
 
 #[tauri::command]
@@ -261,6 +267,67 @@ pub fn list_completed_tasks(
 }
 
 #[tauri::command]
+pub fn list_archived_tasks(
+    app: AppHandle,
+    vault: tauri::State<'_, VaultStore>,
+    badge_state: tauri::State<'_, BadgeStore>,
+    today: String,
+    options: Option<TaskListOptions>,
+) -> Result<TaskListResult, String> {
+    let mut document = read_active_document(&vault)?;
+    let mut tasks = read_tasks_from_document(&document)?;
+    let archived = apply_completed_archive_policy(&app, &mut document, &mut tasks)?;
+    let reminder_sync = reminders::sync_task_reminders_in_document(&mut document, &tasks)?;
+
+    if archived > 0 || reminder_sync.changed {
+        write_active_document(&vault, &mut document)?;
+    }
+
+    native_reminders::reconcile_native_reminders(&app, &reminder_sync.reminders);
+
+    let document = read_active_document(&vault)?;
+    let checklist_items = checklist::read_checklist_items_from_document(&document)?;
+    let mut archived_tasks = tasks
+        .iter()
+        .filter(|task| task.archived_at.is_some())
+        .cloned()
+        .collect::<Vec<_>>();
+    archived_tasks.sort_by(|left, right| {
+        right
+            .archived_at
+            .cmp(&left.archived_at)
+            .then(right.completed_at.cmp(&left.completed_at))
+            .then(left.title.cmp(&right.title))
+            .then(left.id.cmp(&right.id))
+    });
+    let selected_tasks = paginate_tasks(archived_tasks, options.as_ref());
+    let selected_ids = selected_tasks
+        .iter()
+        .map(|task| task.id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let selected_checklist_items = checklist_items
+        .iter()
+        .filter(|item| selected_ids.contains(item.task_id.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    let badge_count = active_tasks(&tasks)
+        .iter()
+        .filter(|task| is_task_in_my_day(task, &today))
+        .count();
+    let badge = badge::set_badge_count(app, badge_state, badge_count as u32)?;
+
+    Ok(TaskListResult {
+        tasks: selected_tasks
+            .iter()
+            .map(|task| task_view(task, &selected_checklist_items, &today))
+            .collect(),
+        checklist_items: selected_checklist_items,
+        reminders: Vec::new(),
+        badge,
+    })
+}
+
+#[tauri::command]
 pub fn get_task_view_counts(
     app: AppHandle,
     vault: tauri::State<'_, VaultStore>,
@@ -271,6 +338,7 @@ pub fn get_task_view_counts(
     let mut document = read_active_document(&vault)?;
     let mut tasks = read_tasks_from_document(&document)?;
     let generated = recurrence::generate_due_tasks_in_document(&mut document, &mut tasks, &today)?;
+    let archived = apply_completed_archive_policy(&app, &mut document, &mut tasks)?;
 
     if generated > 0 {
         write_tasks_to_document(&mut document, &tasks)?;
@@ -278,13 +346,14 @@ pub fn get_task_view_counts(
 
     let reminder_sync = reminders::sync_task_reminders_in_document(&mut document, &tasks)?;
 
-    if generated > 0 || reminder_sync.changed {
+    if generated > 0 || archived > 0 || reminder_sync.changed {
         write_active_document(&vault, &mut document)?;
     }
 
     native_reminders::reconcile_native_reminders(&app, &reminder_sync.reminders);
 
-    let today_count = tasks
+    let visible_tasks = active_tasks(&tasks);
+    let today_count = visible_tasks
         .iter()
         .filter(|task| is_task_in_my_day(task, &today))
         .count();
@@ -296,29 +365,33 @@ pub fn get_task_view_counts(
 
     Ok(TaskViewCounts {
         today: today_count,
-        week: tasks
+        week: visible_tasks
             .iter()
             .filter(|task| is_task_in_week_badge_scope(task, week_start))
             .count(),
-        pending: tasks
+        pending: visible_tasks
             .iter()
             .filter(|task| task.status == TaskStatus::Pending)
             .count(),
-        overdue: tasks
+        overdue: visible_tasks
             .iter()
             .filter(|task| is_task_overdue(task, &today))
             .count(),
-        upcoming: tasks
+        upcoming: visible_tasks
             .iter()
             .filter(|task| is_task_upcoming(task, &today))
             .count(),
-        reminders: tasks
+        reminders: visible_tasks
             .iter()
             .filter(|task| task.status == TaskStatus::Pending && task.reminder_at.is_some())
             .count(),
-        completed: tasks
+        completed: visible_tasks
             .iter()
             .filter(|task| task.status == TaskStatus::Completed)
+            .count(),
+        archived: tasks
+            .iter()
+            .filter(|task| task.archived_at.is_some())
             .count(),
         badge,
     })
@@ -352,6 +425,8 @@ pub fn create_task(
         recurrence_id: None,
         occurrence_date: None,
         completed_at: None,
+        archived_at: None,
+        retention_exempt: false,
         created_at: now.clone(),
         updated_at: now,
     };
@@ -572,6 +647,7 @@ pub fn set_task_completed(
                 TaskStatus::Pending
             };
             task.completed_at = completed.then_some(now.clone());
+            task.retention_exempt = false;
             task.updated_at = now.clone();
             found = true;
             event = Some(LifecycleEventInput {
@@ -651,6 +727,157 @@ pub fn delete_task(
     finish_task_collection(app, badge_state, tasks, reminder_sync.reminders, &today)
 }
 
+#[tauri::command]
+pub fn archive_completed_tasks_before(
+    app: AppHandle,
+    vault: tauri::State<'_, VaultStore>,
+    badge_state: tauri::State<'_, BadgeStore>,
+    before_date: String,
+    today: String,
+) -> Result<TaskCollection, String> {
+    let cutoff = parse_local_date(&before_date)
+        .ok_or_else(|| "Informe uma data limite valida.".to_string())?;
+    let mut document = read_active_document(&vault)?;
+    let mut tasks = read_tasks_from_document(&document)?;
+    let archived_count = archive_completed_tasks_before_date(
+        &mut document,
+        &mut tasks,
+        cutoff,
+        &before_date,
+        false,
+    )?;
+
+    let reminder_sync = reminders::sync_task_reminders_in_document(&mut document, &tasks)?;
+
+    if archived_count > 0 || reminder_sync.changed {
+        write_active_document(&vault, &mut document)?;
+    }
+
+    native_reminders::reconcile_native_reminders(&app, &reminder_sync.reminders);
+    finish_task_collection(app, badge_state, tasks, reminder_sync.reminders, &today)
+}
+
+#[tauri::command]
+pub fn restore_archived_task(
+    app: AppHandle,
+    vault: tauri::State<'_, VaultStore>,
+    badge_state: tauri::State<'_, BadgeStore>,
+    id: String,
+    today: String,
+) -> Result<TaskCollection, String> {
+    let mut document = read_active_document(&vault)?;
+    let mut tasks = read_tasks_from_document(&document)?;
+    let now = now_iso()?;
+    let task = tasks
+        .iter_mut()
+        .find(|task| task.id == id)
+        .ok_or_else(|| "Tarefa nao encontrada.".to_string())?;
+
+    if task.archived_at.is_none() {
+        return Err("A tarefa informada nao esta arquivada.".into());
+    }
+
+    let archived_at = task.archived_at.take();
+    task.retention_exempt = true;
+    task.updated_at = now.clone();
+
+    lifecycle::append_event(
+        &mut document,
+        LifecycleEventInput {
+            entity_type: LifecycleEntityType::Task,
+            entity_id: id.clone(),
+            task_id: Some(id.clone()),
+            event_type: "taskUnarchived",
+            actor: LifecycleActor::user(),
+            summary: "Tarefa restaurada do arquivo".into(),
+            metadata: serde_json::json!({
+                "taskId": id,
+                "archivedAt": archived_at,
+                "restoredAt": now
+            }),
+        },
+    )?;
+    write_tasks_to_document(&mut document, &tasks)?;
+    let reminder_sync = reminders::sync_task_reminders_in_document(&mut document, &tasks)?;
+    write_active_document(&vault, &mut document)?;
+    native_reminders::reconcile_native_reminders(&app, &reminder_sync.reminders);
+    finish_task_collection(app, badge_state, tasks, reminder_sync.reminders, &today)
+}
+
+fn apply_completed_archive_policy(
+    app: &AppHandle,
+    document: &mut Value,
+    tasks: &mut [Task],
+) -> Result<usize, String> {
+    let Some(retention_days) = app_config::completed_task_retention_days(app) else {
+        return Ok(0);
+    };
+
+    let Some(cutoff) =
+        current_local_date().checked_sub(time::Duration::days(retention_days.into()))
+    else {
+        return Ok(0);
+    };
+    let before_date = cutoff.to_string();
+
+    archive_completed_tasks_before_date(document, tasks, cutoff, &before_date, true)
+}
+
+fn archive_completed_tasks_before_date(
+    document: &mut Value,
+    tasks: &mut [Task],
+    cutoff: Date,
+    before_date: &str,
+    respect_retention_exemption: bool,
+) -> Result<usize, String> {
+    let now = now_iso()?;
+    let mut archived_count = 0;
+    let mut events = Vec::new();
+
+    for task in &mut *tasks {
+        if task.status != TaskStatus::Completed
+            || task.archived_at.is_some()
+            || (respect_retention_exemption && task.retention_exempt)
+        {
+            continue;
+        }
+
+        let Some(completed_date) = task.completed_at.as_deref().and_then(completed_date_part)
+        else {
+            continue;
+        };
+
+        if completed_date >= cutoff {
+            continue;
+        }
+
+        task.archived_at = Some(now.clone());
+        task.updated_at = now.clone();
+        archived_count += 1;
+        events.push(LifecycleEventInput {
+            entity_type: LifecycleEntityType::Task,
+            entity_id: task.id.clone(),
+            task_id: Some(task.id.clone()),
+            event_type: "taskArchived",
+            actor: LifecycleActor::system(),
+            summary: "Tarefa arquivada".into(),
+            metadata: serde_json::json!({
+                "taskId": task.id.clone(),
+                "completedAt": task.completed_at.clone(),
+                "archivedAt": task.archived_at.clone(),
+                "beforeDate": before_date
+            }),
+        });
+    }
+
+    if archived_count > 0 {
+        lifecycle::append_events(document, events)?;
+        write_tasks_to_document(document, tasks)?;
+    }
+
+    Ok(archived_count)
+}
+
 pub(crate) fn read_tasks_from_document(document: &Value) -> Result<Vec<Task>, String> {
     let tasks = document
         .get("tasks")
@@ -694,7 +921,8 @@ pub(crate) fn finish_task_collection(
 ) -> Result<TaskCollection, String> {
     let document = read_active_document(&app.state::<VaultStore>())?;
     let checklist_items = checklist::read_checklist_items_from_document(&document)?;
-    let sorted_tasks = sorted_tasks_by_action_time(&tasks);
+    let visible_tasks = active_tasks(&tasks);
+    let sorted_tasks = sorted_tasks_by_action_time(&visible_tasks);
     let my_day = sorted_tasks
         .iter()
         .filter(|task| is_task_in_today_view(task, today))
@@ -766,6 +994,7 @@ fn list_task_result(
     let mut document = read_active_document(&vault)?;
     let mut tasks = read_tasks_from_document(&document)?;
     let generated = recurrence::generate_due_tasks_in_document(&mut document, &mut tasks, &today)?;
+    let archived = apply_completed_archive_policy(&app, &mut document, &mut tasks)?;
 
     if generated > 0 {
         write_tasks_to_document(&mut document, &tasks)?;
@@ -773,7 +1002,7 @@ fn list_task_result(
 
     let reminder_sync = reminders::sync_task_reminders_in_document(&mut document, &tasks)?;
 
-    if generated > 0 || reminder_sync.changed {
+    if generated > 0 || archived > 0 || reminder_sync.changed {
         write_active_document(&vault, &mut document)?;
     }
 
@@ -781,7 +1010,8 @@ fn list_task_result(
 
     let document = read_active_document(&vault)?;
     let checklist_items = checklist::read_checklist_items_from_document(&document)?;
-    let sorted_tasks = sorted_tasks_by_action_time(&tasks);
+    let visible_tasks = active_tasks(&tasks);
+    let sorted_tasks = sorted_tasks_by_action_time(&visible_tasks);
     let selected_tasks = paginate_tasks(
         sorted_tasks
             .iter()
@@ -834,6 +1064,14 @@ fn paginate_tasks(tasks: Vec<Task>, options: Option<&TaskListOptions>) -> Vec<Ta
     }
 }
 
+fn active_tasks(tasks: &[Task]) -> Vec<Task> {
+    tasks
+        .iter()
+        .filter(|task| task.archived_at.is_none())
+        .cloned()
+        .collect()
+}
+
 fn task_view(task: &Task, checklist_items: &[ChecklistItem], today: &str) -> TaskView {
     TaskView {
         id: task.id.clone(),
@@ -846,6 +1084,7 @@ fn task_view(task: &Task, checklist_items: &[ChecklistItem], today: &str) -> Tas
         recurrence_id: task.recurrence_id.clone(),
         occurrence_date: task.occurrence_date.clone(),
         completed_at: task.completed_at.clone(),
+        archived_at: task.archived_at.clone(),
         created_at: task.created_at.clone(),
         updated_at: task.updated_at.clone(),
         is_overdue: is_task_overdue(task, today),
@@ -924,23 +1163,27 @@ fn is_task_in_my_day(task: &Task, today: &str) -> bool {
         return false;
     }
 
-    task.planned_for.as_deref() == Some(today)
-        || task
-            .due_at
-            .as_deref()
-            .and_then(date_part)
-            .is_some_and(|due_date| due_date <= today)
+    task.due_at
+        .as_deref()
+        .and_then(local_date_part)
+        .is_some_and(|due_date| due_date.as_str() <= today)
 }
 
 fn is_task_in_today_view(task: &Task, today: &str) -> bool {
-    let planned_today = task.planned_for.as_deref() == Some(today);
-    let due_date = task.due_at.as_deref().and_then(date_part);
-    let due_today = due_date == Some(today);
-    let completed_today = task.completed_at.as_deref().and_then(date_part) == Some(today);
+    let due_date = task.due_at.as_deref().and_then(local_date_part);
+    let pending_due_today =
+        task.status == TaskStatus::Pending && due_date.as_deref() == Some(today);
+    let completed_today = task.status == TaskStatus::Completed
+        && task
+            .completed_at
+            .as_deref()
+            .and_then(local_date_part)
+            .as_deref()
+            == Some(today);
     let pending_overdue =
-        task.status == TaskStatus::Pending && due_date.is_some_and(|date| date < today);
+        task.status == TaskStatus::Pending && due_date.is_some_and(|date| date.as_str() < today);
 
-    planned_today || due_today || completed_today || pending_overdue
+    pending_due_today || completed_today || pending_overdue
 }
 
 #[cfg(test)]
@@ -1088,6 +1331,10 @@ fn local_date_part_at_offset(value: &str, offset: time::UtcOffset) -> Option<Str
         .or_else(|| value.get(0..10).map(str::to_string))
 }
 
+fn completed_date_part(value: &str) -> Option<Date> {
+    local_date_part(value).and_then(|date| parse_local_date(&date))
+}
+
 fn parse_local_date(value: &str) -> Option<Date> {
     let date = value.trim().get(0..10)?;
     let mut parts = date.split('-');
@@ -1128,6 +1375,8 @@ mod tests {
             recurrence_id: None,
             occurrence_date: None,
             completed_at: None,
+            archived_at: None,
+            retention_exempt: false,
             created_at: "2026-06-18T00:00:00Z".into(),
             updated_at: "2026-06-18T00:00:00Z".into(),
         }
@@ -1153,7 +1402,7 @@ mod tests {
         let mut completed = task("completed", TaskStatus::Completed);
         completed.planned_for = Some("2026-06-18".into());
 
-        assert!(is_task_in_my_day(&planned_today, "2026-06-18"));
+        assert!(!is_task_in_my_day(&planned_today, "2026-06-18"));
         assert!(is_task_in_my_day(&overdue, "2026-06-18"));
         assert!(!is_task_in_my_day(&completed, "2026-06-18"));
         assert!(is_task_overdue(&overdue, "2026-06-18"));
@@ -1171,6 +1420,9 @@ mod tests {
         let mut planned_today = task("planned-today", TaskStatus::Pending);
         planned_today.planned_for = Some("2026-06-18".into());
 
+        let mut due_today = task("due-today", TaskStatus::Pending);
+        due_today.due_at = Some("2026-06-18T09:00:00Z".into());
+
         let mut overdue = task("overdue", TaskStatus::Pending);
         overdue.due_at = Some("2026-06-17T09:00:00Z".into());
 
@@ -1181,19 +1433,107 @@ mod tests {
         let mut completed_today = task("completed-today", TaskStatus::Completed);
         completed_today.completed_at = Some("2026-06-18T18:00:00Z".into());
 
+        let mut completed_due_today_old = task("completed-due-today-old", TaskStatus::Completed);
+        completed_due_today_old.due_at = Some("2026-06-18T10:00:00Z".into());
+        completed_due_today_old.completed_at = Some("2026-06-17T18:00:00Z".into());
+
         let mut completed_old_overdue = task("completed-old-overdue", TaskStatus::Completed);
         completed_old_overdue.due_at = Some("2026-06-15T09:00:00Z".into());
         completed_old_overdue.completed_at = Some("2026-06-16T18:00:00Z".into());
 
-        assert!(is_task_in_today_view(&planned_today, "2026-06-18"));
+        assert!(!is_task_in_today_view(&planned_today, "2026-06-18"));
+        assert!(is_task_in_today_view(&due_today, "2026-06-18"));
         assert!(is_task_in_today_view(&overdue, "2026-06-18"));
         assert!(is_task_in_today_view(
             &completed_planned_today,
             "2026-06-18"
         ));
         assert!(is_task_in_today_view(&completed_today, "2026-06-18"));
+        assert!(!is_task_in_today_view(
+            &completed_due_today_old,
+            "2026-06-18"
+        ));
         assert!(!is_task_in_today_view(&completed_old_overdue, "2026-06-18"));
         assert!(!is_task_in_my_day(&completed_planned_today, "2026-06-18"));
+    }
+
+    #[test]
+    fn archive_completed_tasks_before_date_hides_only_old_completed_tasks() {
+        let mut old_completed = task("old-completed", TaskStatus::Completed);
+        old_completed.completed_at = Some("2024-06-17T10:00:00Z".into());
+
+        let mut recent_completed = task("recent-completed", TaskStatus::Completed);
+        recent_completed.completed_at = Some("2026-06-17T10:00:00Z".into());
+
+        let mut old_pending = task("old-pending", TaskStatus::Pending);
+        old_pending.completed_at = Some("2024-06-17T10:00:00Z".into());
+
+        let mut document = serde_json::json!({
+            "tasks": [],
+            "lifecycleEvents": []
+        });
+        let mut tasks = vec![old_completed, recent_completed, old_pending];
+        let cutoff = parse_local_date("2025-06-18").unwrap();
+
+        let archived = archive_completed_tasks_before_date(
+            &mut document,
+            &mut tasks,
+            cutoff,
+            "2025-06-18",
+            true,
+        )
+        .unwrap();
+        let visible_ids = active_tasks(&tasks)
+            .iter()
+            .map(|task| task.id.clone())
+            .collect::<Vec<_>>();
+        let event_count = document
+            .get("lifecycleEvents")
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or_default();
+
+        assert_eq!(archived, 1);
+        assert!(tasks[0].archived_at.is_some());
+        assert!(tasks[1].archived_at.is_none());
+        assert!(tasks[2].archived_at.is_none());
+        assert_eq!(visible_ids, vec!["recent-completed", "old-pending"]);
+        assert_eq!(event_count, 1);
+    }
+
+    #[test]
+    fn automatic_archive_respects_restored_task_exemption() {
+        let mut restored = task("restored", TaskStatus::Completed);
+        restored.completed_at = Some("2024-06-17T10:00:00Z".into());
+        restored.retention_exempt = true;
+        let mut document = serde_json::json!({
+            "tasks": [],
+            "lifecycleEvents": []
+        });
+        let mut tasks = vec![restored];
+        let cutoff = parse_local_date("2025-06-18").unwrap();
+
+        let automatic = archive_completed_tasks_before_date(
+            &mut document,
+            &mut tasks,
+            cutoff,
+            "2025-06-18",
+            true,
+        )
+        .unwrap();
+        assert_eq!(automatic, 0);
+        assert!(tasks[0].archived_at.is_none());
+
+        let manual = archive_completed_tasks_before_date(
+            &mut document,
+            &mut tasks,
+            cutoff,
+            "2025-06-18",
+            false,
+        )
+        .unwrap();
+        assert_eq!(manual, 1);
+        assert!(tasks[0].archived_at.is_some());
     }
 
     #[test]
@@ -1301,7 +1641,32 @@ mod tests {
             .filter(|task| is_task_in_my_day(task, "2026-06-18"))
             .count();
 
-        assert_eq!(badge_count, 2);
+        assert_eq!(badge_count, 1);
+    }
+
+    #[test]
+    fn week_view_start_date_never_expands_today_badge_scope() {
+        let today = "2026-06-18";
+        let week_start = "2026-06-19";
+        let mut due_today = task("due-today", TaskStatus::Pending);
+        due_today.due_at = Some("2026-06-18T23:00:00Z".into());
+        let mut due_tomorrow = task("due-tomorrow", TaskStatus::Pending);
+        due_tomorrow.due_at = Some("2026-06-19T10:00:00Z".into());
+        let tasks = vec![due_today, due_tomorrow];
+
+        let week_ids = tasks
+            .iter()
+            .filter(|task| is_task_in_week_view(task, week_start))
+            .map(|task| task.id.as_str())
+            .collect::<Vec<_>>();
+        let badge_ids = tasks
+            .iter()
+            .filter(|task| is_task_in_my_day(task, today))
+            .map(|task| task.id.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(week_ids, vec!["due-today", "due-tomorrow"]);
+        assert_eq!(badge_ids, vec!["due-today"]);
     }
 
     #[test]

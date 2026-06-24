@@ -4,10 +4,6 @@ import { useRoute } from "vue-router";
 
 import TaskCreateModal from "@/features/tasks/components/TaskCreateModal.vue";
 import { createTaskStatusScheduler } from "@/shared/lib/scheduler/task-status-scheduler";
-import {
-	todayLocalDate,
-	tomorrowLocalDate,
-} from "@/shared/lib/tasks/task.rules";
 import { useTaskStore } from "@/stores/task.store";
 
 const route = useRoute();
@@ -35,7 +31,9 @@ watch(
 	(routeName) => {
 		const activeView = taskViewFromRouteName(routeName);
 		taskStore.setActiveTaskView(activeView);
-		taskStore.setCreateContext(createContextFromRouteName(routeName));
+		if (activeView !== "today" && activeView !== "week") {
+			taskStore.setCreateContext(freeCreateContextFromRouteName(routeName));
+		}
 		scheduler.reschedule();
 	},
 	{ immediate: true },
@@ -75,24 +73,18 @@ function taskViewFromRouteName(routeName: unknown) {
 			return "reminders";
 		case "completed":
 			return "completed";
+		case "archived":
+			return "archived";
+		case "help":
+			return "pending";
 		case "today":
 		default:
 			return "today";
 	}
 }
 
-function createContextFromRouteName(routeName: unknown) {
-	const today = todayLocalDate();
-	const tomorrow = tomorrowLocalDate();
-
+function freeCreateContextFromRouteName(routeName: unknown) {
 	switch (routeName) {
-		case "my-week":
-			return {
-				source: "week" as const,
-				label: "Minha semana",
-				plannedFor: tomorrow,
-				dueDate: tomorrow,
-			};
 		case "pending":
 			return {
 				source: "pending" as const,
@@ -105,7 +97,7 @@ function createContextFromRouteName(routeName: unknown) {
 				source: "overdue" as const,
 				label: "Vencidas",
 				plannedFor: null,
-				dueDate: today,
+				dueDate: null,
 			};
 		case "reminders":
 			return {
@@ -121,13 +113,27 @@ function createContextFromRouteName(routeName: unknown) {
 				plannedFor: null,
 				dueDate: null,
 			};
+		case "archived":
+			return {
+				source: "pending" as const,
+				label: "Nova tarefa",
+				plannedFor: null,
+				dueDate: null,
+			};
+		case "help":
+			return {
+				source: "pending" as const,
+				label: "Nova tarefa",
+				plannedFor: null,
+				dueDate: null,
+			};
 		case "today":
 		default:
 			return {
-				source: "today" as const,
-				label: "Meu dia",
-				plannedFor: today,
-				dueDate: today,
+				source: "pending" as const,
+				label: "Nova tarefa",
+				plannedFor: null,
+				dueDate: null,
 			};
 	}
 }
@@ -164,6 +170,12 @@ function openCreateModalFromShortcut(event: KeyboardEvent) {
 	}
 
 	event.preventDefault();
+
+	if (event.shiftKey) {
+		taskStore.openFreeCreateTaskModal();
+		return;
+	}
+
 	taskStore.openCreateTaskModal();
 }
 </script>

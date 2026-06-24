@@ -176,18 +176,25 @@ Optional fields:
 - `due_at`: date/time when the task is due
 - `reminder_at`: date/time when a notification should fire
 - `completed_at`: when the task was completed
+- `archived_at`: when a completed task was hidden from normal views by retention policy
+- `retention_exempt`: prevents an explicitly restored task from being archived again automatically without changing its historical completion date
 - `recurrence_id`: recurrence rule reference, when recurring
 - `occurrence_date`: generated occurrence local date, when recurring
 
 Rules:
 
 - A completed task never counts toward the badge.
-- A pending task counts in "Meu Dia" when it is planned for today, due today, or overdue.
+- A pending task counts in "Meu Dia" when it is due today or overdue.
 - A pending task with no `planned_for`, no `due_at`, and no `reminder_at` stays in the general task list, not the daily badge.
 - `created_at` is history. It should not decide whether the task is due today unless `planned_for` is also set.
 - If a task has checklist items, the task status is controlled by the checklist: all items completed means the parent task is completed; any pending item reopens the parent task.
 - Checklist progress is derived at read time and must not be persisted as a mutable task field.
-- Task collections returned by the backend must be sorted by the nearest actionable date/time. Use the earliest of `due_at`, `reminder_at`, and `planned_for`; date-only values sort as the end of that day so specific times remain more precise.
+- Task collections returned by the backend must be sorted by the official product order: overdue first, then nearest `due_at`, then pending tasks without `due_at` by `created_at`, and completed tasks last by recent completion.
+- `due_at` is the only field that defines due urgency and overdue state.
+- `reminder_at` is for notification and reminder filters. It must not outrank a due date.
+- `planned_for` is for contextual grouping such as Minha Semana. It must not outrank a due date.
+- Archived tasks remain in the encrypted vault but are excluded from normal task endpoints and badge/count logic.
+- Only completed tasks can be archived automatically. Pending, overdue, recurring active, and reminder-bearing pending tasks must never be archived by retention policy.
 
 ### Checklist Item
 
@@ -377,6 +384,8 @@ Task event types:
 - `taskReopened`
 - `taskDeleted`
 - `taskRestored`
+- `taskArchived`
+- `taskUnarchived`
 - `taskRecurrenceGenerated`
 - `checklistCompletedTask`
 - `checklistReopenedTask`
@@ -525,17 +534,15 @@ Current view endpoints:
 - `list_upcoming_tasks`
 - `list_reminder_tasks`
 - `list_completed_tasks`
+- `archive_completed_tasks_before`
 
 ### Meu Dia
 
 `list_today_tasks` is the screen endpoint for today's work context. It includes all task
 statuses that belong to today:
 
-- pending tasks where `planned_for` equals today's local date
 - pending tasks where `due_at` is today
 - pending tasks where `due_at` is before today
-- completed tasks where `planned_for` is today
-- completed tasks where `due_at` is today
 - completed tasks where `completed_at` is today
 
 Sort order:

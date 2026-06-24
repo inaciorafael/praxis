@@ -142,6 +142,25 @@ Useful feedback:
 
 Future event; not used until trash/restore exists.
 
+### `taskArchived`
+
+A completed task left the operational views because of retention or a manual archive action.
+
+Useful feedback:
+
+- "Tarefa arquivada"
+- metadata keeps the completion date, archive date, and applied cutoff
+
+### `taskUnarchived`
+
+The user restored an archived task.
+
+Useful feedback:
+
+- "Tarefa restaurada do arquivo"
+- preserves the original completion date
+- prevents the automatic retention policy from immediately archiving it again
+
 ### `taskRecurrenceGenerated`
 
 The task was generated from a recurrence rule.

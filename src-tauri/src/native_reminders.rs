@@ -20,9 +20,43 @@ const TASK_PREFIX: &str = "Praxis_Reminder_";
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum NativeReminderEntry {
+    Legacy(String),
+    Scheduled {
+        task_name: String,
+        scheduled_at: String,
+        #[serde(default)]
+        executable_path: String,
+    },
+}
+
+impl NativeReminderEntry {
+    fn task_name(&self) -> &str {
+        match self {
+            Self::Legacy(task_name) => task_name,
+            Self::Scheduled { task_name, .. } => task_name,
+        }
+    }
+
+    fn matches(&self, task_name: &str, scheduled_at: &str, executable_path: &str) -> bool {
+        matches!(
+            self,
+            Self::Scheduled {
+                task_name: current_task_name,
+                scheduled_at: current_scheduled_at,
+                executable_path: current_executable_path,
+            } if current_task_name == task_name
+                && current_scheduled_at == scheduled_at
+                && current_executable_path == executable_path
+        )
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct NativeReminderIndex {
-    tasks: BTreeMap<String, String>,
+    tasks: BTreeMap<String, NativeReminderEntry>,
 }
 
 pub fn reconcile_native_reminders(app: &AppHandle, reminders: &[Reminder]) {
@@ -49,6 +83,8 @@ pub fn native_reminder_count(app: &AppHandle) -> usize {
 fn reconcile_windows_reminders(app: &AppHandle, reminders: &[Reminder]) -> Result<(), String> {
     let mut index = load_index(app)?;
     let now = OffsetDateTime::now_utc();
+    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+    let executable_path = executable.to_string_lossy().to_string();
     let desired = reminders
         .iter()
         .filter(|reminder| reminder.status == ReminderStatus::Scheduled)
@@ -64,20 +100,43 @@ fn reconcile_windows_reminders(app: &AppHandle, reminders: &[Reminder]) -> Resul
         .map(|(reminder, _)| reminder.id.clone())
         .collect::<BTreeSet<_>>();
 
-    for (reminder_id, task_name) in index.tasks.clone() {
+    let mut index_changed = false;
+
+    for (reminder_id, entry) in index.tasks.clone() {
         if !desired_ids.contains(&reminder_id) {
-            delete_task(&task_name)?;
+            delete_task(entry.task_name())?;
             index.tasks.remove(&reminder_id);
+            index_changed = true;
         }
     }
 
     for (reminder, scheduled_at) in desired {
         let task_name = task_name_for(&reminder.id);
-        create_or_update_task(app, &task_name, reminder, scheduled_at)?;
-        index.tasks.insert(reminder.id.clone(), task_name);
+        let scheduled_at_value = reminder.scheduled_at.clone();
+        let is_current = index
+            .tasks
+            .get(&reminder.id)
+            .is_some_and(|entry| entry.matches(&task_name, &scheduled_at_value, &executable_path));
+
+        if is_current {
+            continue;
+        }
+
+        create_or_update_task(app, &executable_path, &task_name, reminder, scheduled_at)?;
+        index.tasks.insert(
+            reminder.id.clone(),
+            NativeReminderEntry::Scheduled {
+                task_name,
+                scheduled_at: scheduled_at_value,
+                executable_path: executable_path.clone(),
+            },
+        );
+        index_changed = true;
     }
 
-    save_index(app, &index)?;
+    if index_changed {
+        save_index(app, &index)?;
+    }
     clear_last_error(app);
     Ok(())
 }
@@ -85,13 +144,13 @@ fn reconcile_windows_reminders(app: &AppHandle, reminders: &[Reminder]) -> Resul
 #[cfg(target_os = "windows")]
 fn create_or_update_task(
     app: &AppHandle,
+    executable_path: &str,
     task_name: &str,
     reminder: &Reminder,
     scheduled_at: OffsetDateTime,
 ) -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
     let xml_path = scheduler_dir(app)?.join(format!("{}.xml", sanitize_file_name(task_name)));
-    let xml = task_xml(&exe.to_string_lossy(), &reminder.id, scheduled_at);
+    let xml = task_xml(executable_path, &reminder.id, scheduled_at);
 
     fs::write(&xml_path, xml).map_err(|error| error.to_string())?;
 
@@ -296,5 +355,46 @@ fn clear_last_error(app: &AppHandle) {
 
     if path.exists() {
         let _ = fs::remove_file(path);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_entries_are_refreshed_once() {
+        let entry = NativeReminderEntry::Legacy("Praxis_Reminder_task_1".into());
+
+        assert!(!entry.matches(
+            "Praxis_Reminder_task_1",
+            "2026-06-24T12:00:00Z",
+            "C:\\Praxis\\praxis.exe"
+        ));
+    }
+
+    #[test]
+    fn scheduled_entries_only_match_the_same_time_and_task_name() {
+        let entry = NativeReminderEntry::Scheduled {
+            task_name: "Praxis_Reminder_task_1".into(),
+            scheduled_at: "2026-06-24T12:00:00Z".into(),
+            executable_path: "C:\\Praxis\\praxis.exe".into(),
+        };
+
+        assert!(entry.matches(
+            "Praxis_Reminder_task_1",
+            "2026-06-24T12:00:00Z",
+            "C:\\Praxis\\praxis.exe"
+        ));
+        assert!(!entry.matches(
+            "Praxis_Reminder_task_1",
+            "2026-06-24T13:00:00Z",
+            "C:\\Praxis\\praxis.exe"
+        ));
+        assert!(!entry.matches(
+            "Praxis_Reminder_task_1",
+            "2026-06-24T12:00:00Z",
+            "C:\\Praxis\\praxis-new.exe"
+        ));
     }
 }

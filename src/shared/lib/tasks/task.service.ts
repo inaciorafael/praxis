@@ -40,7 +40,8 @@ export async function listWeekTasks(
 	startDate = tomorrowLocalDate(),
 ) {
 	return invoke<TaskListResult>("list_week_tasks", {
-		today: startDate,
+		today: todayLocalDate(),
+		startDate,
 		options,
 	});
 }
@@ -80,6 +81,13 @@ export async function listCompletedTasks(options?: TaskListOptions) {
 	});
 }
 
+export async function listArchivedTasks(options?: TaskListOptions) {
+	return invoke<TaskListResult>("list_archived_tasks", {
+		today: todayLocalDate(),
+		options,
+	});
+}
+
 export async function getTaskViewCounts(weekStartDate = tomorrowLocalDate()) {
 	return invoke<TaskViewCounts>("get_task_view_counts", {
 		today: todayLocalDate(),
@@ -112,6 +120,20 @@ export async function setTaskCompleted(id: string, completed: boolean) {
 
 export async function deleteTask(id: string) {
 	return invoke<TaskCollection>("delete_task", {
+		id,
+		today: todayLocalDate(),
+	});
+}
+
+export async function archiveCompletedTasksBefore(beforeDate: string) {
+	return invoke<TaskCollection>("archive_completed_tasks_before", {
+		beforeDate,
+		today: todayLocalDate(),
+	});
+}
+
+export async function restoreArchivedTask(id: string) {
+	return invoke<TaskCollection>("restore_archived_task", {
 		id,
 		today: todayLocalDate(),
 	});

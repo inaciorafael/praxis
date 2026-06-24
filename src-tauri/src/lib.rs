@@ -1,6 +1,8 @@
 mod app_config;
+mod app_navigation;
 mod badge;
 mod checklist;
+mod jump_list;
 mod lifecycle;
 mod native_reminders;
 mod notification_launch;
@@ -12,6 +14,7 @@ mod tasks;
 mod tray;
 mod vault;
 
+use app_navigation::AppNavigationStore;
 use badge::{apply_badge_count, load_badge_count, BadgeState, BadgeStore};
 use notification_launch::NotificationLaunchStore;
 use tauri::{Emitter, Manager};
@@ -20,8 +23,18 @@ use vault::{VaultState, VaultStore};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if let Err(error) = jump_list::prepare_process_identity() {
+        eprintln!("Nao foi possivel definir a identidade do Praxis no Windows: {error}");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(request) = app_navigation::parse_navigation_request(_argv.iter()) {
+                let state = app.state::<AppNavigationStore>();
+                let _ = app_navigation::store_navigation_request(&state, request.clone());
+                let _ = app.emit("praxis://app-navigation", request);
+            }
+
             if let Some(context) =
                 notification_launch::parse_notification_launch_context(_argv.into_iter())
             {
@@ -47,12 +60,22 @@ pub fn run() {
                 std::env::args().any(|arg| arg == "--minimized" || arg == "--background");
             let count = load_badge_count(app.handle());
             app.manage(AppLifecycle::new());
+            app.manage(AppNavigationStore::new(
+                app_navigation::parse_navigation_request(std::env::args()),
+            ));
             app.manage(BadgeStore(std::sync::Mutex::new(BadgeState { count })));
             app.manage(VaultStore(std::sync::Mutex::new(VaultState::default())));
             app.manage(NotificationLaunchStore(std::sync::Mutex::new(
                 notification_launch::parse_notification_launch_context(std::env::args()),
             )));
             setup_tray(app)?;
+            if let Ok(executable) = std::env::current_exe() {
+                if let Ok(resource_dir) = app.path().resource_dir() {
+                    if let Err(error) = jump_list::install(&executable, &resource_dir) {
+                        eprintln!("Nao foi possivel configurar a Jump List: {error}");
+                    }
+                }
+            }
             vault::auto_unlock_data_file(app.handle())?;
             apply_badge_count(app.handle(), count)?;
 
@@ -96,6 +119,7 @@ pub fn run() {
             app_config::get_app_config,
             app_config::update_app_config,
             app_config::get_app_health,
+            app_navigation::take_app_navigation_request,
             lifecycle::list_task_timeline,
             badge::get_badge_count,
             badge::set_badge_count,
@@ -123,18 +147,22 @@ pub fn run() {
             tasks::list_upcoming_tasks,
             tasks::list_reminder_tasks,
             tasks::list_completed_tasks,
+            tasks::list_archived_tasks,
             tasks::get_task_view_counts,
             tasks::generate_due_recurring_tasks,
             tasks::create_task,
             tasks::update_task,
             tasks::set_task_completed,
             tasks::delete_task,
+            tasks::archive_completed_tasks_before,
+            tasks::restore_archived_task,
             checklist::create_checklist_item,
             checklist::update_checklist_item,
             checklist::set_checklist_item_completed,
             checklist::delete_checklist_item,
             checklist::reorder_checklist_items,
             reminders::list_reminders,
+            reminders::get_reminder_launch_payload,
             reminders::mark_reminder_fired,
             showcase::seed_showcase_data,
             tags::list_tags,

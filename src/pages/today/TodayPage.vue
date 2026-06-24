@@ -1,24 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
-import { useRouter } from "vue-router";
 import dayjs from "dayjs";
 
-import DayStatusClock from "@/features/tasks/components/DayStatusClock.vue";
 import TaskCard from "@/features/tasks/components/TaskCard.vue";
 import { todayLocalDate } from "@/shared/lib/tasks/task.rules";
-import { useBadgeStore } from "@/stores/badge.store";
-import { useTagStore } from "@/stores/tag.store";
 import { useTaskStore } from "@/stores/task.store";
-import { useVaultStore } from "@/stores/vault.store";
+import HelpKey from "@/features/help/components/HelpKey.vue";
 
-const router = useRouter();
-const badge = useBadgeStore();
-const tags = useTagStore();
 const tasks = useTaskStore();
-const vault = useVaultStore();
-const completedCount = computed(
-	() => tasks.myDay.filter((task) => task.status === "completed").length,
+const pendingTasks = computed(() =>
+	tasks.myDay.filter((task) => task.status === "pending"),
 );
+const completedTasks = computed(() =>
+	tasks.myDay.filter((task) => task.status === "completed"),
+);
+const completedCount = computed(() => completedTasks.value.length);
 const overdueCount = computed(
 	() =>
 		tasks.myDay.filter((task) => task.status === "pending" && task.isOverdue)
@@ -30,19 +26,6 @@ onMounted(async () => {
 	setTodayCreateContext();
 	await tasks.hydrateToday({ limit: 100 });
 });
-
-async function lockVault() {
-	await vault.close();
-	tasks.resetLocal();
-	tags.resetLocal();
-	await badge.clear();
-	await router.replace({ name: "vault" });
-}
-
-function openCreateModal() {
-	setTodayCreateContext();
-	tasks.openCreateTaskModal();
-}
 
 function setTodayCreateContext() {
 	const today = todayLocalDate();
@@ -65,26 +48,24 @@ function setTodayCreateContext() {
 
     <div class="flex flex-wrap gap-2">
       <div class="bg-sage px-3 py-1 flex items-center justify-center">
-        <span class="text-caption text-paper font-semibold uppercase"
+        <span class="text-caption text-on-accent font-semibold uppercase"
           >Completed {{ completedCount }}</span
         >
       </div>
 
       <div class="bg-brick px-3 py-1 flex items-center justify-center">
-        <span class="text-caption font-semibold uppercase text-paper"
+        <span class="text-caption font-semibold uppercase text-on-accent"
           >OVERDUE {{ overdueCount }}</span
         >
       </div>
     </div>
 
-    <DayStatusClock :tasks="tasks.myDay" />
-
-    <button
-      class="w-fit border border-border bg-surface px-4 py-2 text-body font-semibold text-ink hover:bg-hover"
-      @click="openCreateModal"
-    >
-      Nova tarefa
-    </button>
+    <div class="text-body flex flex-row items-center gap-2">
+      <HelpKey
+        :keys="['Ctrl', 'N']"
+        label="Para criar uma tarefa hoje."
+      />
+    </div>
 
     <div
       v-if="tasks.myDay.length === 0"
@@ -93,18 +74,36 @@ function setTodayCreateContext() {
       Nenhuma tarefa para hoje.
     </div>
 
-    <template
-      v-for="task in tasks.myDay"
-      :key="task.id"
+    <section
+      v-if="pendingTasks.length > 0"
+      class="grid gap-3"
     >
-      <TaskCard v-bind="task" />
-    </template>
+      <div class="flex items-center justify-between border-b border-border pb-2">
+        <span class="text-heading">Para fazer</span>
+        <span class="text-body text-ink-soft">{{ pendingTasks.length }}</span>
+      </div>
 
-    <button
-      class="w-fit border border-border bg-surface px-4 py-2 text-body text-ink hover:bg-hover"
-      @click="lockVault"
+      <TaskCard
+        v-for="task in pendingTasks"
+        :key="task.id"
+        v-bind="task"
+      />
+    </section>
+
+    <section
+      v-if="completedTasks.length > 0"
+      class="grid gap-3"
     >
-      Bloquear cofre
-    </button>
+      <div class="flex items-center justify-between border-b border-border pb-2">
+        <span class="text-heading text-sage">Concluídas</span>
+        <span class="text-body text-ink-soft">{{ completedTasks.length }}</span>
+      </div>
+
+      <TaskCard
+        v-for="task in completedTasks"
+        :key="task.id"
+        v-bind="task"
+      />
+    </section>
   </section>
 </template>

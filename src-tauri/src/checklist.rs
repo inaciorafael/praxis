@@ -470,6 +470,7 @@ pub(crate) fn sync_parent_task_status_from_checklist(
         tasks::TaskStatus::Pending
     };
     task.completed_at = should_be_completed.then_some(now.clone());
+    task.retention_exempt = false;
     task.updated_at = now;
 
     Ok(vec![LifecycleEventInput {
@@ -516,6 +517,8 @@ mod tests {
             recurrence_id: None,
             occurrence_date: None,
             completed_at: None,
+            archived_at: None,
+            retention_exempt: false,
             created_at: "2026-06-18T00:00:00Z".into(),
             updated_at: "2026-06-18T00:00:00Z".into(),
         }

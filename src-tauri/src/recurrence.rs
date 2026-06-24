@@ -281,6 +281,8 @@ fn task_from_rule(rule: &RecurrenceRule, occurrence_date: &str, now: &str) -> Ta
         recurrence_id: Some(rule.id.clone()),
         occurrence_date: Some(occurrence_date.to_string()),
         completed_at: None,
+        archived_at: None,
+        retention_exempt: false,
         created_at: now.to_string(),
         updated_at: now.to_string(),
     }

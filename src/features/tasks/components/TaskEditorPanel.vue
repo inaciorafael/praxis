@@ -407,7 +407,7 @@ function toIsoDateTime(value: string) {
       </div>
 
       <div class="border-t border-border pt-4">
-        <button type="button" class="w-full bg-brick px-3 py-2 text-body font-semibold text-paper" @click="deleteSelectedTask">
+        <button type="button" class="w-full bg-brick px-3 py-2 text-body font-semibold text-on-accent" @click="deleteSelectedTask">
           Remover tarefa
         </button>
       </div>

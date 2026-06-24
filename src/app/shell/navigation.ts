@@ -6,7 +6,9 @@ import {
 	Clock3,
 	Inbox,
 	AlertTriangle,
+	Archive,
 	Bell,
+	BookOpen,
 	Settings,
 } from "@lucide/vue";
 
@@ -58,11 +60,20 @@ export const appNavigationItems: AppNavigationItem[] = [
 		label: "Concluídas",
 		to: "/app/completed",
 		icon: CheckCircle2,
-		badgeKey: "completed",
+	},
+	{
+		label: "Arquivadas",
+		to: "/app/archived",
+		icon: Archive,
 	},
 	{
 		label: "Configurações",
 		to: "/app/settings",
 		icon: Settings,
+	},
+	{
+		label: "Ajuda",
+		to: "/app/help",
+		icon: BookOpen,
 	},
 ];

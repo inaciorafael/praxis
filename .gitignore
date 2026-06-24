@@ -10,13 +10,33 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
 *.local
+
+# Local Praxis vaults and safety copies
+*.praxis
+*.praxis.*
+
+# Test and tooling caches
+coverage
+.coverage
+.cache
+.vite
+.vitest
+.turbo
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
+Desktop.ini
 *.suo
 *.ntvs*
 *.njsproj

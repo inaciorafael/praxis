@@ -6,6 +6,7 @@ import {
 	updateAppConfig,
 } from "@/shared/lib/app/app-config.service";
 import type { AppConfig, AppConfigPatch, AppHealth } from "@/shared/types/app";
+import { applyTheme } from "@/shared/lib/theme/theme.service";
 
 type AppStoreState = {
 	name: string;
@@ -28,6 +29,7 @@ export const useAppStore = defineStore("app", {
 		async hydrateConfig() {
 			try {
 				this.config = await getAppConfig();
+				applyTheme(this.config.theme);
 				this.isReady = true;
 				this.error = "";
 			} catch (error) {
@@ -41,6 +43,7 @@ export const useAppStore = defineStore("app", {
 		async updateConfig(patch: AppConfigPatch) {
 			try {
 				this.config = await updateAppConfig(patch);
+				applyTheme(this.config.theme);
 				this.error = "";
 				return true;
 			} catch (error) {
@@ -56,6 +59,7 @@ export const useAppStore = defineStore("app", {
 			try {
 				this.health = await getAppHealth();
 				this.config = this.health.config;
+				applyTheme(this.config.theme);
 				this.error = "";
 				return this.health;
 			} catch (error) {

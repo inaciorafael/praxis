@@ -15,6 +15,7 @@ export type Task = {
 	recurrenceId: string | null;
 	occurrenceDate: string | null;
 	completedAt: string | null;
+	archivedAt: string | null;
 	createdAt: string;
 	updatedAt: string;
 	isOverdue: boolean;
@@ -71,5 +72,6 @@ export type TaskViewCounts = {
 	upcoming: number;
 	reminders: number;
 	completed: number;
+	archived: number;
 	badge: BadgeSnapshot;
 };

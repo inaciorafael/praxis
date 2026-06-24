@@ -18,7 +18,7 @@ withDefaults(
 );
 
 const variants: Record<Props["variant"], string> = {
-	primary: "bg-rose text-paper",
+	primary: "bg-rose text-on-accent",
 	secondary: "bg-surface text-ink hover:bg-hover",
 	ghost: "bg-transparent hover:bg-hover",
 	danger: "bg-brick",
@@ -27,11 +27,11 @@ const variants: Record<Props["variant"], string> = {
 };
 
 const variantsLabel: Record<Props["variant"], string> = {
-	primary: "text-paper",
+	primary: "text-on-accent",
 	secondary: "text-ink",
 	ghost: "text-ink",
-	danger: "text-paper",
-	success: "text-paper",
+	danger: "text-on-accent",
+	success: "text-on-accent",
 	icon: "",
 };
 

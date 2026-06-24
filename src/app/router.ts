@@ -11,6 +11,8 @@ import OverduePage from "@/pages/overdue/OverduePage.vue";
 import RemindersPage from "@/pages/reminders/RemindersPage.vue";
 import CompletedPage from "@/pages/completed/CompletedPage.vue";
 import SettingsPage from "@/pages/settings/SettingsPage.vue";
+import ArchivedPage from "@/pages/archived/ArchivedPage.vue";
+import HelpPage from "@/pages/help/HelpPage.vue";
 
 export const router = createRouter({
 	history: createWebHashHistory(),
@@ -75,6 +77,16 @@ export const router = createRouter({
 					path: "settings",
 					name: "settings",
 					component: SettingsPage,
+				},
+				{
+					path: "archived",
+					name: "archived",
+					component: ArchivedPage,
+				},
+				{
+					path: "help",
+					name: "help",
+					component: HelpPage,
 				},
 
 				{

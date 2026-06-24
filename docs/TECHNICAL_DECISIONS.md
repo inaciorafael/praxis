@@ -122,6 +122,7 @@ Current task fields:
 - `recurrenceId`
 - `occurrenceDate`
 - `completedAt`
+- `archivedAt`
 - `createdAt`
 - `updatedAt`
 
@@ -140,6 +141,7 @@ Current task commands:
 - `update_task`
 - `set_task_completed`
 - `delete_task`
+- `archive_completed_tasks_before`
 
 Missing task commands:
 
@@ -161,7 +163,8 @@ Task ordering rule:
 - `list_today_tasks` and `list_week_tasks` are view endpoints and return every relevant status for their time window.
 - `list_pending_tasks`, `list_overdue_tasks`, `list_reminder_tasks`, and `list_completed_tasks` are strict status/filter endpoints.
 - `list_upcoming_tasks` means pending tasks scheduled for a future local date.
-- Badge counting remains a separate pending-only rule: pending tasks planned for today, due today, or overdue.
+- Badge counting remains a separate pending-only rule: pending tasks due today or overdue.
+- `list_week_tasks` keeps `today` and `startDate` as separate parameters. A future view date must never redefine the badge's current day.
 - Do not duplicate or override the default order in page components unless a user-selected sort mode exists.
 - Pending task lists sort by the official urgency order: overdue first, then nearest `dueAt`, then tasks without `dueAt` by `createdAt`.
 - `dueAt` is the only field that defines due urgency and overdue state.
@@ -169,6 +172,15 @@ Task ordering rule:
 - `plannedFor` is for view membership, such as Meu Dia and Minha Semana; it must not outrank a due date.
 - Tasks without `dueAt` sort after due tasks.
 - Completed tasks sort after pending tasks in all-task collections and by most recent `completedAt` in completed collections.
+- Archived tasks stay encrypted inside the vault but are excluded from normal task endpoints.
+- The default completed-task retention is 730 days.
+- A user may disable completed-task retention by setting `completedTaskRetentionDays` to `null`.
+- Automatic retention must archive only completed tasks whose `completedAt` is older than the configured cutoff.
+- Retention is archival, not deletion. It keeps historical data recoverable for future export/restore tooling.
+- Archived tasks have a dedicated paginated endpoint and a recovery view outside the main navigation.
+- Restoring a task preserves `completedAt`; historical dates must never be rewritten to bypass retention.
+- A restored task receives a retention exemption until its completion cycle changes or the user explicitly runs a manual archive.
+- Permanent deletion is not part of automatic retention and must always be a separate explicit user action.
 
 ## 7. Minimal Organization Model
 
@@ -212,8 +224,8 @@ Checklist rules:
 
 Current rule:
 
-- pending task counts in `Meu Dia` if `plannedFor` is today
 - pending task counts in `Meu Dia` if `dueAt` is today or overdue
+- completed task appears in `Meu Dia` only if it was completed today
 - completed task never counts
 
 The badge count is derived from `Meu Dia`.
@@ -401,3 +413,121 @@ Before claiming tags/filtros are ready:
 - verify task display updates without rewriting every task
 - filter `Meu Dia`, pending, and completed by tag
 - test with hundreds/thousands of generated tasks
+
+## 14. E-Ink Themes
+
+Praxis supports two explicit appearance modes:
+
+- `light`: warm electronic-paper background with dark ink
+- `dark`: charcoal electronic-paper background with soft light ink
+
+Rules:
+
+- The selected theme is persisted in `app-config.json`.
+- A localStorage mirror is applied before Vue mounts to avoid a light-theme flash.
+- The backend configuration remains the authoritative preference.
+- Tauri's native application theme is synchronized so the Windows title bar follows the selected mode.
+- Neutral tokens (`paper`, `surface`, `hover`, `selection`, `border`, `ink`, `ink-soft`, and `ink-muted`) change by theme.
+- Status and identity colors remain stable between themes.
+- Text placed over accent/status colors must use `on-accent`, never `paper`.
+- Hardcoded black and white classes are not allowed in product UI; use semantic neutral tokens.
+- The light theme represents matte electronic paper, not a bright white display.
+- Light-mode neutral surfaces intentionally use reduced luminance and softened contrast for prolonged desktop use.
+- Pure white and pure black are not allowed in light-mode controls, shortcut keys or toggles.
+
+## 15. Windows Jump List Navigation
+
+On Windows, Praxis registers native Jump List tasks for its main product views:
+
+- Meu Dia
+- Minha Semana
+
+Product rule:
+
+- Keep the Jump List intentionally short.
+- It exists for immediate access to today and the next seven days, not as a copy of the sidebar.
+
+Implementation rules:
+
+- Native module: `src-tauri/src/jump_list.rs`.
+- Every shortcut launches the current executable with `--open-view=<view>`.
+- Allowed destinations are validated in Rust by `src-tauri/src/app_navigation.rs`.
+- Unknown values are ignored and can never become arbitrary frontend routes.
+- The Windows AppUserModelID is `com.rafael.praxis`, matching the Tauri identifier.
+- If Praxis is already running, the single-instance plugin emits `praxis://app-navigation`.
+- If Praxis is closed, the initial request is retained until the frontend consumes it.
+- Authenticated-route protection remains authoritative. A locked vault is shown first.
+- When the user unlocks the vault, a deferred Jump List destination is opened instead of always redirecting to Meu Dia.
+- Jump List registration failures must not prevent Praxis from starting.
+- Each Jump List task uses a dedicated transparent PNG source and multi-resolution `.ico` generated from the same Lucide icon language used by the frontend.
+- Icon resources live in `src-tauri/resources/jump-list` and are bundled under `resources/jump-list`.
+- Icon generation is reproducible through `node scripts/generate-jump-list-icons.mjs`.
+- Every shortcut falls back to the main executable icon if its dedicated resource is unavailable.
+
+## 16. Runtime Performance
+
+Native reminder reconciliation is incremental:
+
+- `native-reminders.json` records the Windows task name and scheduled time.
+- `schtasks /Create` runs only for a new reminder or when its scheduled time changes.
+- Removed or cancelled reminders still delete their corresponding Windows task.
+- Legacy index entries are refreshed once and migrated automatically.
+- The index includes the executable path, so changing between development and installed builds refreshes the Windows task.
+- Reading a task view must not recreate unchanged Windows scheduled tasks.
+
+Native reminder delivery is a frozen reliability boundary:
+
+- Windows builds use the GUI subsystem in debug and release; scheduled reminders must never open a console window.
+- A native launch resolves its notification payload directly by reminder ID from the encrypted vault.
+- Delivery never depends on the currently visible route or on whether that task belongs to the loaded page.
+- A reminder is marked as fired only after the notification command is sent.
+- Changes to this flow require regression tests for launch parsing, payload resolution, scheduling and fired-state transitions.
+
+Frontend task rendering rules:
+
+- Page-specific task reads keep the in-memory reminder synchronization required to surface native Windows launches as visible notifications.
+- Checklist items are indexed by task ID in Pinia and reused by every `TaskCard`.
+- Task lookup is indexed by ID instead of rebuilding and scanning all view arrays per card.
+
+## 17. Startup Splash
+
+The startup splash is rendered directly by `index.html`, before Vue and the application stylesheet load.
+
+Rules:
+
+- Never show an unstyled white frame while the WebView initializes.
+- Apply the locally stored light or dark theme before the first paint.
+- Keep the splash lightweight and independent from Vue, Pinia, Tauri commands and remote assets.
+- Remove it only after configuration and vault initialization complete and the mounted UI paints.
+- Keep a ten-second failsafe so initialization errors can never leave the application permanently covered.
+- The splash uses the Praxis E-Ink palette and respects reduced-motion preferences.
+
+## 18. Inline Task Tags
+
+Task creation supports inline tag commands in the title field.
+
+Rules:
+
+- Typing `+` after whitespace opens the tag selector at the title input.
+- The text after `+` filters existing tags by name.
+- `ArrowUp` and `ArrowDown` navigate suggestions; `Enter` or `Tab` confirms.
+- A name without an exact match is staged as a new tag.
+- Staged tags appear as removable chips and the `+name` command is removed from the final task title.
+- New tags are persisted only after task creation succeeds, preventing orphan tags when the modal is cancelled.
+- New tag colors are selected deterministically through `pickTagColorByName`.
+- Every selected or newly created tag is assigned automatically to the created task.
+- A plus sign inside a word, such as `C++`, is not interpreted as a tag command.
+
+## 19. Creator Support
+
+The Help Center includes a quiet creator-support section.
+
+Rules:
+
+- Support is voluntary and never blocks, limits or changes product functionality.
+- Do not use popups, recurring banners, countdowns, guilt language or donation prompts outside Help.
+- Explain concretely that contributions support development, Windows testing and maintenance.
+- The public Pix key is configured at build time through `VITE_PRAXIS_PIX_KEY`.
+- Never commit a real key to source files; `.env.example` documents the configuration contract.
+- Display only a masked version of the key and copy the complete value through an explicit user action.
+- When no key is configured, show a neutral availability message instead of fake donation data.

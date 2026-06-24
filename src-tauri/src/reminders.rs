@@ -1,3 +1,5 @@
+use std::collections::{BTreeSet, HashMap};
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -33,6 +35,17 @@ pub struct ReminderSyncResult {
     pub changed: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderLaunchPayload {
+    reminder_id: String,
+    notification_id: u32,
+    task_id: String,
+    title: String,
+    body: String,
+    scheduled_at: String,
+}
+
 impl Reminder {
     pub(crate) fn task_id(&self) -> &str {
         &self.task_id
@@ -43,6 +56,18 @@ impl Reminder {
 pub fn list_reminders(vault: tauri::State<'_, VaultStore>) -> Result<Vec<Reminder>, String> {
     let document = read_active_document(&vault)?;
     read_reminders_from_document(&document)
+}
+
+#[tauri::command]
+pub fn get_reminder_launch_payload(
+    vault: tauri::State<'_, VaultStore>,
+    id: String,
+) -> Result<Option<ReminderLaunchPayload>, String> {
+    let document = read_active_document(&vault)?;
+    let reminders = read_reminders_from_document(&document)?;
+    let tasks = crate::tasks::read_tasks_from_document(&document)?;
+
+    Ok(find_reminder_launch_payload(&reminders, &tasks, &id))
 }
 
 #[tauri::command]
@@ -102,22 +127,29 @@ pub fn sync_task_reminders_in_document(
     let mut reminders = read_reminders_from_document(document)?;
     let now = now_iso()?;
     let mut changed = false;
+    let task_ids = tasks
+        .iter()
+        .map(|task| task.id.as_str())
+        .collect::<BTreeSet<_>>();
 
     reminders.retain(|reminder| {
-        let exists = tasks.iter().any(|task| task.id == reminder.task_id);
+        let exists = task_ids.contains(reminder.task_id.as_str());
         changed |= !exists;
         exists
     });
+    let mut reminder_positions = reminders
+        .iter()
+        .enumerate()
+        .map(|(index, reminder)| (reminder.id.clone(), index))
+        .collect::<HashMap<_, _>>();
 
     for task in tasks {
         let reminder_id = task_reminder_id(&task.id);
-        let existing = reminders
-            .iter_mut()
-            .find(|reminder| reminder.id == reminder_id);
+        let existing_index = reminder_positions.get(&reminder_id).copied();
         let should_schedule = task.status == TaskStatus::Pending && task.reminder_at.is_some();
 
         if !should_schedule {
-            if let Some(reminder) = existing {
+            if let Some(reminder) = existing_index.map(|index| &mut reminders[index]) {
                 if reminder.status == ReminderStatus::Scheduled {
                     reminder.status = ReminderStatus::Cancelled;
                     reminder.updated_at = now.clone();
@@ -130,7 +162,7 @@ pub fn sync_task_reminders_in_document(
 
         let scheduled_at = task.reminder_at.as_ref().expect("checked above").clone();
 
-        match existing {
+        match existing_index.map(|index| &mut reminders[index]) {
             Some(reminder)
                 if reminder.scheduled_at == scheduled_at
                     && reminder.status == ReminderStatus::Scheduled => {}
@@ -143,7 +175,7 @@ pub fn sync_task_reminders_in_document(
             }
             None => {
                 reminders.push(Reminder {
-                    id: reminder_id,
+                    id: reminder_id.clone(),
                     task_id: task.id.clone(),
                     notification_id: notification_id_for_task(&task.id),
                     scheduled_at,
@@ -151,6 +183,7 @@ pub fn sync_task_reminders_in_document(
                     created_at: now.clone(),
                     updated_at: now.clone(),
                 });
+                reminder_positions.insert(reminder_id, reminders.len() - 1);
                 changed = true;
             }
         }
@@ -201,6 +234,30 @@ fn notification_id_for_task(task_id: &str) -> u32 {
     hash % MAX_INT_32
 }
 
+fn find_reminder_launch_payload(
+    reminders: &[Reminder],
+    tasks: &[Task],
+    id: &str,
+) -> Option<ReminderLaunchPayload> {
+    let reminder = reminders
+        .iter()
+        .find(|reminder| reminder.id == id && reminder.status == ReminderStatus::Scheduled)?;
+    let task = tasks.iter().find(|task| {
+        task.id == reminder.task_id
+            && task.status == TaskStatus::Pending
+            && task.archived_at.is_none()
+    })?;
+
+    Some(ReminderLaunchPayload {
+        reminder_id: reminder.id.clone(),
+        notification_id: reminder.notification_id,
+        task_id: task.id.clone(),
+        title: task.title.clone(),
+        body: task.notes.clone().unwrap_or_default(),
+        scheduled_at: reminder.scheduled_at.clone(),
+    })
+}
+
 fn now_iso() -> Result<String, String> {
     time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
@@ -225,6 +282,8 @@ mod tests {
             recurrence_id: None,
             occurrence_date: None,
             completed_at: None,
+            archived_at: None,
+            retention_exempt: false,
             created_at: "2026-06-18T00:00:00Z".into(),
             updated_at: "2026-06-18T00:00:00Z".into(),
         }
@@ -322,5 +381,30 @@ mod tests {
 
         assert!(sync.changed);
         assert!(sync.reminders.is_empty());
+    }
+
+    #[test]
+    fn resolves_native_launch_payload_independently_from_task_views() {
+        let reminders = vec![Reminder {
+            id: "task:task-1".into(),
+            task_id: "task-1".into(),
+            notification_id: 42,
+            scheduled_at: "2026-06-24T09:00:00Z".into(),
+            status: ReminderStatus::Scheduled,
+            created_at: "2026-06-24T08:00:00Z".into(),
+            updated_at: "2026-06-24T08:00:00Z".into(),
+        }];
+        let tasks = vec![task(
+            "task-1",
+            TaskStatus::Pending,
+            Some("2026-06-24T09:00:00Z"),
+        )];
+
+        let payload = find_reminder_launch_payload(&reminders, &tasks, "task:task-1")
+            .expect("native launch payload should exist");
+
+        assert_eq!(payload.task_id, "task-1");
+        assert_eq!(payload.notification_id, 42);
+        assert_eq!(payload.title, "Task");
     }
 }

@@ -54,6 +54,15 @@ export type NotificationLaunchContext = {
 	reminderId: string;
 };
 
+export type ReminderLaunchPayload = {
+	reminderId: string;
+	notificationId: ReminderId;
+	taskId: string;
+	title: string;
+	body: string;
+	scheduledAt: string;
+};
+
 export type NotificationInteractionAction =
 	| "open"
 	| "complete"

@@ -1,65 +1,76 @@
-@import "tailwindcss";
+@import 'tailwindcss';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @theme {
-  --color-paper: #f4f2ec;
-  --color-surface: #efece5;
-  --color-hover: #e7e2d9;
-  --color-selection: #ded8cc;
-  --color-border: #ddd8cf;
-  --color-ink: #2f2c28;
-  --color-black: #1E1F20;
-  --color-ink-soft: #66615a;
-  --color-ink-muted: #9b948a;
+  --color-paper: #eae8e2;
+  --color-surface: #e4e1da;
+  --color-hover: #dcd8cf;
+  --color-selection: #d2ccc0;
+  --color-border: #c9c4ba;
+  --color-ink: #383530;
+  --color-ink-soft: #6d6860;
+  --color-ink-muted: #918b82;
+  --color-on-accent: #f7f4ed;
+  --color-archived: #686a66;
+  --color-blue: #526f7a;
 
-  --color-accent: #A85F1F; /* laranja queimado mais legível */
-  --color-amber:  #9F7328; /* atenção, mais contraste */
-  --color-sage:   #5F7656; /* concluído, verde mais aparente */
-  --color-rose:   #B77B78; /* lembrete, rosa antigo visível */
-  --color-brick:  #9B4F45; /* atraso/erro, carimbo mais forte */
-  --color-purple: #75658E;
+  --color-accent: #a85f1f; /* laranja queimado mais legível */
+  --color-amber: #9f7328; /* atenção, mais contraste */
+  --color-sage: #5f7656; /* concluído, verde mais aparente */
+  --color-rose: #b77b78; /* lembrete, rosa antigo visível */
+  --color-brick: #9b4f45; /* atraso/erro, carimbo mais forte */
+  --color-purple: #75658e;
+  --color-archived-bg: rgba(104, 106, 102, 0.14);
 
-  --task-pending:    #A85F1F;
-  --task-due-today:  #9F7328;
-  --task-overdue:    #9B4F45;
-  --task-completed:  #5F7656;
-  --task-snoozed:    #74685D;
-  --task-recurring:  #75658E;
-  --task-reminder:   #B77B78;
-  --task-selected:   #D8CBB9;
+  --task-archived: #686a66;
+  --task-archived-bg: rgba(104, 106, 102, 0.14);
+  --color-blue-bg: rgba(82, 111, 122, 0.15);
+
+  --task-pending: #a85f1f;
+  --task-due-today: #9f7328;
+  --task-overdue: #9b4f45;
+  --task-completed: #5f7656;
+  --task-snoozed: #74685d;
+  --task-recurring: #75658e;
+  --task-reminder: #b77b78;
+  --task-selected: #d8cbb9;
 
   /* tag colors */
-  --tag-clay:     #9A6246; /* barro queimado */
-  --tag-olive:    #687A52; /* oliva seco */
-  --tag-slate:    #5F6F73; /* azul acinzentado */
-  --tag-mauve:    #8A6678; /* malva apagado */
-  --tag-ochre:    #9B762D; /* ocre envelhecido */
-  --tag-moss:     #5F735D; /* musgo */
-  --tag-plum:     #75658E; /* ameixa dessaturada */
-  --tag-rust:     #A85F1F; /* ferrugem */
-  --tag-graphite: #5E5850; /* grafite quente */
-  --tag-rosewood: #9B5F5C; /* rosa madeira */
+  --tag-clay: #9a6246; /* barro queimado */
+  --tag-olive: #687a52; /* oliva seco */
+  --tag-slate: #5f6f73; /* azul acinzentado */
+  --tag-mauve: #8a6678; /* malva apagado */
+  --tag-ochre: #9b762d; /* ocre envelhecido */
+  --tag-moss: #5f735d; /* musgo */
+  --tag-plum: #75658e; /* ameixa dessaturada */
+  --tag-rust: #a85f1f; /* ferrugem */
+  --tag-graphite: #5e5850; /* grafite quente */
+  --tag-rosewood: #9b5f5c; /* rosa madeira */
 
-  --tag-clay-bg:     rgba(154, 98, 70, 0.14);
-  --tag-olive-bg:    rgba(104, 122, 82, 0.16);
-  --tag-slate-bg:    rgba(95, 111, 115, 0.15);
-  --tag-mauve-bg:    rgba(138, 102, 120, 0.15);
-  --tag-ochre-bg:    rgba(155, 118, 45, 0.16);
-  --tag-moss-bg:     rgba(95, 115, 93, 0.16);
-  --tag-plum-bg:     rgba(117, 101, 142, 0.15);
-  --tag-rust-bg:     rgba(168, 95, 31, 0.14);
+  --tag-clay-bg: rgba(154, 98, 70, 0.14);
+  --tag-olive-bg: rgba(104, 122, 82, 0.16);
+  --tag-slate-bg: rgba(95, 111, 115, 0.15);
+  --tag-mauve-bg: rgba(138, 102, 120, 0.15);
+  --tag-ochre-bg: rgba(155, 118, 45, 0.16);
+  --tag-moss-bg: rgba(95, 115, 93, 0.16);
+  --tag-plum-bg: rgba(117, 101, 142, 0.15);
+  --tag-rust-bg: rgba(168, 95, 31, 0.14);
   --tag-graphite-bg: rgba(94, 88, 80, 0.12);
   --tag-rosewood-bg: rgba(155, 95, 92, 0.15);
 
-  --task-pending-bg:   rgba(168, 95, 31, 0.14);
+  --task-pending-bg: rgba(168, 95, 31, 0.14);
   --task-due-today-bg: rgba(159, 115, 40, 0.16);
-  --task-overdue-bg:   rgba(155, 79, 69, 0.15);
+  --task-overdue-bg: rgba(155, 79, 69, 0.15);
   --task-completed-bg: rgba(95, 118, 86, 0.16);
-  --task-reminder-bg:  rgba(183, 123, 120, 0.18);
+  --task-reminder-bg: rgba(183, 123, 120, 0.18);
 
   /* breakpoints */
-  --breakpoint-mobile: 30rem;   /* 480px */
-  --breakpoint-tablet: 48rem;   /* 768px */
-  --breakpoint-desktop: 80rem;  /* 1280px */
+  --breakpoint-mobile: 30rem; /* 480px */
+  --breakpoint-tablet: 48rem; /* 768px */
+  --breakpoint-desktop: 80rem; /* 1280px */
 
   /* FONTS */
   --text-caption: 0.75rem;
@@ -86,38 +97,64 @@
 
 :root {
   /* colors */
-  --paper: #f4f2ec;
-  --surface: #efece5;
-  --hover: #e7e2d9;
-  --selection: #ded8cc;
-  --border: #ddd8cf;
-  --ink: #2f2c28;
-  --ink-soft: #66615a;
-  --ink-muted: #9b948a;
+  --paper: #eae8e2;
+  --surface: #e4e1da;
+  --hover: #dcd8cf;
+  --selection: #d2ccc0;
+  --border: #c9c4ba;
+  --ink: #383530;
+  --ink-soft: #6d6860;
+  --ink-muted: #918b82;
+  --on-accent: #f7f4ed;
   --accent: #b46a2b;
   --amber: #b58a48;
   --sage: #7d8974;
   --rose: #c7aaa7;
   --brick: #a26056;
-  --black: #1E1F20;
 
-  --task-pending:    #B46A2B; /* laranja ferrugem, ação pendente */
-  --task-due-today:  #B58A48; /* âmbar envelhecido, vence hoje */
-  --task-overdue:    #A26056; /* carimbo antigo, atrasada */
-  --task-completed:  #7D8974; /* verde botânico, concluída */
-  --task-snoozed:    #8D8174; /* cinza quente, adiada */
-  --task-recurring:  #8A7B9B; /* violeta apagado, recorrente */
-  --task-reminder:   #C7AAA7; /* rosa marcador antigo, lembrete */
-  --task-selected:   #DED8CC; /* seleção em papel */
+  --task-pending: #b46a2b; /* laranja ferrugem, ação pendente */
+  --task-due-today: #b58a48; /* âmbar envelhecido, vence hoje */
+  --task-overdue: #a26056; /* carimbo antigo, atrasada */
+  --task-completed: #7d8974; /* verde botânico, concluída */
+  --task-snoozed: #8d8174; /* cinza quente, adiada */
+  --task-recurring: #8a7b9b; /* violeta apagado, recorrente */
+  --task-reminder: #c7aaa7; /* rosa marcador antigo, lembrete */
+  --task-selected: #d2ccc0; /* seleção em papel */
 
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
   color: var(--ink);
   background: var(--paper);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+html[data-theme='dark'] {
+  --color-paper: #20211f;
+  --color-surface: #292a27;
+  --color-hover: #33342f;
+  --color-selection: #3b3a33;
+  --color-border: #464740;
+  --color-ink: #e7e3d9;
+  --color-ink-soft: #b9b4aa;
+  --color-ink-muted: #817e77;
+
+  --paper: #20211f;
+  --surface: #292a27;
+  --hover: #33342f;
+  --selection: #3b3a33;
+  --border: #464740;
+  --ink: #e7e3d9;
+  --ink-soft: #b9b4aa;
+  --ink-muted: #817e77;
 }
 
 * {
@@ -161,17 +198,24 @@ button {
 }
 
 @layer components {
+  kbd {
+    @apply min-h-8 min-w-8 px-3;
+    @apply inline-flex items-center justify-center;
+    @apply rounded-md;
+    @apply bg-surface text-ink;
+    @apply border border-border;
+    @apply border-b-4;
+  }
+
   .praxis-shell {
     min-height: 100vh;
-    background:
-      radial-gradient(circle at top left, rgba(180, 106, 43, 0.08), transparent 28rem),
-      var(--paper);
+    background: var(--paper);
     color: var(--ink);
   }
 
   .praxis-header {
     border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--paper) 90%, white 10%);
+    background: var(--paper);
   }
 
   .praxis-card {
@@ -184,7 +228,7 @@ button {
   .praxis-field {
     border: 1px solid var(--border);
     border-radius: 0.375rem;
-    background: color-mix(in srgb, var(--surface) 85%, white 15%);
+    background: var(--surface);
     color: var(--ink);
     outline: none;
   }
@@ -201,7 +245,7 @@ button {
   .praxis-button-primary {
     border-radius: 0.375rem;
     background: var(--accent);
-    color: var(--paper);
+    color: var(--on-accent);
     font-weight: 700;
   }
 
@@ -224,7 +268,7 @@ button {
   .praxis-pill {
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--surface) 82%, white 18%);
+    background: var(--surface);
     color: var(--ink-soft);
     font-weight: 700;
   }
@@ -232,7 +276,7 @@ button {
   .praxis-row {
     border: 1px solid var(--border);
     border-radius: 0.375rem;
-    background: color-mix(in srgb, var(--surface) 88%, white 12%);
+    background: var(--surface);
   }
 
   .praxis-row:hover {

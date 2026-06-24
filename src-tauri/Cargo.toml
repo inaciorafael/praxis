@@ -33,7 +33,16 @@ tauri-plugin-autostart = "2"
 tauri-plugin-dialog = "2"
 time = { version = "0.3", features = ["formatting", "local-offset"] }
 uuid = { version = "1", features = ["v4"] }
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_Shell_PropertiesSystem",
+] }
 zeroize = "1"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"

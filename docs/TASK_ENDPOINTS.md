@@ -84,21 +84,23 @@ type TaskViewCounts = {
   upcoming: number;
   reminders: number;
   completed: number;
+  archived: number;
   badge: BadgeSnapshot;
 };
 ```
 
 Regra dos contadores:
 
-- `today`: pendentes do Meu Dia, mesmo escopo do badge do app
+- `today`: pendentes vencidas ou com vencimento hoje, mesmo escopo do badge do app
 - `week`: pendentes da semana movel
 - `pending`: todas pendentes
 - `overdue`: pendentes vencidas
 - `upcoming`: pendentes futuras/agendadas
 - `reminders`: pendentes com lembrete
 - `completed`: concluidas
+- `archived`: concluidas antigas ocultadas pela politica de retencao
 
-Esse endpoint tambem gera recorrencias vencidas antes de contar e sincroniza o badge.
+Esse endpoint tambem gera recorrencias vencidas antes de contar, arquiva concluidas antigas conforme configuracao e sincroniza o badge.
 
 ### listTodayTasks()
 
@@ -116,11 +118,8 @@ Quando usar:
 
 Inclui todos os status relevantes para hoje:
 
-- pendentes planejadas para hoje
 - pendentes com vencimento hoje
 - pendentes vencidas antes de hoje
-- concluidas planejadas para hoje
-- concluidas com vencimento hoje
 - concluidas hoje
 
 Importante:
@@ -128,6 +127,7 @@ Importante:
 ```text
 O badge continua contando apenas pendentes do Meu Dia.
 Completed tasks podem aparecer na lista, mas nao contam no badge.
+Tasks apenas planejadas para hoje nao entram no Meu Dia se nao tiverem vencimento hoje.
 ```
 
 ### listWeekTasks()
@@ -137,6 +137,12 @@ Uso:
 ```ts
 const result = await listWeekTasks({ limit: 100 });
 ```
+
+Contract:
+
+- `today` is always the user's current local date and remains authoritative for badge and overdue calculations.
+- `startDate` defines only the first day of the seven-day week window.
+- Opening `Minha Semana` must never cause tomorrow's tasks to enter the app icon badge.
 
 Quando usar:
 
@@ -256,6 +262,73 @@ Inclui apenas:
 status = completed
 ```
 
+Tasks concluidas arquivadas por retencao nao aparecem aqui.
+
+### archiveCompletedTasksBefore()
+
+Uso:
+
+```ts
+await archiveCompletedTasksBefore("2024-06-23");
+```
+
+Quando usar:
+
+- tela de configuracoes
+- manutencao manual de historico
+- aplicacao de politica de retencao definida pelo usuario
+
+Regra:
+
+```text
+Arquiva apenas tasks concluidas com completedAt anterior a data informada.
+Nao apaga dados do cofre.
+Nao arquiva pendentes.
+Tasks arquivadas deixam de aparecer nos endpoints normais.
+```
+
+### listArchivedTasks()
+
+Uso:
+
+```ts
+const result = await listArchivedTasks({ limit: 50, offset: 0 });
+```
+
+Quando usar:
+
+- tela de tarefas arquivadas
+- recuperação de histórico fora das visões operacionais
+- paginação de arquivos grandes
+
+Regras:
+
+```text
+Retorna apenas tasks com archivedAt definido.
+Ordena pelas arquivadas mais recentemente.
+Inclui checklist e tags continuam disponíveis pelo índice global de tags.
+Não retorna lembretes ativos.
+Não altera badges ou contagens operacionais.
+```
+
+### restoreArchivedTask()
+
+Uso:
+
+```ts
+await restoreArchivedTask(taskId);
+```
+
+Regras:
+
+```text
+Remove archivedAt sem alterar completedAt.
+Registra taskUnarchived na timeline.
+A tarefa volta para Concluídas.
+A retenção automática não arquiva imediatamente a mesma tarefa restaurada.
+Um arquivamento manual explícito ainda pode arquivá-la novamente.
+```
+
 ## Endpoint Legado / Lab
 
 ### listTasks()
@@ -290,6 +363,8 @@ Regra:
 Nao usar em telas reais como estrategia padrao.
 Usar apenas para compatibilidade, testes manuais, labs ou telas temporarias.
 ```
+
+Tasks arquivadas tambem ficam fora desse payload normal.
 
 ## Ordenacao Oficial
 

@@ -80,6 +80,7 @@ function task(overrides: Partial<Task> = {}): Task {
 		recurrenceId: overrides.recurrenceId ?? null,
 		occurrenceDate: overrides.occurrenceDate ?? null,
 		completedAt: overrides.completedAt ?? null,
+		archivedAt: overrides.archivedAt ?? null,
 		createdAt: overrides.createdAt ?? "2026-06-18T12:00:00.000Z",
 		updatedAt: overrides.updatedAt ?? "2026-06-18T12:00:00.000Z",
 		isOverdue: overrides.isOverdue ?? false,

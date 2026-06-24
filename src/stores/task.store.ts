@@ -3,11 +3,13 @@ import { defineStore } from "pinia";
 import { playTaskCompletedSound } from "@/shared/lib/audio/task-sounds";
 import { syncTaskReminders } from "@/shared/lib/notifications/notification.service";
 import {
+	archiveCompletedTasksBefore,
 	createChecklistItem,
 	createTask,
 	deleteChecklistItem,
 	deleteTask,
 	getTaskViewCounts,
+	listArchivedTasks,
 	listCompletedTasks,
 	listOverdueTasks,
 	listPendingTasks,
@@ -19,6 +21,7 @@ import {
 	listWeekTasks,
 	setChecklistItemCompleted,
 	setTaskCompleted,
+	restoreArchivedTask,
 	updateChecklistItem,
 	updateTask,
 } from "@/shared/lib/tasks/task.service";
@@ -52,7 +55,8 @@ type TaskActiveView =
 	| "overdue"
 	| "upcoming"
 	| "reminders"
-	| "completed";
+	| "completed"
+	| "archived";
 type TaskListTarget =
 	| "myDay"
 	| "myWeek"
@@ -60,7 +64,8 @@ type TaskListTarget =
 	| "overdue"
 	| "upcoming"
 	| "withReminders"
-	| "completed";
+	| "completed"
+	| "archived";
 type TaskCreateContext = {
 	source: TaskActiveView;
 	label: string;
@@ -77,6 +82,7 @@ type TaskStoreState = {
 	upcoming: Task[];
 	withReminders: Task[];
 	completed: Task[];
+	archived: Task[];
 	checklistItems: ChecklistItem[];
 	viewCounts: Omit<TaskViewCounts, "badge">;
 	timelinesByTaskId: Record<string, TaskTimeline>;
@@ -99,6 +105,7 @@ export const useTaskStore = defineStore("tasks", {
 		upcoming: [],
 		withReminders: [],
 		completed: [],
+		archived: [],
 		checklistItems: [],
 		viewCounts: emptyViewCounts(),
 		timelinesByTaskId: {},
@@ -111,9 +118,31 @@ export const useTaskStore = defineStore("tasks", {
 		error: "",
 	}),
 
+	getters: {
+		tasksById(state): Record<string, Task> {
+			return Object.fromEntries(
+				allKnownTasks(state).map((task) => [task.id, task]),
+			);
+		},
+
+		checklistItemsByTask(state): Record<string, ChecklistItem[]> {
+			const itemsByTask: Record<string, ChecklistItem[]> = {};
+
+			for (const item of state.checklistItems) {
+				(itemsByTask[item.taskId] ??= []).push(item);
+			}
+
+			for (const items of Object.values(itemsByTask)) {
+				items.sort((left, right) => left.sortOrder - right.sortOrder);
+			}
+
+			return itemsByTask;
+		},
+	},
+
 	actions: {
 		findTaskById(taskId: string) {
-			return allKnownTasks(this).find((task) => task.id === taskId) ?? null;
+			return this.tasksById[taskId] ?? null;
 		},
 
 		getSelectedTask() {
@@ -123,9 +152,7 @@ export const useTaskStore = defineStore("tasks", {
 		},
 
 		checklistItemsByTaskId(taskId: string) {
-			return this.checklistItems
-				.filter((item) => item.taskId === taskId)
-				.sort((left, right) => left.sortOrder - right.sortOrder);
+			return this.checklistItemsByTask[taskId] ?? [];
 		},
 
 		async applyCollection(collection: TaskCollection) {
@@ -141,6 +168,7 @@ export const useTaskStore = defineStore("tasks", {
 			this.viewCounts = countsFromCollection(
 				collection,
 				this.activeWeekStartDate,
+				this.viewCounts.archived,
 			);
 			this.isReady = true;
 			this.error = "";
@@ -159,8 +187,14 @@ export const useTaskStore = defineStore("tasks", {
 			await useVaultStore().refreshStatus();
 		},
 
-		async applyTaskList(result: TaskListResult, target: TaskListTarget) {
-			this[target] = result.tasks;
+		async applyTaskList(
+			result: TaskListResult,
+			target: TaskListTarget,
+			append = false,
+		) {
+			this[target] = append
+				? mergeTasksById(this[target], result.tasks)
+				: result.tasks;
 			this.checklistItems = mergeChecklistItemsForTasks(
 				this.checklistItems,
 				result.checklistItems,
@@ -198,6 +232,7 @@ export const useTaskStore = defineStore("tasks", {
 			this.upcoming = [];
 			this.withReminders = [];
 			this.completed = [];
+			this.archived = [];
 			this.checklistItems = [];
 			this.viewCounts = emptyViewCounts();
 			this.timelinesByTaskId = {};
@@ -320,6 +355,21 @@ export const useTaskStore = defineStore("tasks", {
 			}
 		},
 
+		async hydrateArchived(options?: TaskListOptions, append = false) {
+			try {
+				await this.applyTaskList(
+					await listArchivedTasks(options),
+					"archived",
+					append,
+				);
+			} catch (error) {
+				this.error =
+					error instanceof Error
+						? error.message
+						: "Nao foi possivel carregar tarefas arquivadas.";
+			}
+		},
+
 		setActiveTaskView(view: TaskActiveView) {
 			this.activeTaskView = view;
 		},
@@ -337,6 +387,15 @@ export const useTaskStore = defineStore("tasks", {
 			}
 
 			this.createModalOpen = true;
+		},
+
+		openFreeCreateTaskModal() {
+			this.openCreateTaskModal({
+				source: "pending",
+				label: "Nova tarefa",
+				plannedFor: null,
+				dueDate: null,
+			});
 		},
 
 		closeCreateTaskModal() {
@@ -363,6 +422,8 @@ export const useTaskStore = defineStore("tasks", {
 					return this.withReminders;
 				case "completed":
 					return this.completed;
+				case "archived":
+					return this.archived;
 			}
 		},
 
@@ -388,6 +449,9 @@ export const useTaskStore = defineStore("tasks", {
 					break;
 				case "completed":
 					await this.hydrateCompleted({ limit: 150 });
+					break;
+				case "archived":
+					await this.hydrateArchived({ limit: 150 });
 					break;
 			}
 
@@ -447,6 +511,34 @@ export const useTaskStore = defineStore("tasks", {
 					error instanceof Error
 						? error.message
 						: "Nao foi possivel remover a tarefa.";
+			}
+		},
+
+		async archiveCompletedBefore(beforeDate: string) {
+			try {
+				await this.applyCollection(await archiveCompletedTasksBefore(beforeDate));
+				return true;
+			} catch (error) {
+				this.error =
+					error instanceof Error
+						? error.message
+						: "Nao foi possivel arquivar tarefas concluidas.";
+				return false;
+			}
+		},
+
+		async restoreArchived(id: string) {
+			try {
+				await this.applyCollection(await restoreArchivedTask(id));
+				this.archived = this.archived.filter((task) => task.id !== id);
+				await this.hydrateViewCounts();
+				return true;
+			} catch (error) {
+				this.error =
+					error instanceof Error
+						? error.message
+						: "Nao foi possivel restaurar a tarefa arquivada.";
+				return false;
 			}
 		},
 
@@ -550,6 +642,7 @@ function allKnownTasks(state: TaskStoreState): Task[] {
 		...state.upcoming,
 		...state.withReminders,
 		...state.completed,
+		...state.archived,
 	]) {
 		tasksById.set(task.id, task);
 	}
@@ -570,6 +663,16 @@ function mergeChecklistItemsForTasks(
 	];
 }
 
+function mergeTasksById(existing: Task[], incoming: Task[]) {
+	const tasksById = new Map(existing.map((task) => [task.id, task]));
+
+	for (const task of incoming) {
+		tasksById.set(task.id, task);
+	}
+
+	return [...tasksById.values()];
+}
+
 function emptyViewCounts(): Omit<TaskViewCounts, "badge"> {
 	return {
 		today: 0,
@@ -579,23 +682,23 @@ function emptyViewCounts(): Omit<TaskViewCounts, "badge"> {
 		upcoming: 0,
 		reminders: 0,
 		completed: 0,
+		archived: 0,
 	};
 }
 
 function defaultCreateContext(): TaskCreateContext {
-	const today = todayLocalDate();
-
 	return {
-		source: "today",
-		label: "Meu dia",
-		plannedFor: today,
-		dueDate: today,
+		source: "pending",
+		label: "Nova tarefa",
+		plannedFor: null,
+		dueDate: null,
 	};
 }
 
 function countsFromCollection(
 	collection: TaskCollection,
 	weekStartDate: string,
+	archivedCount: number,
 ): Omit<TaskViewCounts, "badge"> {
 	return {
 		today: collection.myDay.filter((task) => task.status === "pending").length,
@@ -607,6 +710,7 @@ function countsFromCollection(
 		upcoming: collection.upcoming.length,
 		reminders: collection.withReminders.length,
 		completed: collection.completed.length,
+		archived: archivedCount,
 	};
 }
 

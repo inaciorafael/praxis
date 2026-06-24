@@ -23,7 +23,7 @@ pub fn seed_showcase_data(
     let offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
 
     let recurrence_id = "showcase-recurrence-weekly-review";
-    let tasks = vec![
+    let mut tasks = vec![
         task(
             "showcase-today-focus",
             "Finalizar proposta comercial",
@@ -248,7 +248,57 @@ pub fn seed_showcase_data(
             None,
             None,
         ),
+        task(
+            "showcase-archived-launch",
+            "Publicar primeira versão interna",
+            Some("Marco concluído e preservado como parte da história do Praxis."),
+            TaskStatus::Completed,
+            None,
+            Some(at_local(today_date - Duration::days(120), 17, 0, offset)?),
+            None,
+            Some(past_iso(now, 120)?),
+            past_iso(now, 145)?,
+            past_iso(now, 12)?,
+            None,
+            None,
+        ),
+        task(
+            "showcase-archived-finance",
+            "Encerrar planejamento financeiro anual",
+            Some("Exemplo de registro antigo arquivado sem perder notas e classificacao."),
+            TaskStatus::Completed,
+            None,
+            Some(at_local(today_date - Duration::days(400), 12, 0, offset)?),
+            None,
+            Some(past_iso(now, 398)?),
+            past_iso(now, 430)?,
+            past_iso(now, 45)?,
+            None,
+            None,
+        ),
+        task(
+            "showcase-archived-migration",
+            "Migrar anotacoes para o cofre privado",
+            Some("Checklist historico completo para demonstrar que o arquivo preserva contexto."),
+            TaskStatus::Completed,
+            None,
+            Some(at_local(today_date - Duration::days(800), 18, 0, offset)?),
+            None,
+            Some(past_iso(now, 798)?),
+            past_iso(now, 825)?,
+            past_iso(now, 90)?,
+            None,
+            None,
+        ),
     ];
+
+    set_archived_at(&mut tasks, "showcase-archived-launch", past_iso(now, 12)?)?;
+    set_archived_at(&mut tasks, "showcase-archived-finance", past_iso(now, 45)?)?;
+    set_archived_at(
+        &mut tasks,
+        "showcase-archived-migration",
+        past_iso(now, 90)?,
+    )?;
 
     let checklist_items = showcase_checklist_items(now, &now_iso)?;
     let tags = showcase_tags(&now_iso);
@@ -323,9 +373,22 @@ fn task(
         recurrence_id,
         occurrence_date,
         completed_at,
+        archived_at: None,
+        retention_exempt: false,
         created_at,
         updated_at,
     }
+}
+
+fn set_archived_at(tasks: &mut [Task], task_id: &str, archived_at: String) -> Result<(), String> {
+    let task = tasks
+        .iter_mut()
+        .find(|task| task.id == task_id)
+        .ok_or_else(|| format!("Tarefa de showcase {task_id} nao encontrada."))?;
+
+    task.archived_at = Some(archived_at.clone());
+    task.updated_at = archived_at;
+    Ok(())
 }
 
 fn showcase_checklist_items(
@@ -392,6 +455,36 @@ fn showcase_checklist_items(
             Some(past_iso(now, 2)?),
             past_iso(now, 4)?,
             now_iso.into(),
+        ),
+        checklist_item(
+            "showcase-check-migration-1",
+            "showcase-archived-migration",
+            "Exportar anotacoes antigas",
+            ChecklistItemStatus::Completed,
+            0,
+            Some(past_iso(now, 800)?),
+            past_iso(now, 825)?,
+            past_iso(now, 800)?,
+        ),
+        checklist_item(
+            "showcase-check-migration-2",
+            "showcase-archived-migration",
+            "Validar conteudo importado",
+            ChecklistItemStatus::Completed,
+            1,
+            Some(past_iso(now, 799)?),
+            past_iso(now, 825)?,
+            past_iso(now, 799)?,
+        ),
+        checklist_item(
+            "showcase-check-migration-3",
+            "showcase-archived-migration",
+            "Remover copias temporarias",
+            ChecklistItemStatus::Completed,
+            2,
+            Some(past_iso(now, 798)?),
+            past_iso(now, 825)?,
+            past_iso(now, 798)?,
         ),
     ])
 }
@@ -464,7 +557,12 @@ fn showcase_task_tags() -> Value {
         relation("showcase-pending-reading", "showcase-tag-personal"),
         relation("showcase-completed-today", "showcase-tag-home"),
         relation("showcase-completed-week", "showcase-tag-finance"),
-        relation("showcase-later-roadmap", "showcase-tag-work")
+        relation("showcase-later-roadmap", "showcase-tag-work"),
+        relation("showcase-archived-launch", "showcase-tag-work"),
+        relation("showcase-archived-launch", "showcase-tag-focus"),
+        relation("showcase-archived-finance", "showcase-tag-finance"),
+        relation("showcase-archived-migration", "showcase-tag-personal"),
+        relation("showcase-archived-migration", "showcase-tag-home")
     ])
 }
 
@@ -543,6 +641,36 @@ fn showcase_lifecycle_events(now: &str) -> Value {
             now,
             "Ocorrencia recorrente criada",
             json!({ "recurrenceId": "showcase-recurrence-weekly-review" })
+        ),
+        lifecycle_event(
+            "showcase-event-archived-launch",
+            "task",
+            "showcase-archived-launch",
+            "showcase-archived-launch",
+            "taskArchived",
+            now,
+            "Tarefa arquivada",
+            json!({ "reason": "retention", "showcase": true })
+        ),
+        lifecycle_event(
+            "showcase-event-archived-finance",
+            "task",
+            "showcase-archived-finance",
+            "showcase-archived-finance",
+            "taskArchived",
+            now,
+            "Tarefa arquivada",
+            json!({ "reason": "manual", "showcase": true })
+        ),
+        lifecycle_event(
+            "showcase-event-archived-migration",
+            "task",
+            "showcase-archived-migration",
+            "showcase-archived-migration",
+            "taskArchived",
+            now,
+            "Tarefa arquivada",
+            json!({ "reason": "retention", "showcase": true })
         )
     ])
 }

@@ -15,6 +15,7 @@ import type {
 	PersistedReminder,
 	NotificationInteraction,
 	NotificationLaunchContext,
+	ReminderLaunchPayload,
 	ReminderId,
 	ReminderInput,
 	ReminderResult,
@@ -155,6 +156,54 @@ export async function markReminderFired(
 	id: string,
 ): Promise<PersistedReminder[]> {
 	return invoke<PersistedReminder[]>("mark_reminder_fired", { id });
+}
+
+export async function fireNativeLaunchReminder(
+	reminderId: string,
+): Promise<PendingReminder | null> {
+	const payload = await invoke<ReminderLaunchPayload | null>(
+		"get_reminder_launch_payload",
+		{ id: reminderId },
+	);
+
+	if (!payload) {
+		await clearNotificationLaunchContext();
+		nativeLaunchReminderId = null;
+		return null;
+	}
+
+	if (!(await requestNotificationPermission())) {
+		return null;
+	}
+
+	sendNotification(
+		toNotificationOptions(
+			{
+				title: payload.title,
+				body: payload.body,
+				group: "praxis-task-reminders",
+				payload: {
+					source: "task",
+					taskId: payload.taskId,
+					reminderId: payload.reminderId,
+				},
+			},
+			payload.notificationId,
+		),
+	);
+
+	await markReminderFired(payload.reminderId);
+	await clearNotificationLaunchContext();
+	nativeLaunchReminderId = null;
+
+	return {
+		id: payload.notificationId,
+		reminderId: payload.reminderId,
+		taskId: payload.taskId,
+		title: payload.title,
+		body: payload.body,
+		scheduledAt: payload.scheduledAt,
+	};
 }
 
 export async function getNotificationLaunchContext(): Promise<NotificationLaunchContext | null> {
@@ -303,6 +352,11 @@ async function fireReminder(reminder: PendingReminder) {
 
 	if (reminder.reminderId) {
 		await markReminderFired(reminder.reminderId);
+
+		if (reminder.reminderId === nativeLaunchReminderId) {
+			await clearNotificationLaunchContext();
+			nativeLaunchReminderId = null;
+		}
 	}
 
 	timerReminders = timerReminders.filter((item) => item.id !== reminder.id);

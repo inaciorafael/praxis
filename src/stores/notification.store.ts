@@ -7,6 +7,7 @@ import {
 	getNotificationLaunchContext,
 	getNotificationPermission,
 	getPendingReminders,
+	fireNativeLaunchReminder,
 	initializeNotificationInteractions,
 	notifyNow,
 	requestNotificationPermission,
@@ -60,6 +61,10 @@ export const useNotificationStore = defineStore("notifications", {
 					},
 				});
 				this.permissionGranted = await getNotificationPermission();
+				if (this.nativeLaunchReminderId) {
+					await fireNativeLaunchReminder(this.nativeLaunchReminderId);
+					this.nativeLaunchReminderId = "";
+				}
 				this.pendingReminders = await getPendingReminders();
 				this.isReady = true;
 				this.error = "";

@@ -1,14 +1,202 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri + Vue + Typescript App</title>
+    <meta name="theme-color" content="#eae8e2" />
+    <title>Praxis</title>
+    <script>
+      (() => {
+        const theme =
+          localStorage.getItem("praxis:theme") === "dark" ? "dark" : "light";
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+    <style>
+      :root {
+        --splash-paper: #eae8e2;
+        --splash-surface: #e4e1da;
+        --splash-border: #c9c4ba;
+        --splash-ink: #383530;
+        --splash-ink-soft: #6d6860;
+        --splash-accent: #a85f1f;
+        --splash-blue: #526f7a;
+      }
+
+      html[data-theme="dark"] {
+        --splash-paper: #20211f;
+        --splash-surface: #292a27;
+        --splash-border: #464740;
+        --splash-ink: #e7e3d9;
+        --splash-ink-soft: #b9b4aa;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100%;
+        background: var(--splash-paper);
+      }
+
+      #praxis-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background: var(--splash-paper);
+        color: var(--splash-ink);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        transition:
+          opacity 180ms ease,
+          visibility 180ms ease;
+      }
+
+      #praxis-splash[data-leaving="true"] {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .praxis-splash__content {
+        width: min(320px, calc(100vw - 48px));
+        display: grid;
+        justify-items: center;
+        gap: 18px;
+      }
+
+      .praxis-splash__mark {
+        position: relative;
+        width: 72px;
+        height: 72px;
+      }
+
+      .praxis-splash__ring {
+        position: absolute;
+        width: 44px;
+        height: 44px;
+        border: 8px solid var(--splash-accent);
+        border-left-color: transparent;
+        border-radius: 50%;
+      }
+
+      .praxis-splash__ring:first-child {
+        top: 0;
+        right: 0;
+      }
+
+      .praxis-splash__ring:last-child {
+        bottom: 0;
+        left: 0;
+        border-color: var(--splash-blue);
+        border-right-color: transparent;
+      }
+
+      .praxis-splash__title {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 500;
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .praxis-splash__message {
+        margin: -4px 0 0;
+        color: var(--splash-ink-soft);
+        font-size: 13px;
+        line-height: 20px;
+      }
+
+      .praxis-splash__progress {
+        width: 160px;
+        height: 2px;
+        overflow: hidden;
+        background: var(--splash-border);
+      }
+
+      .praxis-splash__progress::after {
+        content: "";
+        display: block;
+        width: 42%;
+        height: 100%;
+        background: var(--splash-accent);
+        animation: praxis-splash-progress 1.25s ease-in-out infinite;
+      }
+
+      @keyframes praxis-splash-progress {
+        from {
+          transform: translateX(-110%);
+        }
+
+        to {
+          transform: translateX(350%);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #praxis-splash {
+          transition: none;
+        }
+
+        .praxis-splash__progress::after {
+          width: 100%;
+          animation: none;
+        }
+      }
+    </style>
   </head>
 
   <body>
+    <div
+      id="praxis-splash"
+      role="status"
+      aria-live="polite"
+      aria-label="Praxis está iniciando"
+    >
+      <div class="praxis-splash__content">
+        <div
+          class="praxis-splash__mark"
+          aria-hidden="true"
+        >
+          <span class="praxis-splash__ring"></span>
+          <span class="praxis-splash__ring"></span>
+        </div>
+        <h1 class="praxis-splash__title">Praxis</h1>
+        <p class="praxis-splash__message">Preparando seu espaço de trabalho</p>
+        <div
+          class="praxis-splash__progress"
+          aria-hidden="true"
+        ></div>
+      </div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+      (() => {
+        const removeSplash = () => {
+          const splash = document.getElementById("praxis-splash");
+
+          if (!splash || splash.dataset.leaving === "true") {
+            return;
+          }
+
+          splash.dataset.leaving = "true";
+          window.setTimeout(() => splash.remove(), 220);
+        };
+
+        window.addEventListener("praxis:ready", removeSplash, { once: true });
+        window.setTimeout(removeSplash, 10000);
+      })();
+    </script>
   </body>
 </html>

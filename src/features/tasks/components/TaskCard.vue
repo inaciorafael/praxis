@@ -2,24 +2,19 @@
 import { Task } from "@/shared/types/task";
 import { useTagStore } from "@/stores/tag.store";
 import { useTaskStore } from "@/stores/task.store";
-import { Bell, CalendarCheck, CalendarDays, Check, Trash2 } from "@lucide/vue";
+import {
+	Archive,
+	ArchiveRestore,
+	Bell,
+	CalendarCheck,
+	CalendarDays,
+	Check,
+	Trash2,
+} from "@lucide/vue";
 import TaskTag from "./TaskTag.vue";
 import { computed, ref, type ComputedRef } from "vue";
 import { Tag } from "@/shared/types/tag";
-import dayjs from "dayjs";
-import calendar from "dayjs/plugin/calendar";
-import "dayjs/locale/pt-br";
-
-dayjs.extend(calendar);
-
-dayjs().calendar(null, {
-	sameDay: "[Today at] HH:mm", // The same day ( Today at 2:30 AM )
-	nextDay: "[Tomorrow at] HH:mm", // The next day ( Tomorrow at 2:30 AM )
-	nextWeek: "dddd [at] HH:mm", // The next week ( Sunday at 2:30 AM )
-	lastDay: "[Yesterday at] HH:mm", // The day before ( Yesterday at 2:30 AM )
-	lastWeek: "[Last] dddd [at] HH:mm", // Last week ( Last Monday at 2:30 AM )
-	sameElse: "DD/MM/YYYY", // Everything else ( 17/10/2011 )
-});
+import { formatCalendarDateTime } from "@/shared/lib/date/date-format";
 
 const props = defineProps<Task>();
 
@@ -27,6 +22,7 @@ const tags = useTagStore();
 const tasks = useTaskStore();
 const isUpdatingStatus = ref(false);
 const isDeleting = ref(false);
+const isRestoring = ref(false);
 const updatingChecklistItemIds = ref(new Set<string>());
 
 const taskTags: ComputedRef<Tag[]> = computed(
@@ -34,7 +30,7 @@ const taskTags: ComputedRef<Tag[]> = computed(
 );
 const isSelected = computed(() => tasks.selectedTaskId === props.id);
 
-const checklistItems = computed(() => tasks.checklistItemsByTaskId(props.id));
+const checklistItems = computed(() => tasks.checklistItemsByTask[props.id] ?? []);
 
 function selectTask() {
 	tasks.selectTask(props.id);
@@ -65,6 +61,20 @@ async function deleteTask() {
 		await tasks.delete(props.id);
 	} finally {
 		isDeleting.value = false;
+	}
+}
+
+async function restoreTask() {
+	if (isRestoring.value || !props.archivedAt) {
+		return;
+	}
+
+	isRestoring.value = true;
+
+	try {
+		await tasks.restoreArchived(props.id);
+	} finally {
+		isRestoring.value = false;
 	}
 }
 
@@ -99,9 +109,10 @@ function isChecklistItemUpdating(itemId: string) {
     :class="[
       'p-3 border-l-5 gap-3 hover:bg-hover transition-all flex flex-col',
       {
-        'border-brick': isOverdue,
-        'border-transparent': status === 'pending' && !isOverdue,
-        'border-sage': status === 'completed',
+        'border-archived opacity-80': archivedAt,
+        'border-brick': isOverdue && !archivedAt,
+        'border-transparent': status === 'pending' && !isOverdue && !archivedAt,
+        'border-sage': status === 'completed' && !archivedAt,
         'bg-selection': isSelected,
       },
     ]"
@@ -112,10 +123,10 @@ function isChecklistItemUpdating(itemId: string) {
     <div class="flex cursor-pointer flex-row flex-wrap items-center gap-3">
       <template v-if="checklistItems.length > 0">
         <div class="flex shrink-0 flex-row gap-2">
-          <div class="bg-rose px-3 text-paper">
+          <div class="bg-rose px-3 text-on-accent">
             {{ progress.completedItems }}/{{ progress.totalItems }}
           </div>
-          <div class="bg-sage px-3 text-paper">{{ progress.percentage }}%</div>
+          <div class="bg-sage px-3 text-on-accent">{{ progress.percentage }}%</div>
         </div>
       </template>
 
@@ -131,14 +142,14 @@ function isChecklistItemUpdating(itemId: string) {
           'border w-8 h-8 shrink-0 flex items-center justify-center rounded-xl',
           'disabled:opacity-50 disabled:pointer-events-none',
           {
-            'bg-sage border-sage text-paper': status === 'completed',
+            'bg-sage border-sage text-on-accent': status === 'completed',
             'bg-transparent': status === 'pending',
           },
         ]"
         @click.stop="toggleCompleted"
       >
         <Check
-          class="text-paper"
+          class="text-on-accent"
           v-if="status === 'completed'"
           :size="18"
         />
@@ -163,11 +174,26 @@ function isChecklistItemUpdating(itemId: string) {
       </template>
 
       <button
+        v-if="archivedAt"
+        type="button"
+        :disabled="isRestoring"
+        aria-label="Restaurar tarefa arquivada"
+        title="Restaurar tarefa"
+        class="ml-auto flex h-8 w-8 shrink-0 items-center justify-center border border-border text-archived hover:border-blue hover:bg-hover hover:text-blue disabled:pointer-events-none disabled:opacity-50"
+        @click.stop="restoreTask"
+      >
+        <ArchiveRestore :size="16" />
+      </button>
+
+      <button
         type="button"
         :disabled="isDeleting"
         aria-label="Excluir tarefa"
         title="Excluir tarefa"
-        class="ml-auto flex h-8 w-8 shrink-0 items-center justify-center border border-border text-ink-soft hover:border-brick hover:bg-hover hover:text-brick disabled:pointer-events-none disabled:opacity-50"
+        :class="[
+          'flex h-8 w-8 shrink-0 items-center justify-center border border-border text-ink-soft hover:border-brick hover:bg-hover hover:text-brick disabled:pointer-events-none disabled:opacity-50',
+          archivedAt ? '' : 'ml-auto',
+        ]"
         @click.stop="deleteTask"
       >
         <Trash2 :size="16" />
@@ -200,7 +226,7 @@ function isChecklistItemUpdating(itemId: string) {
             :class="[
               'h-6 w-6 rounded-md border flex items-center justify-center',
               {
-                'bg-sage text-paper line-through': item.status === 'completed',
+                'bg-sage text-on-accent line-through': item.status === 'completed',
               },
             ]"
           >
@@ -229,7 +255,7 @@ function isChecklistItemUpdating(itemId: string) {
       <div
         v-if="dueAt && status === 'pending'"
         :class="[
-          'flex text-paper px-3 flex-row items-center gap-1',
+          'flex text-on-accent px-3 flex-row items-center gap-1',
           {
             'text-brick': !isOverdue,
             'bg-brick': isOverdue,
@@ -239,31 +265,39 @@ function isChecklistItemUpdating(itemId: string) {
         <CalendarDays
           :class="{
             'text-brick': !isOverdue,
-            'text-paper': isOverdue,
+            'text-on-accent': isOverdue,
           }"
           :size="15"
         />
         <span
           :class="{
             'text-brick': !isOverdue,
-            'text-paper': isOverdue,
+            'text-on-accent': isOverdue,
           }"
-          >{{ dayjs(dueAt).calendar() }}</span
+          >{{ formatCalendarDateTime(dueAt) }}</span
         >
       </div>
 
       <div
         v-if="status === 'completed'"
-        class="flex bg-sage text-paper px-3 flex-row items-center gap-1"
+        class="flex bg-sage text-on-accent px-3 flex-row items-center gap-1"
       >
         <CalendarCheck :size="15" />
-        <span>{{ dayjs(completedAt).calendar() }}</span>
+        <span>{{ formatCalendarDateTime(completedAt) }}</span>
+      </div>
+
+      <div
+        v-if="status === 'completed' && archivedAt"
+        class="flex bg-archived text-on-accent px-3 flex-row items-center gap-1"
+      >
+        <Archive :size="15" />
+        <span>Arquivada em {{ formatCalendarDateTime(archivedAt) }}</span>
       </div>
 
       <template v-if="reminderAt && status === 'pending'">
-        <div class="bg-purple text-paper px-3 flex flex-row items-center gap-2">
+        <div class="bg-purple text-on-accent px-3 flex flex-row items-center gap-2">
           <Bell :size="15" />
-          <span>{{ dayjs(reminderAt).calendar() }}</span>
+          <span>{{ formatCalendarDateTime(reminderAt) }}</span>
         </div>
       </template>
     </div>

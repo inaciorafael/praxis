@@ -18,21 +18,32 @@ const APP_CONFIG_FILE: &str = "app-config.json";
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
 pub struct AppConfig {
+    pub theme: AppTheme,
     pub start_with_windows: bool,
     pub start_minimized: bool,
     pub minimize_to_tray_when_unlocked: bool,
     pub notifications_enabled: bool,
     pub badge_enabled: bool,
+    pub completed_task_retention_days: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AppTheme {
+    Light,
+    Dark,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            theme: AppTheme::Light,
             start_with_windows: false,
             start_minimized: true,
             minimize_to_tray_when_unlocked: true,
             notifications_enabled: true,
             badge_enabled: true,
+            completed_task_retention_days: Some(730),
         }
     }
 }
@@ -40,11 +51,13 @@ impl Default for AppConfig {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfigPatch {
+    theme: Option<AppTheme>,
     start_with_windows: Option<bool>,
     start_minimized: Option<bool>,
     minimize_to_tray_when_unlocked: Option<bool>,
     notifications_enabled: Option<bool>,
     badge_enabled: Option<bool>,
+    completed_task_retention_days: Option<Option<u32>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -109,6 +122,10 @@ pub fn get_app_config(app: AppHandle) -> Result<AppConfig, String> {
 pub fn update_app_config(app: AppHandle, patch: AppConfigPatch) -> Result<AppConfig, String> {
     let mut config = load_app_config(&app)?;
 
+    if let Some(value) = patch.theme {
+        config.theme = value;
+    }
+
     if let Some(value) = patch.start_with_windows {
         config.start_with_windows = value;
     }
@@ -129,6 +146,10 @@ pub fn update_app_config(app: AppHandle, patch: AppConfigPatch) -> Result<AppCon
         config.badge_enabled = value;
     }
 
+    if let Some(value) = patch.completed_task_retention_days {
+        config.completed_task_retention_days = value;
+    }
+
     apply_autostart(&app, config.start_with_windows)?;
     save_app_config(&app, &config)?;
     Ok(config)
@@ -138,6 +159,12 @@ pub fn is_badge_enabled(app: &AppHandle) -> bool {
     load_app_config(app)
         .map(|config| config.badge_enabled)
         .unwrap_or(true)
+}
+
+pub fn completed_task_retention_days(app: &AppHandle) -> Option<u32> {
+    load_app_config(app)
+        .ok()
+        .and_then(|config| config.completed_task_retention_days)
 }
 
 #[tauri::command]
