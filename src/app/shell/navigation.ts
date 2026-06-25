@@ -2,11 +2,11 @@ import type { Component } from 'vue'
 
 import {
   CalendarDays,
-  CheckCircle2,
+  // CheckCircle2,
   Clock3,
   Inbox,
   AlertTriangle,
-  Archive,
+  // Archive,
   Bell,
   BookOpen,
   Settings,
