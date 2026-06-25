@@ -30,7 +30,9 @@ const taskTags: ComputedRef<Tag[]> = computed(
 );
 const isSelected = computed(() => tasks.selectedTaskId === props.id);
 
-const checklistItems = computed(() => tasks.checklistItemsByTask[props.id] ?? []);
+const checklistItems = computed(
+	() => tasks.checklistItemsByTask[props.id] ?? [],
+);
 
 function selectTask() {
 	tasks.selectTask(props.id);
@@ -156,9 +158,9 @@ function isChecklistItemUpdating(itemId: string) {
       </button>
       <span
         :class="[
-          'text-title min-w-0 max-w-full break-words',
+          'text-title min-w-0 max-w-full wrap-break-words',
           {
-            'line-through': status === 'completed',
+            'line-through opacity-40': status === 'completed',
           },
         ]"
       >

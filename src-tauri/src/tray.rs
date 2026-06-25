@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     App, AppHandle, Manager,
@@ -8,6 +9,7 @@ use tauri::{
 
 const OPEN_MENU_ID: &str = "praxis_open";
 const QUIT_MENU_ID: &str = "praxis_quit";
+const APP_ICON_BYTES: &[u8] = include_bytes!("../icons/icon.png");
 
 pub struct AppLifecycle {
     is_quitting: AtomicBool,
@@ -39,9 +41,7 @@ pub fn setup_tray(app: &App) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .tooltip("Praxis");
 
-    if let Some(icon) = app.default_window_icon().cloned() {
-        tray = tray.icon(icon);
-    }
+    tray = tray.icon(Image::from_bytes(APP_ICON_BYTES)?);
 
     tray.on_menu_event(|app, event| match event.id().as_ref() {
         OPEN_MENU_ID => show_main_window(app),

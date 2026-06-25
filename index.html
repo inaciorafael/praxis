@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#eae8e2" />
+    <meta name="theme-color" content="#dddcd6" />
     <title>Praxis</title>
     <script>
       (() => {
@@ -13,31 +13,17 @@
         document.documentElement.style.colorScheme = theme;
       })();
     </script>
+    <link
+      rel="stylesheet"
+      href="/src/app/styles/theme.css"
+    />
     <style>
-      :root {
-        --splash-paper: #eae8e2;
-        --splash-surface: #e4e1da;
-        --splash-border: #c9c4ba;
-        --splash-ink: #383530;
-        --splash-ink-soft: #6d6860;
-        --splash-accent: #a85f1f;
-        --splash-blue: #526f7a;
-      }
-
-      html[data-theme="dark"] {
-        --splash-paper: #20211f;
-        --splash-surface: #292a27;
-        --splash-border: #464740;
-        --splash-ink: #e7e3d9;
-        --splash-ink-soft: #b9b4aa;
-      }
-
       html,
       body {
         margin: 0;
         min-width: 320px;
         min-height: 100%;
-        background: var(--splash-paper);
+        background: var(--paper);
       }
 
       #praxis-splash {
@@ -47,8 +33,8 @@
         display: grid;
         place-items: center;
         overflow: hidden;
-        background: var(--splash-paper);
-        color: var(--splash-ink);
+        background: var(--paper);
+        color: var(--ink);
         font-family:
           Inter,
           ui-sans-serif,
@@ -76,30 +62,10 @@
       }
 
       .praxis-splash__mark {
-        position: relative;
-        width: 72px;
-        height: 72px;
-      }
-
-      .praxis-splash__ring {
-        position: absolute;
-        width: 44px;
-        height: 44px;
-        border: 8px solid var(--splash-accent);
-        border-left-color: transparent;
-        border-radius: 50%;
-      }
-
-      .praxis-splash__ring:first-child {
-        top: 0;
-        right: 0;
-      }
-
-      .praxis-splash__ring:last-child {
-        bottom: 0;
-        left: 0;
-        border-color: var(--splash-blue);
-        border-right-color: transparent;
+        display: block;
+        width: 88px;
+        height: 88px;
+        object-fit: contain;
       }
 
       .praxis-splash__title {
@@ -112,7 +78,7 @@
 
       .praxis-splash__message {
         margin: -4px 0 0;
-        color: var(--splash-ink-soft);
+        color: var(--ink-soft);
         font-size: 13px;
         line-height: 20px;
       }
@@ -121,7 +87,7 @@
         width: 160px;
         height: 2px;
         overflow: hidden;
-        background: var(--splash-border);
+        background: var(--border);
       }
 
       .praxis-splash__progress::after {
@@ -129,7 +95,7 @@
         display: block;
         width: 42%;
         height: 100%;
-        background: var(--splash-accent);
+        background: var(--accent);
         animation: praxis-splash-progress 1.25s ease-in-out infinite;
       }
 
@@ -164,13 +130,12 @@
       aria-label="Praxis está iniciando"
     >
       <div class="praxis-splash__content">
-        <div
+        <img
           class="praxis-splash__mark"
+          src="/assets/praxis-logo-v2.png"
+          alt=""
           aria-hidden="true"
-        >
-          <span class="praxis-splash__ring"></span>
-          <span class="praxis-splash__ring"></span>
-        </div>
+        />
         <h1 class="praxis-splash__title">Praxis</h1>
         <p class="praxis-splash__message">Preparando seu espaço de trabalho</p>
         <div

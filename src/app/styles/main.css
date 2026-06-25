@@ -5,67 +5,29 @@
 @tailwind utilities;
 
 @theme {
-  --color-paper: #eae8e2;
-  --color-surface: #e4e1da;
-  --color-hover: #dcd8cf;
-  --color-selection: #d2ccc0;
-  --color-border: #c9c4ba;
-  --color-ink: #383530;
-  --color-ink-soft: #6d6860;
-  --color-ink-muted: #918b82;
-  --color-on-accent: #f7f4ed;
-  --color-archived: #686a66;
-  --color-blue: #526f7a;
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-hover: var(--hover);
+  --color-selection: var(--selection);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-on-accent: var(--on-accent);
+  --color-archived: var(--archived);
+  --color-blue: var(--blue);
+  --color-orange: var(--orange);
 
-  --color-accent: #a85f1f; /* laranja queimado mais legível */
-  --color-amber: #9f7328; /* atenção, mais contraste */
-  --color-sage: #5f7656; /* concluído, verde mais aparente */
-  --color-rose: #b77b78; /* lembrete, rosa antigo visível */
-  --color-brick: #9b4f45; /* atraso/erro, carimbo mais forte */
-  --color-purple: #75658e;
-  --color-archived-bg: rgba(104, 106, 102, 0.14);
-
-  --task-archived: #686a66;
-  --task-archived-bg: rgba(104, 106, 102, 0.14);
-  --color-blue-bg: rgba(82, 111, 122, 0.15);
-
-  --task-pending: #a85f1f;
-  --task-due-today: #9f7328;
-  --task-overdue: #9b4f45;
-  --task-completed: #5f7656;
-  --task-snoozed: #74685d;
-  --task-recurring: #75658e;
-  --task-reminder: #b77b78;
-  --task-selected: #d8cbb9;
-
-  /* tag colors */
-  --tag-clay: #9a6246; /* barro queimado */
-  --tag-olive: #687a52; /* oliva seco */
-  --tag-slate: #5f6f73; /* azul acinzentado */
-  --tag-mauve: #8a6678; /* malva apagado */
-  --tag-ochre: #9b762d; /* ocre envelhecido */
-  --tag-moss: #5f735d; /* musgo */
-  --tag-plum: #75658e; /* ameixa dessaturada */
-  --tag-rust: #a85f1f; /* ferrugem */
-  --tag-graphite: #5e5850; /* grafite quente */
-  --tag-rosewood: #9b5f5c; /* rosa madeira */
-
-  --tag-clay-bg: rgba(154, 98, 70, 0.14);
-  --tag-olive-bg: rgba(104, 122, 82, 0.16);
-  --tag-slate-bg: rgba(95, 111, 115, 0.15);
-  --tag-mauve-bg: rgba(138, 102, 120, 0.15);
-  --tag-ochre-bg: rgba(155, 118, 45, 0.16);
-  --tag-moss-bg: rgba(95, 115, 93, 0.16);
-  --tag-plum-bg: rgba(117, 101, 142, 0.15);
-  --tag-rust-bg: rgba(168, 95, 31, 0.14);
-  --tag-graphite-bg: rgba(94, 88, 80, 0.12);
-  --tag-rosewood-bg: rgba(155, 95, 92, 0.15);
-
-  --task-pending-bg: rgba(168, 95, 31, 0.14);
-  --task-due-today-bg: rgba(159, 115, 40, 0.16);
-  --task-overdue-bg: rgba(155, 79, 69, 0.15);
-  --task-completed-bg: rgba(95, 118, 86, 0.16);
-  --task-reminder-bg: rgba(183, 123, 120, 0.18);
+  --color-accent: var(--accent);
+  --color-amber: var(--amber);
+  --color-sage: var(--sage);
+  --color-rose: var(--rose);
+  --color-brick: var(--brick);
+  --color-purple: var(--purple);
+  --color-archived-bg: var(--archived-bg);
+  --color-blue-bg: var(--blue-bg);
 
   /* breakpoints */
   --breakpoint-mobile: 30rem; /* 480px */
@@ -96,31 +58,6 @@
 }
 
 :root {
-  /* colors */
-  --paper: #eae8e2;
-  --surface: #e4e1da;
-  --hover: #dcd8cf;
-  --selection: #d2ccc0;
-  --border: #c9c4ba;
-  --ink: #383530;
-  --ink-soft: #6d6860;
-  --ink-muted: #918b82;
-  --on-accent: #f7f4ed;
-  --accent: #b46a2b;
-  --amber: #b58a48;
-  --sage: #7d8974;
-  --rose: #c7aaa7;
-  --brick: #a26056;
-
-  --task-pending: #b46a2b; /* laranja ferrugem, ação pendente */
-  --task-due-today: #b58a48; /* âmbar envelhecido, vence hoje */
-  --task-overdue: #a26056; /* carimbo antigo, atrasada */
-  --task-completed: #7d8974; /* verde botânico, concluída */
-  --task-snoozed: #8d8174; /* cinza quente, adiada */
-  --task-recurring: #8a7b9b; /* violeta apagado, recorrente */
-  --task-reminder: #c7aaa7; /* rosa marcador antigo, lembrete */
-  --task-selected: #d2ccc0; /* seleção em papel */
-
   font-family:
     Inter,
     ui-sans-serif,
@@ -135,26 +72,6 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-html[data-theme='dark'] {
-  --color-paper: #20211f;
-  --color-surface: #292a27;
-  --color-hover: #33342f;
-  --color-selection: #3b3a33;
-  --color-border: #464740;
-  --color-ink: #e7e3d9;
-  --color-ink-soft: #b9b4aa;
-  --color-ink-muted: #817e77;
-
-  --paper: #20211f;
-  --surface: #292a27;
-  --hover: #33342f;
-  --selection: #3b3a33;
-  --border: #464740;
-  --ink: #e7e3d9;
-  --ink-soft: #b9b4aa;
-  --ink-muted: #817e77;
 }
 
 * {
@@ -222,7 +139,7 @@ button {
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     background: var(--surface);
-    box-shadow: 0 1px 0 rgba(47, 44, 40, 0.04);
+    box-shadow: 0 1px 0 var(--shadow-color);
   }
 
   .praxis-field {
@@ -239,7 +156,7 @@ button {
 
   .praxis-field:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(180, 106, 43, 0.14);
+    box-shadow: 0 0 0 2px var(--focus-ring);
   }
 
   .praxis-button-primary {

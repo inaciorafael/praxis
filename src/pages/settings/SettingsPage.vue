@@ -239,46 +239,103 @@ const retentionOptions = [
     </div>
 
     <div class="grid border border-border bg-surface">
-      <div class="flex items-center justify-between gap-6 p-4">
+      <div class="grid gap-5 p-4">
         <div class="grid gap-1">
           <span class="text-heading">Aparência</span>
           <span class="text-body text-ink-soft">
-            Escolha a leitura E-Ink clara ou escura.
+            Escolha entre papel fosco para ambientes claros ou tinta invertida para pouca
+            luz.
           </span>
         </div>
 
         <div
-          class="grid grid-cols-2 border border-border bg-paper p-1"
+          class="grid gap-3 tablet:grid-cols-2"
           aria-label="Tema do aplicativo"
         >
           <button
             type="button"
             :aria-pressed="config?.theme === 'light'"
             :class="[
-              'flex min-w-28 items-center justify-center gap-2 px-3 py-2 text-body font-semibold',
+              'grid gap-3 border p-3 text-left transition-colors',
               config?.theme === 'light'
-                ? 'bg-ink text-paper'
-                : 'text-ink-soft hover:bg-hover hover:text-ink',
+                ? 'border-accent bg-selection'
+                : 'border-border bg-paper hover:border-border-strong hover:bg-hover',
             ]"
             @click="setTheme('light')"
           >
-            <Sun :size="17" />
-            <span>Claro</span>
+            <span class="theme-preview-paper grid h-20 grid-cols-[2.5rem_1fr] overflow-hidden border border-border">
+              <span
+                class="border-r"
+                style="background: var(--preview-surface); border-color: var(--preview-border)"
+              ></span>
+              <span
+                class="grid content-center gap-2 p-3"
+                style="background: var(--preview-paper)"
+              >
+                <span
+                  class="h-2 w-2/3"
+                  style="background: var(--preview-ink)"
+                ></span>
+                <span
+                  class="h-1.5 w-full opacity-40"
+                  style="background: var(--preview-ink)"
+                ></span>
+                <span
+                  class="h-1.5 w-4/5 opacity-25"
+                  style="background: var(--preview-ink)"
+                ></span>
+              </span>
+            </span>
+            <span class="flex items-center justify-between gap-3">
+              <span class="flex items-center gap-2 text-body font-semibold text-ink">
+                <Sun :size="17" />
+                Papel
+              </span>
+              <span class="text-small text-ink-muted">Fosco e suave</span>
+            </span>
           </button>
 
           <button
             type="button"
             :aria-pressed="config?.theme === 'dark'"
             :class="[
-              'flex min-w-28 items-center justify-center gap-2 px-3 py-2 text-body font-semibold',
+              'grid gap-3 border p-3 text-left transition-colors',
               config?.theme === 'dark'
-                ? 'bg-ink text-paper'
-                : 'text-ink-soft hover:bg-hover hover:text-ink',
+                ? 'border-accent bg-selection'
+                : 'border-border bg-paper hover:border-border-strong hover:bg-hover',
             ]"
             @click="setTheme('dark')"
           >
-            <Moon :size="17" />
-            <span>Escuro</span>
+            <span class="theme-preview-dark grid h-20 grid-cols-[2.5rem_1fr] overflow-hidden border border-border">
+              <span
+                class="border-r"
+                style="background: var(--preview-surface); border-color: var(--preview-border)"
+              ></span>
+              <span
+                class="grid content-center gap-2 p-3"
+                style="background: var(--preview-paper)"
+              >
+                <span
+                  class="h-2 w-2/3"
+                  style="background: var(--preview-ink)"
+                ></span>
+                <span
+                  class="h-1.5 w-full opacity-40"
+                  style="background: var(--preview-ink)"
+                ></span>
+                <span
+                  class="h-1.5 w-4/5 opacity-25"
+                  style="background: var(--preview-ink)"
+                ></span>
+              </span>
+            </span>
+            <span class="flex items-center justify-between gap-3">
+              <span class="flex items-center gap-2 text-body font-semibold text-ink">
+                <Moon :size="17" />
+                Escuro
+              </span>
+              <span class="text-small text-ink-muted">Pouca luz</span>
+            </span>
           </button>
         </div>
       </div>

@@ -1266,17 +1266,20 @@ fn is_task_in_week_badge_scope(task: &Task, today: &str) -> bool {
         return false;
     };
 
-    task.planned_for
+    let planned_in_week = task
+        .planned_for
         .as_deref()
         .and_then(parse_local_date)
-        .is_some_and(|date| date >= effective_start && date <= week_end)
-        || task
-            .due_at
-            .as_deref()
-            .and_then(local_date_part)
-            .as_deref()
-            .and_then(parse_local_date)
-            .is_some_and(|date| date >= effective_start && date <= week_end)
+        .is_some_and(|date| date >= effective_start && date <= week_end);
+    let due_in_week = task
+        .due_at
+        .as_deref()
+        .and_then(local_date_part)
+        .as_deref()
+        .and_then(parse_local_date)
+        .is_some_and(|date| date >= effective_start && date <= week_end);
+
+    planned_in_week || due_in_week
 }
 
 fn is_task_overdue(task: &Task, today: &str) -> bool {
@@ -1609,6 +1612,91 @@ mod tests {
         due_today.due_at = Some(format!("{today}T23:00:00Z"));
 
         assert!(!is_task_in_week_badge_scope(&due_today, &today));
+    }
+
+    #[test]
+    fn week_badge_counts_task_when_planned_date_is_in_week_even_if_due_is_later() {
+        let current_day = current_local_date();
+        let tomorrow = current_day
+            .checked_add(time::Duration::days(1))
+            .unwrap()
+            .to_string();
+        let outside_week = current_day
+            .checked_add(time::Duration::days(10))
+            .unwrap()
+            .to_string();
+        let mut planned_in_week_due_outside = task("due-outside", TaskStatus::Pending);
+        planned_in_week_due_outside.planned_for = Some(tomorrow);
+        planned_in_week_due_outside.due_at = Some(format!("{outside_week}T09:00:00Z"));
+
+        assert!(is_task_in_week_badge_scope(
+            &planned_in_week_due_outside,
+            &current_day.to_string()
+        ));
+    }
+
+    #[test]
+    fn week_badge_falls_back_to_planned_date_without_due_date() {
+        let current_day = current_local_date();
+        let tomorrow = current_day
+            .checked_add(time::Duration::days(1))
+            .unwrap()
+            .to_string();
+        let mut planned_in_week = task("planned-in-week", TaskStatus::Pending);
+        planned_in_week.planned_for = Some(tomorrow);
+
+        assert!(is_task_in_week_badge_scope(
+            &planned_in_week,
+            &current_day.to_string()
+        ));
+    }
+
+    #[test]
+    fn week_badge_counts_each_pending_task_once_across_both_date_fields() {
+        let current_day = current_local_date();
+        let week_start = current_day.checked_add(time::Duration::days(1)).unwrap();
+        let inside = |days: i64| {
+            week_start
+                .checked_add(time::Duration::days(days))
+                .unwrap()
+                .to_string()
+        };
+        let outside = current_day
+            .checked_add(time::Duration::days(10))
+            .unwrap()
+            .to_string();
+
+        let mut planned_only = task("planned-only", TaskStatus::Pending);
+        planned_only.planned_for = Some(inside(0));
+
+        let mut due_only = task("due-only", TaskStatus::Pending);
+        due_only.due_at = Some(format!("{}T09:00:00Z", inside(1)));
+
+        let mut both_inside = task("both-inside", TaskStatus::Pending);
+        both_inside.planned_for = Some(inside(2));
+        both_inside.due_at = Some(format!("{}T09:00:00Z", inside(3)));
+
+        let mut planned_inside_due_outside = task("planned-inside", TaskStatus::Pending);
+        planned_inside_due_outside.planned_for = Some(inside(4));
+        planned_inside_due_outside.due_at = Some(format!("{outside}T09:00:00Z"));
+
+        let mut due_inside_planned_outside = task("due-inside", TaskStatus::Pending);
+        due_inside_planned_outside.planned_for = Some(outside);
+        due_inside_planned_outside.due_at = Some(format!("{}T09:00:00Z", inside(5)));
+
+        let tasks = vec![
+            planned_only,
+            due_only,
+            both_inside,
+            planned_inside_due_outside,
+            due_inside_planned_outside,
+        ];
+        let count = tasks
+            .iter()
+            .filter(|task| is_task_in_week_badge_scope(task, &week_start.to_string()))
+            .count();
+
+        assert_eq!(count, 5);
     }
 
     #[test]

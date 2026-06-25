@@ -17,9 +17,11 @@ mod vault;
 use app_navigation::AppNavigationStore;
 use badge::{apply_badge_count, load_badge_count, BadgeState, BadgeStore};
 use notification_launch::NotificationLaunchStore;
-use tauri::{Emitter, Manager};
+use tauri::{image::Image, Emitter, Manager};
 use tray::{setup_tray, AppLifecycle};
 use vault::{VaultState, VaultStore};
+
+const APP_ICON_BYTES: &[u8] = include_bytes!("../icons/icon.png");
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -56,6 +58,10 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_icon(Image::from_bytes(APP_ICON_BYTES)?)?;
+            }
+
             let start_minimized =
                 std::env::args().any(|arg| arg == "--minimized" || arg == "--background");
             let count = load_badge_count(app.handle());

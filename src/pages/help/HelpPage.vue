@@ -376,7 +376,7 @@ function scrollToTopic(topicId: string) {
                 <span
                   class="flex items-center justify-center gap-2 bg-ink px-3 py-2 text-small text-paper"
                 >
-                  <Sun :size="15" /> Claro
+                  <Sun :size="15" /> Papel
                 </span>
                 <span
                   class="flex items-center justify-center gap-2 px-3 py-2 text-small text-ink-soft"

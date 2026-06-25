@@ -165,6 +165,7 @@ Task ordering rule:
 - `list_upcoming_tasks` means pending tasks scheduled for a future local date.
 - Badge counting remains a separate pending-only rule: pending tasks due today or overdue.
 - `list_week_tasks` keeps `today` and `startDate` as separate parameters. A future view date must never redefine the badge's current day.
+- Weekly membership uses `plannedFor` or local `dueAt`. A pending task counts once when at least one of those dates is inside the seven visible days, even when both fields are set.
 - Do not duplicate or override the default order in page components unless a user-selected sort mode exists.
 - Pending task lists sort by the official urgency order: overdue first, then nearest `dueAt`, then tasks without `dueAt` by `createdAt`.
 - `dueAt` is the only field that defines due urgency and overdue state.
@@ -418,7 +419,7 @@ Before claiming tags/filtros are ready:
 
 Praxis supports two explicit appearance modes:
 
-- `light`: warm electronic-paper background with dark ink
+- `light`: matte electronic-paper background, presented to the user as `Papel`
 - `dark`: charcoal electronic-paper background with soft light ink
 
 Rules:
@@ -434,6 +435,9 @@ Rules:
 - The light theme represents matte electronic paper, not a bright white display.
 - Light-mode neutral surfaces intentionally use reduced luminance and softened contrast for prolonged desktop use.
 - Pure white and pure black are not allowed in light-mode controls, shortcut keys or toggles.
+- Theme values live only in `src/app/styles/theme.css`; Tailwind utilities reference semantic CSS variables instead of repeating hex values.
+- `theme.css` is loaded by `index.html` before the application bundle so the splash and first application frame use the same palette.
+- The persisted value remains `light` for compatibility, while the product label is `Papel`.
 
 ## 15. Windows Jump List Navigation
 
@@ -527,7 +531,7 @@ Rules:
 - Support is voluntary and never blocks, limits or changes product functionality.
 - Do not use popups, recurring banners, countdowns, guilt language or donation prompts outside Help.
 - Explain concretely that contributions support development, Windows testing and maintenance.
-- The public Pix key is configured at build time through `VITE_PRAXIS_PIX_KEY`.
-- Never commit a real key to source files; `.env.example` documents the configuration contract.
-- Display only a masked version of the key and copy the complete value through an explicit user action.
-- When no key is configured, show a neutral availability message instead of fake donation data.
+- The creator explicitly authorizes the public Pix key and QR Code distributed with Praxis.
+- Public support data lives in `src/shared/config/support.ts`; the QR Code lives in `public/assets`.
+- `VITE_PRAXIS_PIX_KEY` remains available as an optional build-time override.
+- Show the complete public key, provide explicit copy feedback and preserve a white quiet zone around the QR Code for reliable scanning in both themes.

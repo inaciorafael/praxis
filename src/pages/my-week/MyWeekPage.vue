@@ -96,23 +96,21 @@ function datePart(value: string | null) {
         :key="day.key"
         class="flex flex-col gap-1 items-center"
       >
-        <span :class="[selectedDate === day.key ? 'font-semibold text-blue' : '']">{{
+        <span :class="[selectedDate === day.key ? 'text-ink' : '']">{{
           day.weekday
         }}</span>
         <button
           type="button"
           :class="[
-            'w-30 h-30 transition-all flex flex-col border item-center justify-center relative',
-            selectedDate === day.key
-              ? 'bg-blue border-blue'
-              : 'bg-transparent border-ink hover:bg-hover',
+            'w-30 h-30 transition-colors flex flex-col item-center justify-center relative',
+            selectedDate === day.key ? 'bg-hover' : 'bg-transparent',
           ]"
           @click="selectDate(day.key)"
         >
           <span
             :class="[
               'text-4xl',
-              selectedDate === day.key ? 'text-on-accent font-bold' : 'text-ink',
+              selectedDate === day.key ? 'text-on-accent' : 'text-ink',
             ]"
           >
             {{ day.day }}
@@ -126,7 +124,7 @@ function datePart(value: string | null) {
             :class="[
               'absolute rounded-full flex items-center justify-center font-semibold border -top-3 -right-3 w-8 h-8',
               selectedDate === day.key
-                ? 'text-on-accent bg-blue border-on-accent'
+                ? 'text-on-accent bg-hover border-on-accent'
                 : 'bg-paper text-ink border-ink',
             ]"
           >

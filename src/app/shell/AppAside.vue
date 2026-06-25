@@ -6,7 +6,7 @@ import { useTaskStore } from "@/stores/task.store";
 import { useTagStore } from "@/stores/tag.store";
 import { useVaultStore } from "@/stores/vault.store";
 import { useBadgeStore } from "@/stores/badge.store";
-import { LogOut, Plus, RefreshCw } from "@lucide/vue";
+import { LogOut, Plus, RefreshCw, Search } from "@lucide/vue";
 import dayjs from "dayjs";
 
 const vault = useVaultStore();
@@ -14,6 +14,10 @@ const tasks = useTaskStore();
 const tags = useTagStore();
 const badge = useBadgeStore();
 const router = useRouter();
+
+const emit = defineEmits<{
+	handleClickSearchTask: [];
+}>();
 
 function getBadgeCount(key: AppNavigationItem["badgeKey"]) {
 	if (!key) {
@@ -41,37 +45,57 @@ function openFreeCreateModal() {
     class="flex h-full flex-col justify-between gap-1 overflow-y-auto p-3"
     aria-label="Navegacao principal"
   >
-    <div>
+    <div class="flex flex-col gap-3">
+      <button
+        @click="emit('handleClickSearchTask')"
+        class="bg-hover flex flex-row items-center justify-between gap-2 px-3 py-1"
+      >
+        <div class="flex flex-row items-center gap-2">
+          <Search :size="18" />
+          <span class="text-ink-soft">Search</span>
+        </div>
+        <span class="text-ink-soft">Ctrl+k</span>
+      </button>
+
       <button
         type="button"
-        class="mb-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-body font-semibold text-ink transition-colors hover:bg-hover"
+        class="mb-3 flex min-h-10 w-full items-center justify-center gap-2 border border-border bg-surface px-3 py-2 text-body font-semibold text-ink transition-colors hover:bg-hover"
         @click="openFreeCreateModal"
       >
         <Plus :size="18" />
-        <span>Nova tarefa livre</span>
+        <span>Nova tarefa</span>
       </button>
 
       <div class="flex flex-col gap-2">
         <RouterLink
           v-for="item in appNavigationItems"
+          v-slot="{ isActive }"
           :key="item.to"
           :to="item.to"
-          class="flex min-h-10 items-center justify-between gap-2 rounded-md px-3 py-2 text-body font-semibold text-ink-soft transition-colors"
-          active-class="bg-blue text-on-accent"
         >
-          <div class="flex flex-row items-center gap-2">
-            <component
-              :is="item.icon"
-              class="size-5 shrink-0"
-            />
-            <span class="truncate">{{ item.label }}</span>
-          </div>
-          <span
-            v-if="getBadgeCount(item.badgeKey) > 0"
-            class="rounded-full border border-border bg-brick px-2 py-0.5 text-caption font-semibold text-on-accent"
+          <div
+            :class="[
+              'flex flex-row min-h-10 items-center justify-between gap-2 px-3 py-2 border-l-[3px] transition-colors',
+              {
+                'border-l-blue bg-hover text-ink': isActive,
+                'border-l-transparent text-ink-soft': !isActive,
+              },
+            ]"
           >
-            {{ getBadgeCount(item.badgeKey) }}
-          </span>
+            <div class="flex flex-row gap-2 items-center">
+              <component
+                :is="item.icon"
+                class="size-5 shrink-0"
+              />
+              <span class="truncate">{{ item.label }}</span>
+            </div>
+            <span
+              v-if="getBadgeCount(item.badgeKey) > 0"
+              class="bg-brick px-2 py-0.5 text-caption font-semibold text-on-accent"
+            >
+              {{ getBadgeCount(item.badgeKey) }}
+            </span>
+          </div>
         </RouterLink>
       </div>
     </div>
@@ -95,7 +119,7 @@ function openFreeCreateModal() {
         </div>
 
         <button
-          class="text-on-accent bg-brick flex flex-row items-center p-2 rounded-xl"
+          class="text-on-accent bg-brick flex flex-row items-center p-2"
           @click="lockVault"
         >
           <LogOut :size="15" />

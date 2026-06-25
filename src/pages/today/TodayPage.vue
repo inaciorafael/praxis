@@ -14,12 +14,6 @@ const pendingTasks = computed(() =>
 const completedTasks = computed(() =>
 	tasks.myDay.filter((task) => task.status === "completed"),
 );
-const completedCount = computed(() => completedTasks.value.length);
-const overdueCount = computed(
-	() =>
-		tasks.myDay.filter((task) => task.status === "pending" && task.isOverdue)
-			.length,
-);
 
 onMounted(async () => {
 	tasks.setActiveTaskView("today");
@@ -44,20 +38,6 @@ function setTodayCreateContext() {
     <div class="flex flex-col gap-2">
       <span class="text-display">Meu dia</span>
       <span class="text-heading">{{ dayjs().format('dddd[,] DD [de] MMMM YYYY.') }}</span>
-    </div>
-
-    <div class="flex flex-wrap gap-2">
-      <div class="bg-sage px-3 py-1 flex items-center justify-center">
-        <span class="text-caption text-on-accent font-semibold uppercase"
-          >Completed {{ completedCount }}</span
-        >
-      </div>
-
-      <div class="bg-brick px-3 py-1 flex items-center justify-center">
-        <span class="text-caption font-semibold uppercase text-on-accent"
-          >OVERDUE {{ overdueCount }}</span
-        >
-      </div>
     </div>
 
     <div class="text-body flex flex-row items-center gap-2">
