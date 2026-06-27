@@ -154,6 +154,7 @@ pub fn run() {
             tasks::list_reminder_tasks,
             tasks::list_completed_tasks,
             tasks::list_archived_tasks,
+            tasks::search_tasks,
             tasks::get_task_view_counts,
             tasks::generate_due_recurring_tasks,
             tasks::create_task,

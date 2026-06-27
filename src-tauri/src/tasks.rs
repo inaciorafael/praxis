@@ -116,6 +116,14 @@ pub struct TaskListResult {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TaskSearchResult {
+    tasks: Vec<TaskView>,
+    checklist_items: Vec<ChecklistItem>,
+    total: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskViewCounts {
     today: usize,
     week: usize,
@@ -133,6 +141,40 @@ pub struct TaskViewCounts {
 pub struct TaskListOptions {
     limit: Option<usize>,
     offset: Option<usize>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskSearchFilters {
+    #[serde(default)]
+    query: String,
+    status: Option<TaskStatus>,
+    date_filter: Option<TaskSearchDateFilter>,
+    has_reminder: Option<bool>,
+    tag_id: Option<String>,
+    #[serde(default = "default_search_archive_filter")]
+    archive_filter: TaskSearchArchiveFilter,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TaskSearchDateFilter {
+    DueToday,
+    Overdue,
+    Upcoming,
+    WithoutDue,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TaskSearchArchiveFilter {
+    Active,
+    Archived,
+    All,
+}
+
+fn default_search_archive_filter() -> TaskSearchArchiveFilter {
+    TaskSearchArchiveFilter::Active
 }
 
 #[tauri::command]
@@ -324,6 +366,51 @@ pub fn list_archived_tasks(
         checklist_items: selected_checklist_items,
         reminders: Vec::new(),
         badge,
+    })
+}
+
+#[tauri::command]
+pub fn search_tasks(
+    vault: tauri::State<'_, VaultStore>,
+    today: String,
+    filters: TaskSearchFilters,
+    options: Option<TaskListOptions>,
+) -> Result<TaskSearchResult, String> {
+    let document = read_active_document(&vault)?;
+    let tasks = read_tasks_from_document(&document)?;
+    let checklist_items = checklist::read_checklist_items_from_document(&document)?;
+    let now = now_timestamp();
+    let sorted_tasks = sorted_tasks_by_action_time(&tasks);
+    let matching_tasks = sorted_tasks
+        .into_iter()
+        .filter(|task| {
+            let has_selected_tag = filters
+                .tag_id
+                .as_deref()
+                .is_none_or(|tag_id| task_has_tag(&document, &task.id, tag_id));
+
+            has_selected_tag && task_matches_search_filters(task, &today, now, &filters)
+        })
+        .collect::<Vec<_>>();
+    let total = matching_tasks.len();
+    let selected_tasks = paginate_tasks(matching_tasks, options.as_ref());
+    let selected_ids = selected_tasks
+        .iter()
+        .map(|task| task.id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let selected_checklist_items = checklist_items
+        .iter()
+        .filter(|item| selected_ids.contains(item.task_id.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    Ok(TaskSearchResult {
+        tasks: selected_tasks
+            .iter()
+            .map(|task| task_view(task, &selected_checklist_items, &today))
+            .collect(),
+        checklist_items: selected_checklist_items,
+        total,
     })
 }
 
@@ -1053,6 +1140,57 @@ fn list_task_result(
     })
 }
 
+fn task_matches_search_filters(
+    task: &Task,
+    today: &str,
+    now: i128,
+    filters: &TaskSearchFilters,
+) -> bool {
+    let query = filters.query.trim().to_lowercase();
+    let matches_query = query.is_empty()
+        || task.title.to_lowercase().contains(&query)
+        || task
+            .notes
+            .as_deref()
+            .is_some_and(|notes| notes.to_lowercase().contains(&query));
+    let matches_status = filters
+        .status
+        .as_ref()
+        .is_none_or(|status| &task.status == status);
+    let matches_date = filters
+        .date_filter
+        .is_none_or(|date_filter| match date_filter {
+            TaskSearchDateFilter::DueToday => {
+                task.due_at.as_deref().and_then(local_date_part).as_deref() == Some(today)
+            }
+            TaskSearchDateFilter::Overdue => is_task_overdue_at(task, today, now),
+            TaskSearchDateFilter::Upcoming => is_task_upcoming(task, today),
+            TaskSearchDateFilter::WithoutDue => task.due_at.is_none(),
+        });
+    let matches_reminder = filters
+        .has_reminder
+        .is_none_or(|has_reminder| task.reminder_at.is_some() == has_reminder);
+    let matches_archive = match filters.archive_filter {
+        TaskSearchArchiveFilter::Active => task.archived_at.is_none(),
+        TaskSearchArchiveFilter::Archived => task.archived_at.is_some(),
+        TaskSearchArchiveFilter::All => true,
+    };
+
+    matches_query && matches_status && matches_date && matches_reminder && matches_archive
+}
+
+fn task_has_tag(document: &Value, task_id: &str, tag_id: &str) -> bool {
+    document
+        .get("taskTags")
+        .and_then(Value::as_array)
+        .is_some_and(|relations| {
+            relations.iter().any(|relation| {
+                relation.get("taskId").and_then(Value::as_str) == Some(task_id)
+                    && relation.get("tagId").and_then(Value::as_str) == Some(tag_id)
+            })
+        })
+}
+
 fn paginate_tasks(tasks: Vec<Task>, options: Option<&TaskListOptions>) -> Vec<Task> {
     let offset = options.and_then(|options| options.offset).unwrap_or(0);
     let limit = options.and_then(|options| options.limit);
@@ -1383,6 +1521,79 @@ mod tests {
             created_at: "2026-06-18T00:00:00Z".into(),
             updated_at: "2026-06-18T00:00:00Z".into(),
         }
+    }
+
+    fn search_filters(query: &str) -> TaskSearchFilters {
+        TaskSearchFilters {
+            query: query.into(),
+            status: None,
+            date_filter: None,
+            has_reminder: None,
+            tag_id: None,
+            archive_filter: TaskSearchArchiveFilter::Active,
+        }
+    }
+
+    #[test]
+    fn search_matches_title_and_notes_with_composable_filters() {
+        let mut candidate = task("searchable", TaskStatus::Pending);
+        candidate.title = "Preparar reuniao".into();
+        candidate.notes = Some("Revisar o contrato do fornecedor".into());
+        candidate.due_at = Some("2026-06-18".into());
+        candidate.reminder_at = Some("2026-06-18T09:00:00Z".into());
+        let now = parse_instant_timestamp("2026-06-18T08:00:00Z").unwrap();
+
+        let mut filters = search_filters("CONTRATO");
+        filters.status = Some(TaskStatus::Pending);
+        filters.date_filter = Some(TaskSearchDateFilter::DueToday);
+        filters.has_reminder = Some(true);
+
+        assert!(task_matches_search_filters(
+            &candidate,
+            "2026-06-18",
+            now,
+            &filters
+        ));
+
+        filters.status = Some(TaskStatus::Completed);
+        assert!(!task_matches_search_filters(
+            &candidate,
+            "2026-06-18",
+            now,
+            &filters
+        ));
+    }
+
+    #[test]
+    fn search_archive_and_tag_filters_distinguish_hidden_tasks() {
+        let mut archived = task("archived-task", TaskStatus::Completed);
+        archived.archived_at = Some("2026-06-18T12:00:00Z".into());
+        let now = parse_instant_timestamp("2026-06-18T13:00:00Z").unwrap();
+        let mut filters = search_filters("");
+
+        assert!(!task_matches_search_filters(
+            &archived,
+            "2026-06-18",
+            now,
+            &filters
+        ));
+
+        filters.archive_filter = TaskSearchArchiveFilter::Archived;
+        assert!(task_matches_search_filters(
+            &archived,
+            "2026-06-18",
+            now,
+            &filters
+        ));
+
+        let document = serde_json::json!({
+            "taskTags": [
+                { "taskId": "archived-task", "tagId": "work" },
+                { "taskId": "another-task", "tagId": "personal" }
+            ]
+        });
+        assert!(task_has_tag(&document, "archived-task", "work"));
+        assert!(!task_has_tag(&document, "archived-task", "personal"));
     }
 
     #[test]
