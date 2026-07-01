@@ -7,8 +7,11 @@ import { tomorrowLocalDate } from "@/shared/lib/tasks/task.rules";
 import type { Task } from "@/shared/types/task";
 import { useTaskStore } from "@/stores/task.store";
 import HelpKey from "@/features/help/components/HelpKey.vue";
+import { useI18n } from "vue-i18n";
+import { formatLongDate } from "@/shared/lib/date/date-format";
 
 const tasks = useTaskStore();
+const { t, locale } = useI18n();
 const weekStartDate = tomorrowLocalDate();
 const selectedDate = ref(weekStartDate);
 
@@ -18,9 +21,9 @@ const weekDays = computed(() =>
 
 		return {
 			key: date.format("YYYY-MM-DD"),
-			weekday: date.format("dddd"),
+			weekday: new Intl.DateTimeFormat(locale.value, { weekday: "long" }).format(date.toDate()),
 			day: date.format("DD"),
-			month: date.format("MMMM YYYY"),
+			month: new Intl.DateTimeFormat(locale.value, { month: "long", year: "numeric" }).format(date.toDate()),
 			count: tasks.myWeek.filter((task) =>
 				isTaskOnDate(task, date.format("YYYY-MM-DD")),
 			).length,
@@ -38,9 +41,7 @@ const selectedDayCompletedTasks = computed(() =>
 	selectedDayTasks.value.filter((task) => task.status === "completed"),
 );
 
-const selectedDayLabel = computed(() =>
-	dayjs(selectedDate.value).format("dddd[,] DD [de] MMMM"),
-);
+const selectedDayLabel = computed(() => formatLongDate(selectedDate.value));
 
 onMounted(async () => {
 	tasks.setActiveTaskView("week");
@@ -56,7 +57,7 @@ function selectDate(date: string) {
 function setWeekCreateContext(date: string) {
 	tasks.setCreateContext({
 		source: "week",
-		label: `Minha semana · ${dayjs(date).format("DD/MM/YYYY")}`,
+		label: t("week.context", { date: new Intl.DateTimeFormat(locale.value).format(dayjs(date).toDate()) }),
 		plannedFor: date,
 		dueDate: date,
 	});
@@ -83,10 +84,10 @@ function datePart(value: string | null) {
 <template>
   <section class="grid gap-5">
     <div class="flex flex-col">
-      <span class="text-display">Minha semana</span>
+      <span class="text-display">{{ t('week.title') }}</span>
       <span class="text-body text-ink-soft"
-        >{{ dayjs().add(1, 'day').format('DD dddd MMMM YYYY') }} -
-        {{ dayjs().add(7, 'day').format('DD dddd MMMM YYYY') }}</span
+        >{{ formatLongDate(dayjs().add(1, 'day').toDate()) }} -
+        {{ formatLongDate(dayjs().add(7, 'day').toDate()) }}</span
       >
     </div>
 
@@ -143,7 +144,7 @@ function datePart(value: string | null) {
           >
           <HelpKey
             :keys="['Ctrl', 'N']"
-            label="Nova tarefa"
+            :label="t('week.newTask')"
           />
         </div>
       </div>
@@ -153,7 +154,7 @@ function datePart(value: string | null) {
       v-if="selectedDayTasks.length === 0"
       class="border border-border bg-surface p-4 text-body text-ink-soft"
     >
-      Nenhuma tarefa para este dia.
+      {{ t('week.empty') }}
     </div>
 
     <section
@@ -161,7 +162,7 @@ function datePart(value: string | null) {
       class="grid gap-3"
     >
       <div class="flex items-center justify-between border-b border-border pb-2">
-        <span class="text-heading">Para fazer</span>
+        <span class="text-heading">{{ t('week.todo') }}</span>
         <span class="text-body text-ink-soft">
           {{ selectedDayPendingTasks.length }}
         </span>
@@ -179,7 +180,7 @@ function datePart(value: string | null) {
       class="grid gap-3"
     >
       <div class="flex items-center justify-between border-b border-border pb-2">
-        <span class="text-heading text-sage">Concluídas</span>
+        <span class="text-heading text-sage">{{ t('week.completed') }}</span>
         <span class="text-body text-ink-soft">
           {{ selectedDayCompletedTasks.length }}
         </span>

@@ -1,85 +1,119 @@
 <script setup lang="ts">
-import { Check, Clipboard, Code2, Coffee, Heart } from "@lucide/vue";
-import { onBeforeUnmount, ref } from "vue";
+import { Check, Clipboard, Code2, Coffee, ExternalLink, Heart } from '@lucide/vue'
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { onBeforeUnmount, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-import { praxisSupport } from "@/shared/config/support";
+import { praxisSupport } from '@/shared/config/support'
 
-const pixKey =
-	import.meta.env.VITE_PRAXIS_PIX_KEY?.trim() || praxisSupport.pixKey;
-const copied = ref(false);
-const copyError = ref(false);
-let copiedTimer: number | null = null;
+const pixKey = import.meta.env.VITE_PRAXIS_PIX_KEY?.trim() || praxisSupport.pixKey
+const { t } = useI18n()
+const copied = ref(false)
+const copyError = ref(false)
+const supportLinkError = ref(false)
+let copiedTimer: number | null = null
 
 async function copyPixKey() {
-	if (!pixKey) {
-		return;
-	}
+  if (!pixKey) {
+    return
+  }
 
-	try {
-		await navigator.clipboard.writeText(pixKey);
-		copied.value = true;
-		copyError.value = false;
-	} catch {
-		copied.value = false;
-		copyError.value = true;
-		return;
-	}
+  try {
+    await navigator.clipboard.writeText(pixKey)
+    copied.value = true
+    copyError.value = false
+  } catch {
+    copied.value = false
+    copyError.value = true
+    return
+  }
 
-	if (copiedTimer !== null) {
-		window.clearTimeout(copiedTimer);
-	}
+  if (copiedTimer !== null) {
+    window.clearTimeout(copiedTimer)
+  }
 
-	copiedTimer = window.setTimeout(() => {
-		copied.value = false;
-		copiedTimer = null;
-	}, 2400);
+  copiedTimer = window.setTimeout(() => {
+    copied.value = false
+    copiedTimer = null
+  }, 2400)
+}
+
+async function openBuyMeACoffee() {
+  supportLinkError.value = false
+
+  try {
+    await openUrl(praxisSupport.buyMeACoffeeUrl)
+  } catch {
+    supportLinkError.value = true
+  }
 }
 
 onBeforeUnmount(() => {
-	if (copiedTimer !== null) {
-		window.clearTimeout(copiedTimer);
-	}
-});
+  if (copiedTimer !== null) {
+    window.clearTimeout(copiedTimer)
+  }
+})
 </script>
 
 <template>
   <div class="grid gap-5">
     <div class="grid gap-3 text-body leading-6 text-ink-soft">
-      <p>
-        O Praxis é criado e mantido de forma independente por
-        <strong class="font-semibold text-ink">{{ praxisSupport.creatorName }}</strong>, com
-        atenção especial à privacidade, ao desempenho e aos detalhes que tornam o uso
-        diário mais tranquilo.
-      </p>
-      <p>
-        Se a ferramenta ajuda você a lembrar do que importa, uma contribuição voluntária
-        apoia o tempo de desenvolvimento, os testes no Windows e a continuidade do
-        projeto. O Praxis continuará funcionando normalmente sem qualquer doação.
-      </p>
+      <p>{{ t('support.intro1', { name: praxisSupport.creatorName }) }}</p>
+      <p>{{ t('support.intro2') }}</p>
     </div>
 
     <div class="flex flex-wrap gap-x-5 gap-y-2 text-small text-ink-muted">
       <span class="flex items-center gap-2">
         <Heart :size="15" />
-        Apoio único e opcional
+        {{ t('support.optional') }}
       </span>
       <span class="flex items-center gap-2">
         <Coffee :size="15" />
-        Sem assinatura
+        {{ t('support.noSubscription') }}
       </span>
       <span class="flex items-center gap-2">
         <Code2 :size="15" />
-        Projeto independente
+        {{ t('support.independent') }}
       </span>
+    </div>
+
+    <div
+      class="flex flex-wrap items-center justify-between gap-4 border border-border bg-surface p-4"
+    >
+      <div class="grid gap-1">
+        <span class="text-caption font-semibold uppercase text-ink-muted">
+          {{ t('support.international') }}
+        </span>
+        <span class="text-body text-ink-soft">
+          {{ t('support.internationalDescription') }}
+        </span>
+        <span
+          v-if="supportLinkError"
+          class="text-small text-brick"
+          role="status"
+        >
+          {{ t('support.openError') }}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        class="inline-flex min-h-10 shrink-0 items-center gap-2 border border-accent bg-accent px-4 py-2 text-body font-semibold text-on-accent hover:bg-orange"
+        @click="openBuyMeACoffee"
+      >
+        <Coffee :size="17" />
+        Buy me a coffee
+        <ExternalLink :size="15" />
+      </button>
     </div>
 
     <div class="grid gap-4 border border-border bg-surface p-4">
       <div class="grid gap-1">
         <span class="text-caption font-semibold uppercase text-ink-muted">
-          Apoiar via Pix
+          {{ t('support.pix') }}
         </span>
         <span class="text-body text-ink-soft">
-          Qualquer valor já contribui para manter o desenvolvimento ativo.
+          {{ t('support.pixDescription') }}
         </span>
       </div>
 
@@ -87,7 +121,7 @@ onBeforeUnmount(() => {
         <div class="grid place-items-center border border-border bg-white p-3">
           <img
             :src="praxisSupport.pixQrCodeUrl"
-            alt="QR Code Pix para apoiar o desenvolvimento do Praxis"
+            :alt="t('support.qrAlt')"
             class="aspect-square w-full max-w-52 object-contain"
             width="400"
             height="400"
@@ -96,7 +130,7 @@ onBeforeUnmount(() => {
 
         <div class="grid content-center gap-3">
           <div class="grid gap-1">
-            <span class="text-small font-semibold text-ink">Chave Pix</span>
+            <span class="text-small font-semibold text-ink">{{ t('support.pixKey') }}</span>
             <code
               class="break-all border border-border bg-paper px-3 py-3 text-body text-ink"
             >
@@ -117,22 +151,19 @@ onBeforeUnmount(() => {
               v-else
               :size="17"
             />
-            {{ copied ? "Chave copiada" : "Copiar chave Pix" }}
+            {{ copied ? t('support.copied') : t('support.copy') }}
           </button>
 
           <span
-            :class="[
-              'text-small',
-              copyError ? 'text-brick' : 'text-ink-muted',
-            ]"
+            :class="['text-small', copyError ? 'text-brick' : 'text-ink-muted']"
             aria-live="polite"
           >
             {{
               copyError
-                ? "O Windows não permitiu copiar a chave. Tente novamente."
+                ? t('support.copyError')
                 : copied
-                  ? "Obrigado por apoiar o Praxis."
-                  : "Escaneie o QR Code ou copie a chave. Você escolhe o valor."
+                  ? t('support.thanks')
+                  : t('support.pixHint')
             }}
           </span>
         </div>

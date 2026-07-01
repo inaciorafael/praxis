@@ -18,6 +18,7 @@ const APP_CONFIG_FILE: &str = "app-config.json";
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
 pub struct AppConfig {
+    pub language: AppLanguage,
     pub theme: AppTheme,
     pub start_with_windows: bool,
     pub start_minimized: bool,
@@ -34,9 +35,18 @@ pub enum AppTheme {
     Dark,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AppLanguage {
+    #[serde(rename = "en")]
+    En,
+    #[serde(rename = "pt-BR")]
+    PtBr,
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            language: AppLanguage::En,
             theme: AppTheme::Light,
             start_with_windows: false,
             start_minimized: true,
@@ -51,6 +61,7 @@ impl Default for AppConfig {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfigPatch {
+    language: Option<AppLanguage>,
     theme: Option<AppTheme>,
     start_with_windows: Option<bool>,
     start_minimized: Option<bool>,
@@ -121,6 +132,10 @@ pub fn get_app_config(app: AppHandle) -> Result<AppConfig, String> {
 #[tauri::command]
 pub fn update_app_config(app: AppHandle, patch: AppConfigPatch) -> Result<AppConfig, String> {
     let mut config = load_app_config(&app)?;
+
+    if let Some(value) = patch.language {
+        config.language = value;
+    }
 
     if let Some(value) = patch.theme {
         config.theme = value;

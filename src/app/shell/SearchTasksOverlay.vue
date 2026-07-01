@@ -6,6 +6,7 @@ import { useTagStore } from '@/stores/tag.store'
 import { useTaskStore } from '@/stores/task.store'
 import { RotateCcw, Search, SlidersHorizontal, X } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const PAGE_SIZE = 40
 const SEARCH_DELAY_MS = 250
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 
 const tags = useTagStore()
 const tasks = useTaskStore()
+const { t } = useI18n()
 const query = ref('')
 const inputRef = ref<HTMLInputElement>()
 const filters = reactive<TaskSearchFilters>({
@@ -118,17 +120,17 @@ useShortcut('Escape', () => emit('close'), {
     <header class="border-b border-border bg-paper px-6 py-5">
       <div class="mb-4 flex items-center justify-between gap-4">
         <div>
-          <h1 class="text-display">Buscar</h1>
+          <h1 class="text-display">{{ t('search.title') }}</h1>
           <p class="text-body text-ink-soft">
-            Encontre tarefas pelo título ou pelo conteúdo das notas.
+            {{ t('search.subtitle') }}
           </p>
         </div>
 
         <button
           type="button"
           class="flex h-10 w-10 shrink-0 items-center justify-center border border-border text-ink-soft hover:bg-hover hover:text-ink"
-          aria-label="Fechar busca"
-          title="Fechar busca"
+          :aria-label="t('common.close')"
+          :title="t('common.close')"
           @click="emit('close')"
         >
           <X :size="20" />
@@ -147,19 +149,19 @@ useShortcut('Escape', () => emit('close'), {
           v-model="query"
           type="search"
           autocomplete="off"
-          placeholder="Buscar em títulos e notas..."
+          :placeholder="t('search.placeholder')"
           class="w-full bg-transparent text-heading text-ink outline-none placeholder:text-ink-muted"
         />
         <span
           v-if="tasks.isSearching"
           class="shrink-0 text-small text-ink-muted"
-          >Buscando...</span
+          >{{ t('search.searching') }}</span
         >
       </div>
 
       <div class="mt-4 flex items-center gap-2 text-label font-semibold text-ink-soft">
         <SlidersHorizontal :size="17" />
-        <span>Filtros</span>
+        <span>{{ t('search.filters') }}</span>
         <span
           v-if="activeFilterCount"
           class="bg-accent px-2 text-on-accent"
@@ -169,50 +171,50 @@ useShortcut('Escape', () => emit('close'), {
 
       <div class="mt-2 grid grid-cols-1 gap-2 tablet:grid-cols-2 desktop:grid-cols-5">
         <label class="grid gap-1 text-small text-ink-soft">
-          Status
+          {{ t('search.status') }}
           <select
             v-model="filters.status"
             class="h-10 border border-border bg-surface px-3 text-body text-ink outline-none focus:border-accent"
           >
-            <option :value="null">Todos</option>
-            <option value="pending">Pendentes</option>
-            <option value="completed">Concluídas</option>
+            <option :value="null">{{ t('search.all') }}</option>
+            <option value="pending">{{ t('nav.pending') }}</option>
+            <option value="completed">{{ t('nav.completed') }}</option>
           </select>
         </label>
 
         <label class="grid gap-1 text-small text-ink-soft">
-          Prazo
+          {{ t('search.due') }}
           <select
             v-model="filters.dateFilter"
             class="h-10 border border-border bg-surface px-3 text-body text-ink outline-none focus:border-accent"
           >
-            <option :value="null">Qualquer prazo</option>
-            <option value="dueToday">Vence hoje</option>
-            <option value="overdue">Vencidas</option>
-            <option value="upcoming">Próximas</option>
-            <option value="withoutDue">Sem vencimento</option>
+            <option :value="null">{{ t('search.anyDue') }}</option>
+            <option value="dueToday">{{ t('search.dueToday') }}</option>
+            <option value="overdue">{{ t('nav.overdue') }}</option>
+            <option value="upcoming">{{ t('search.upcoming') }}</option>
+            <option value="withoutDue">{{ t('search.withoutDue') }}</option>
           </select>
         </label>
 
         <label class="grid gap-1 text-small text-ink-soft">
-          Lembrete
+          {{ t('search.reminder') }}
           <select
             v-model="filters.hasReminder"
             class="h-10 border border-border bg-surface px-3 text-body text-ink outline-none focus:border-accent"
           >
-            <option :value="null">Todos</option>
-            <option :value="true">Com lembrete</option>
-            <option :value="false">Sem lembrete</option>
+            <option :value="null">{{ t('search.all') }}</option>
+            <option :value="true">{{ t('search.withReminder') }}</option>
+            <option :value="false">{{ t('search.withoutReminder') }}</option>
           </select>
         </label>
 
         <label class="grid gap-1 text-small text-ink-soft">
-          Tag
+          {{ t('search.tag') }}
           <select
             v-model="filters.tagId"
             class="h-10 border border-border bg-surface px-3 text-body text-ink outline-none focus:border-accent"
           >
-            <option :value="null">Todas as tags</option>
+            <option :value="null">{{ t('search.allTags') }}</option>
             <option
               v-for="tag in tags.tags"
               :key="tag.id"
@@ -224,14 +226,14 @@ useShortcut('Escape', () => emit('close'), {
         </label>
 
         <label class="grid gap-1 text-small text-ink-soft">
-          Arquivamento
+          {{ t('search.archive') }}
           <select
             v-model="filters.archiveFilter"
             class="h-10 border border-border bg-surface px-3 text-body text-ink outline-none focus:border-accent"
           >
-            <option value="active">Ativas</option>
-            <option value="archived">Arquivadas</option>
-            <option value="all">Todas</option>
+            <option value="active">{{ t('search.active') }}</option>
+            <option value="archived">{{ t('search.archived') }}</option>
+            <option value="all">{{ t('search.all') }}</option>
           </select>
         </label>
       </div>
@@ -243,7 +245,7 @@ useShortcut('Escape', () => emit('close'), {
         @click="clearFilters"
       >
         <RotateCcw :size="15" />
-        Limpar busca e filtros
+        {{ t('search.clear') }}
       </button>
     </header>
 
@@ -257,9 +259,9 @@ useShortcut('Escape', () => emit('close'), {
             :size="28"
             class="mx-auto mb-3 text-ink-muted"
           />
-          <p class="text-title">O que você precisa encontrar?</p>
+          <p class="text-title">{{ t('search.promptTitle') }}</p>
           <p class="mt-1 text-body text-ink-soft">
-            Digite uma palavra ou use os filtros para pesquisar seu cofre.
+            {{ t('search.prompt') }}
           </p>
         </div>
       </div>
@@ -267,7 +269,7 @@ useShortcut('Escape', () => emit('close'), {
       <template v-else>
         <div class="mb-3 flex items-center justify-between border-b border-border pb-3">
           <span class="text-body text-ink-soft">
-            {{ tasks.searchTotal }} resultado{{ tasks.searchTotal === 1 ? '' : 's' }}
+            {{ t('search.results', tasks.searchTotal) }}
             <template v-if="query.trim()"> para “{{ query.trim() }}”</template>
           </span>
         </div>
@@ -283,7 +285,7 @@ useShortcut('Escape', () => emit('close'), {
           v-else-if="!tasks.isSearching && tasks.searchResults.length === 0"
           class="border border-border bg-surface p-6 text-center text-body text-ink-soft"
         >
-          Nenhuma tarefa corresponde a esta busca.
+          {{ t('search.noResults') }}
         </div>
 
         <div
@@ -306,7 +308,7 @@ useShortcut('Escape', () => emit('close'), {
           class="mx-auto mt-5 flex min-h-10 items-center justify-center border border-border bg-surface px-5 text-body font-semibold text-ink hover:bg-hover disabled:pointer-events-none disabled:opacity-50"
           @click="runSearch(true)"
         >
-          {{ tasks.isSearching ? 'Carregando...' : 'Carregar mais' }}
+          {{ tasks.isSearching ? t('common.loading') : t('common.loadMore') }}
         </button>
       </template>
     </div>

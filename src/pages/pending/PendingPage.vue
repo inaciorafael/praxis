@@ -6,8 +6,10 @@ import { onMounted } from "vue";
 import TaskCard from "@/features/tasks/components/TaskCard.vue";
 import type { Task } from "@/shared/types/task";
 import { useTaskStore } from "@/stores/task.store";
+import { useI18n } from "vue-i18n";
 
 const tasks = useTaskStore();
+const { t } = useI18n();
 
 type PendingGroup = {
 	key: string;
@@ -84,38 +86,38 @@ function createEmptyGroups() {
 	return {
 		overdue: {
 			key: "overdue",
-			title: "Vencidas",
-			description: "Tarefas pendentes cujo vencimento já passou.",
+			title: t("pending.groups.overdue.0"),
+			description: t("pending.groups.overdue.1"),
 			tasks: [] as Task[],
 		},
 		today: {
 			key: "today",
-			title: "Hoje",
-			description: "Tarefas pendentes que vencem ainda hoje.",
+			title: t("pending.groups.today.0"),
+			description: t("pending.groups.today.1"),
 			tasks: [] as Task[],
 		},
 		tomorrow: {
 			key: "tomorrow",
-			title: "Amanhã",
-			description: "Pendências já separadas para amanhã.",
+			title: t("pending.groups.tomorrow.0"),
+			description: t("pending.groups.tomorrow.1"),
 			tasks: [] as Task[],
 		},
 		week: {
 			key: "week",
-			title: "Esta semana",
-			description: "Tarefas dos próximos dias.",
+			title: t("pending.groups.week.0"),
+			description: t("pending.groups.week.1"),
 			tasks: [] as Task[],
 		},
 		later: {
 			key: "later",
-			title: "Próximas",
-			description: "Tarefas com vencimento fora da janela desta semana.",
+			title: t("pending.groups.later.0"),
+			description: t("pending.groups.later.1"),
 			tasks: [] as Task[],
 		},
 		noDate: {
 			key: "no-date",
-			title: "Sem data",
-			description: "Tarefas abertas sem vencimento definido.",
+			title: t("pending.groups.noDate.0"),
+			description: t("pending.groups.noDate.1"),
 			tasks: [] as Task[],
 		},
 	} satisfies Record<string, PendingGroup>;
@@ -125,12 +127,12 @@ function createEmptyGroups() {
 <template>
   <section class="grid gap-5">
     <div class="flex flex-col">
-      <span class="text-display">Pendentes</span>
-      <span class="text-body text-ink-soft">Tudo que ainda está aberto.</span>
+      <span class="text-display">{{ t('pending.title') }}</span>
+      <span class="text-body text-ink-soft">{{ t('pending.subtitle') }}</span>
     </div>
 
     <div v-if="pendingGroups.length === 0" class="border border-border bg-surface p-4 text-body text-ink-soft">
-      Nenhuma tarefa pendente.
+      {{ t('pending.empty') }}
     </div>
 
     <section

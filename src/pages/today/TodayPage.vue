@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
-import dayjs from "dayjs";
+import { useI18n } from "vue-i18n";
 
 import TaskCard from "@/features/tasks/components/TaskCard.vue";
 import { todayLocalDate } from "@/shared/lib/tasks/task.rules";
 import { useTaskStore } from "@/stores/task.store";
 import HelpKey from "@/features/help/components/HelpKey.vue";
+import { formatLongDate } from "@/shared/lib/date/date-format";
 
 const tasks = useTaskStore();
+const { t } = useI18n();
 const pendingTasks = computed(() =>
 	tasks.myDay.filter((task) => task.status === "pending"),
 );
@@ -26,7 +28,7 @@ function setTodayCreateContext() {
 
 	tasks.setCreateContext({
 		source: "today",
-		label: "Meu dia",
+		label: t("nav.today"),
 		plannedFor: today,
 		dueDate: today,
 	});
@@ -36,14 +38,14 @@ function setTodayCreateContext() {
 <template>
   <section class="grid gap-5">
     <div class="flex flex-col gap-2">
-      <span class="text-display">Meu dia</span>
-      <span class="text-heading">{{ dayjs().format('dddd[,] DD [de] MMMM YYYY.') }}</span>
+      <span class="text-display">{{ t('today.title') }}</span>
+      <span class="text-heading">{{ formatLongDate(new Date()) }}</span>
     </div>
 
     <div class="text-body flex flex-row items-center gap-2">
       <HelpKey
         :keys="['Ctrl', 'N']"
-        label="Para criar uma tarefa hoje."
+        :label="t('today.shortcut')"
       />
     </div>
 
@@ -51,7 +53,7 @@ function setTodayCreateContext() {
       v-if="tasks.myDay.length === 0"
       class="border border-border bg-surface p-4 text-body text-ink-soft"
     >
-      Nenhuma tarefa para hoje.
+      {{ t('today.empty') }}
     </div>
 
     <section
@@ -59,7 +61,7 @@ function setTodayCreateContext() {
       class="grid gap-3"
     >
       <div class="flex items-center justify-between border-b border-border pb-2">
-        <span class="text-heading">Para fazer</span>
+        <span class="text-heading">{{ t('today.todo') }}</span>
         <span class="text-body text-ink-soft">{{ pendingTasks.length }}</span>
       </div>
 
@@ -75,7 +77,7 @@ function setTodayCreateContext() {
       class="grid gap-3"
     >
       <div class="flex items-center justify-between border-b border-border pb-2">
-        <span class="text-heading text-sage">Concluídas</span>
+        <span class="text-heading text-sage">{{ t('today.completed') }}</span>
         <span class="text-body text-ink-soft">{{ completedTasks.length }}</span>
       </div>
 

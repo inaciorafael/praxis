@@ -3,8 +3,10 @@ import { onMounted } from "vue";
 
 import TaskCard from "@/features/tasks/components/TaskCard.vue";
 import { useTaskStore } from "@/stores/task.store";
+import { useI18n } from "vue-i18n";
 
 const tasks = useTaskStore();
+const { t } = useI18n();
 
 onMounted(async () => {
 	tasks.setActiveTaskView("overdue");
@@ -15,12 +17,12 @@ onMounted(async () => {
 <template>
   <section class="grid gap-5">
     <div class="flex flex-col">
-      <span class="text-display">Vencidas</span>
-      <span class="text-body text-ink-soft">Pendências cujo vencimento já passou.</span>
+      <span class="text-display">{{ t('overdue.title') }}</span>
+      <span class="text-body text-ink-soft">{{ t('overdue.subtitle') }}</span>
     </div>
 
     <div v-if="tasks.overdue.length === 0" class="border border-border bg-surface p-4 text-body text-ink-soft">
-      Nenhuma tarefa vencida.
+      {{ t('overdue.empty') }}
     </div>
 
     <template v-for="task in tasks.overdue" :key="task.id">

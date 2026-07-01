@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { pickTagColorByName } from "@/shared/lib/tags/tag-color";
-import { Tag } from "@/shared/types/tag";
+import { resolveTagColor } from '@/shared/lib/tags/tag-color'
+import type { Tag } from '@/shared/types/tag'
+import { computed } from 'vue'
 
-const props = defineProps<Tag>();
+const props = defineProps<Tag>()
 
-const tagStyle = pickTagColorByName(props.name);
+const tagStyle = computed(() => resolveTagColor(props.color, props.name))
 </script>
 
 <template>
-  <div :style="{ backgroundColor: tagStyle.background, color: tagStyle.text }" class="px-3 rounded-full">
+  <div
+    :style="{ backgroundColor: tagStyle.background, color: tagStyle.text }"
+    class="rounded-full px-3"
+  >
     <span>+{{ name }}</span>
   </div>
 </template>

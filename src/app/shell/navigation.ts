@@ -13,7 +13,7 @@ import {
 } from '@lucide/vue'
 
 export type AppNavigationItem = {
-  label: string
+  labelKey: string
   to: string
   icon: Component
   badgeKey?: 'today' | 'week' | 'pending' | 'overdue' | 'reminders' | 'completed'
@@ -21,31 +21,31 @@ export type AppNavigationItem = {
 
 export const appNavigationItems: AppNavigationItem[] = [
   {
-    label: 'Meu dia',
+    labelKey: 'nav.today',
     to: '/app/today',
     icon: CalendarDays,
     badgeKey: 'today',
   },
   {
-    label: 'Minha semana',
+    labelKey: 'nav.week',
     to: '/app/my-week',
     icon: Clock3,
     badgeKey: 'week',
   },
   {
-    label: 'Pendentes',
+    labelKey: 'nav.pending',
     to: '/app/pending',
     icon: Inbox,
     badgeKey: 'pending',
   },
   {
-    label: 'Vencidas',
+    labelKey: 'nav.overdue',
     to: '/app/overdue',
     icon: AlertTriangle,
     badgeKey: 'overdue',
   },
   {
-    label: 'Lembretes',
+    labelKey: 'nav.reminders',
     to: '/app/reminders',
     icon: Bell,
     badgeKey: 'reminders',
@@ -61,12 +61,12 @@ export const appNavigationItems: AppNavigationItem[] = [
   // 	icon: Archive,
   // },
   {
-    label: 'Configurações',
+    labelKey: 'nav.settings',
     to: '/app/settings',
     icon: Settings,
   },
   {
-    label: 'Ajuda',
+    labelKey: 'nav.help',
     to: '/app/help',
     icon: BookOpen,
   },

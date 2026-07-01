@@ -8,12 +8,14 @@ import { useVaultStore } from "@/stores/vault.store";
 import { useBadgeStore } from "@/stores/badge.store";
 import { LogOut, Plus, RefreshCw, Search } from "@lucide/vue";
 import dayjs from "dayjs";
+import { useI18n } from "vue-i18n";
 
 const vault = useVaultStore();
 const tasks = useTaskStore();
 const tags = useTagStore();
 const badge = useBadgeStore();
 const router = useRouter();
+const { t } = useI18n();
 
 const emit = defineEmits<{
 	handleClickSearchTask: [];
@@ -43,7 +45,7 @@ function openFreeCreateModal() {
 <template>
   <nav
     class="flex h-full flex-col justify-between gap-1 overflow-y-auto p-3"
-    aria-label="Navegacao principal"
+    :aria-label="t('nav.mainNavigation')"
   >
     <div class="flex flex-col gap-3">
       <button
@@ -52,7 +54,7 @@ function openFreeCreateModal() {
       >
         <div class="flex flex-row items-center gap-2">
           <Search :size="18" />
-          <span class="text-ink-soft">Search</span>
+          <span class="text-ink-soft">{{ t('nav.search') }}</span>
         </div>
         <span class="text-ink-soft">Ctrl+k</span>
       </button>
@@ -63,7 +65,7 @@ function openFreeCreateModal() {
         @click="openFreeCreateModal"
       >
         <Plus :size="18" />
-        <span>Nova tarefa</span>
+        <span>{{ t('nav.newTask') }}</span>
       </button>
 
       <div class="flex flex-col gap-2">
@@ -87,7 +89,7 @@ function openFreeCreateModal() {
                 :is="item.icon"
                 class="size-5 shrink-0"
               />
-              <span class="truncate">{{ item.label }}</span>
+              <span class="truncate">{{ t(item.labelKey) }}</span>
             </div>
             <span
               v-if="getBadgeCount(item.badgeKey) > 0"
@@ -106,7 +108,7 @@ function openFreeCreateModal() {
         class="flex text-sage font-semibold flex-row gap-2 items-center"
       >
         <div class="h-2 w-2 rounded-full bg-sage"></div>
-        <span class="text-small">Cofre Online</span>
+        <span class="text-small">{{ t('nav.vaultOnline') }}</span>
       </div>
 
       <div
@@ -114,12 +116,14 @@ function openFreeCreateModal() {
       >
         <div class="flex flex-row items-center gap-1">
           <RefreshCw :size="15" />
-          last synced
+          {{ t('nav.lastSynced') }}
           <span>{{ dayjs(vault.dataFileUpdatedAt).format('DD/MM/YYYY HH:mm A') }}</span>
         </div>
 
         <button
           class="text-on-accent bg-brick flex flex-row items-center p-2"
+          :aria-label="t('nav.lockVault')"
+          :title="t('nav.lockVault')"
           @click="lockVault"
         >
           <LogOut :size="15" />

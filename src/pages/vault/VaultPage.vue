@@ -7,9 +7,11 @@ import Input from "@/shared/ui/Input.vue";
 import { KeyRound } from "@lucide/vue";
 import BaseButton from "@/shared/ui/BaseButton.vue";
 import { takeDeferredAppNavigation } from "@/shared/lib/app/app-navigation.service";
+import { useI18n } from "vue-i18n";
 
 const router = useRouter();
 const vault = useVaultStore();
+const { t } = useI18n();
 
 type VaultMode = "open" | "create";
 
@@ -24,7 +26,7 @@ const vaultPath = computed(
 	() =>
 		vault.activeDataFilePath ??
 		vault.selectedDataFilePath ??
-		"nenhum arquivo selecionado",
+		t("vault.noneSelected"),
 );
 const canOpen = computed(() =>
 	Boolean(
@@ -47,13 +49,13 @@ const canSubmit = computed(() =>
 );
 const submitLabel = computed(() => {
 	if (isSubmitting.value) {
-		return mode.value === "create" ? "Criando cofre..." : "Abrindo cofre...";
+		return mode.value === "create" ? t("vault.creating") : t("vault.opening");
 	}
 
-	return mode.value === "create" ? "Criar cofre e entrar" : "Abrir cofre";
+	return mode.value === "create" ? t("vault.createAndEnter") : t("vault.open");
 });
 const selectedModeLabel = computed(() =>
-	mode.value === "create" ? "Novo cofre" : "Cofre existente",
+	mode.value === "create" ? t("vault.new") : t("vault.existing"),
 );
 
 watch(
@@ -111,7 +113,7 @@ async function createCurrentDataFile() {
 	}
 
 	if (!dataFilePassword.value.trim()) {
-		formError.value = "Informe uma senha para criar o cofre.";
+		formError.value = t("vault.passwordRequired");
 		return;
 	}
 
@@ -176,8 +178,8 @@ async function submitVault() {
 
     <div class="col-span-12 desktop:col-span-6 flex items-center justify-center">
       <div class="flex mobile:w-[80%] tablet:w-[60%] desktop:w-[60%] flex-col gap-5">
-        <span class="text-display">Acesse seu planejamento privado</span>
-        <span class="text-ink-soft">Suas tarefas ficam locais, privadas e criptografadas.</span>
+        <span class="text-display">{{ t('vault.heading') }}</span>
+        <span class="text-ink-soft">{{ t('vault.subtitle') }}</span>
 
         <div class="grid grid-cols-2 gap-2">
           <button
@@ -188,7 +190,7 @@ async function submitVault() {
             ]"
             @click="selectExistingDataFile"
           >
-            Selecionar cofre
+            {{ t('vault.select') }}
           </button>
 
           <button
@@ -199,14 +201,14 @@ async function submitVault() {
             ]"
             @click="createCurrentDataFile"
           >
-            Criar novo cofre
+            {{ t('vault.create') }}
           </button>
         </div>
 
         <Input
           v-model="dataFilePath"
           :label="selectedModeLabel"
-          placeholder="Caminho do arquivo .praxis"
+          :placeholder="t('vault.pathPlaceholder')"
           @blur="validateCurrentDataFile"
         >
           <template #suffix>
@@ -215,19 +217,19 @@ async function submitVault() {
               type="button"
               @click="mode === 'create' ? createCurrentDataFile() : selectExistingDataFile()"
             >
-              {{ mode === "create" ? "criar em..." : "selecionar" }}
+              {{ mode === "create" ? t('vault.createAt') : t('vault.selectAction') }}
             </button>
           </template>
         </Input>
         <span class="break-all text-small text-ink-muted">{{ vaultPath }}</span>
-        <span v-if="mode === 'open' && vault.validation?.valid" class="text-small font-semibold text-sage">Cofre reconhecido.</span>
+        <span v-if="mode === 'open' && vault.validation?.valid" class="text-small font-semibold text-sage">{{ t('vault.recognized') }}</span>
         <span v-if="mode === 'open' && vault.validation?.error" class="text-small font-semibold text-brick">{{ vault.validation.error }}</span>
-        <span v-if="mode === 'create' && dataFilePath" class="text-small font-semibold text-sage">Novo cofre será criado nesse caminho.</span>
+        <span v-if="mode === 'create' && dataFilePath" class="text-small font-semibold text-sage">{{ t('vault.willCreate') }}</span>
 
         <Input
           v-model="dataFilePassword"
-          label="Senha"
-          placeholder="Digite sua senha"
+          :label="t('vault.password')"
+          :placeholder="t('vault.passwordPlaceholder')"
           :type="passwordIsVisible ? 'text' : 'password'"
           @keydown.enter.prevent="submitVault"
         >
@@ -237,12 +239,12 @@ async function submitVault() {
 
           <template #suffix>
             <button class="text-small font-semibold text-accent" type="button" @click="passwordIsVisible = !passwordIsVisible">
-              {{ passwordIsVisible ? "ocultar" : "mostrar" }}
+              {{ passwordIsVisible ? t('vault.hide') : t('vault.show') }}
             </button>
           </template>
         </Input>
         <span>
-          <strong class="text-purple">Escolha um cofre</strong> existente ou <strong class="text-purple">crie um novo</strong> para começar.
+          {{ t('vault.instruction') }}
         </span>
         <span v-if="formError" class="text-small font-semibold text-brick">{{ formError }}</span>
         <span v-if="vault.error" class="text-small font-semibold text-brick">{{ vault.error }}</span>

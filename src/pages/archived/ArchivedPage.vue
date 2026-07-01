@@ -4,10 +4,12 @@ import { Archive } from "@lucide/vue";
 
 import { useTaskStore } from "@/stores/task.store";
 import TaskCard from "@/features/tasks/components/TaskCard.vue";
+import { useI18n } from "vue-i18n";
 
 const PAGE_SIZE = 50;
 
 const tasks = useTaskStore();
+const { t } = useI18n();
 const isLoadingMore = ref(false);
 const hasMore = ref(true);
 const archivedCount = computed(() => tasks.viewCounts.archived);
@@ -50,9 +52,9 @@ async function loadMore() {
       class="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4"
     >
       <div class="grid gap-1">
-        <span class="text-display">Arquivadas</span>
+        <span class="text-display">{{ t('archived.title') }}</span>
         <span class="text-body text-ink-soft">
-          Tarefas concluídas preservadas fora das visões de trabalho.
+          {{ t('archived.subtitle') }}
         </span>
       </div>
 
@@ -61,7 +63,7 @@ async function loadMore() {
       >
         <Archive :size="17" />
         <strong class="text-ink">{{ archivedCount }}</strong>
-        <span>{{ archivedCount === 1 ? 'tarefa' : 'tarefas' }}</span>
+        <span>{{ t('common.tasks', archivedCount) }}</span>
       </div>
     </header>
 
@@ -74,9 +76,9 @@ async function loadMore() {
         class="text-ink-muted"
       />
       <div class="grid gap-1">
-        <span class="text-heading">O arquivo está vazio</span>
+        <span class="text-heading">{{ t('archived.emptyTitle') }}</span>
         <span class="text-body text-ink-soft">
-          Tarefas arquivadas automaticamente ou manualmente aparecerão aqui.
+          {{ t('archived.emptyMessage') }}
         </span>
       </div>
     </div>
@@ -99,7 +101,7 @@ async function loadMore() {
         :disabled="isLoadingMore"
         @click="loadMore"
       >
-        {{ isLoadingMore ? 'Carregando...' : 'Carregar mais' }}
+        {{ isLoadingMore ? t('common.loading') : t('common.loadMore') }}
       </button>
     </div>
   </section>

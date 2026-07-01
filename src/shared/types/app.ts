@@ -1,6 +1,8 @@
 export type AppTheme = "light" | "dark";
+export type AppLanguage = "en" | "pt-BR";
 
 export type AppConfig = {
+	language: AppLanguage;
 	theme: AppTheme;
 	startWithWindows: boolean;
 	startMinimized: boolean;

@@ -1,115 +1,130 @@
 <script setup lang="ts">
-import { Task } from "@/shared/types/task";
-import { useTagStore } from "@/stores/tag.store";
-import { useTaskStore } from "@/stores/task.store";
+import type { ChecklistItem } from '@/shared/types/checklist'
+import type { Tag } from '@/shared/types/tag'
+import type { Task } from '@/shared/types/task'
+import { useTagStore } from '@/stores/tag.store'
+import { useTaskStore } from '@/stores/task.store'
 import {
-	Archive,
-	ArchiveRestore,
-	Bell,
-	CalendarCheck,
-	CalendarDays,
-	Check,
-	Trash2,
-} from "@lucide/vue";
-import TaskTag from "./TaskTag.vue";
-import { computed, ref, type ComputedRef } from "vue";
-import { Tag } from "@/shared/types/tag";
-import { formatCalendarDateTime } from "@/shared/lib/date/date-format";
+  Archive,
+  ArchiveRestore,
+  Bell,
+  CalendarCheck,
+  CalendarDays,
+  Check,
+  Trash2,
+} from '@lucide/vue'
+import TaskTag from './TaskTag.vue'
+import { computed, ref, type ComputedRef } from 'vue'
+import { formatCalendarDateTime } from '@/shared/lib/date/date-format'
+import { useI18n } from 'vue-i18n'
 
-const props = defineProps<Task>();
+type TaskCardProps = Task & {
+  readonly?: boolean
+  displayTags?: Tag[]
+  displayChecklistItems?: ChecklistItem[]
+}
 
-const tags = useTagStore();
-const tasks = useTaskStore();
-const isUpdatingStatus = ref(false);
-const isDeleting = ref(false);
-const isRestoring = ref(false);
-const updatingChecklistItemIds = ref(new Set<string>());
+const props = withDefaults(defineProps<TaskCardProps>(), {
+  readonly: false,
+  displayTags: undefined,
+  displayChecklistItems: undefined,
+})
+
+const tags = useTagStore()
+const tasks = useTaskStore()
+const { t } = useI18n()
+const isUpdatingStatus = ref(false)
+const isDeleting = ref(false)
+const isRestoring = ref(false)
+const updatingChecklistItemIds = ref(new Set<string>())
 
 const taskTags: ComputedRef<Tag[]> = computed(
-	() => tags.tagsByTask[props.id] ?? [],
-);
-const isSelected = computed(() => tasks.selectedTaskId === props.id);
+  () => props.displayTags ?? tags.tagsByTask[props.id] ?? []
+)
+const isSelected = computed(() => tasks.selectedTaskId === props.id)
 
 const checklistItems = computed(
-	() => tasks.checklistItemsByTask[props.id] ?? [],
-);
+  () => props.displayChecklistItems ?? tasks.checklistItemsByTask[props.id] ?? []
+)
 
 function selectTask() {
-	tasks.selectTask(props.id);
+  if (props.readonly) {
+    return
+  }
+
+  tasks.selectTask(props.id)
 }
 
 async function toggleCompleted() {
-	if (isUpdatingStatus.value) {
-		return;
-	}
+  if (isUpdatingStatus.value) {
+    return
+  }
 
-	isUpdatingStatus.value = true;
+  isUpdatingStatus.value = true
 
-	try {
-		await tasks.setCompleted(props.id, props.status !== "completed");
-	} finally {
-		isUpdatingStatus.value = false;
-	}
+  try {
+    await tasks.setCompleted(props.id, props.status !== 'completed')
+  } finally {
+    isUpdatingStatus.value = false
+  }
 }
 
 async function deleteTask() {
-	if (isDeleting.value) {
-		return;
-	}
+  if (isDeleting.value) {
+    return
+  }
 
-	isDeleting.value = true;
+  isDeleting.value = true
 
-	try {
-		await tasks.delete(props.id);
-	} finally {
-		isDeleting.value = false;
-	}
+  try {
+    await tasks.delete(props.id)
+  } finally {
+    isDeleting.value = false
+  }
 }
 
 async function restoreTask() {
-	if (isRestoring.value || !props.archivedAt) {
-		return;
-	}
+  if (isRestoring.value || !props.archivedAt) {
+    return
+  }
 
-	isRestoring.value = true;
+  isRestoring.value = true
 
-	try {
-		await tasks.restoreArchived(props.id);
-	} finally {
-		isRestoring.value = false;
-	}
+  try {
+    await tasks.restoreArchived(props.id)
+  } finally {
+    isRestoring.value = false
+  }
 }
 
 async function toggleChecklistItem(itemId: string, completed: boolean) {
-	if (updatingChecklistItemIds.value.has(itemId)) {
-		return;
-	}
+  if (updatingChecklistItemIds.value.has(itemId)) {
+    return
+  }
 
-	updatingChecklistItemIds.value = new Set([
-		...updatingChecklistItemIds.value,
-		itemId,
-	]);
+  updatingChecklistItemIds.value = new Set([...updatingChecklistItemIds.value, itemId])
 
-	try {
-		await tasks.setChecklistItemCompleted(itemId, completed);
-	} finally {
-		const nextIds = new Set(updatingChecklistItemIds.value);
-		nextIds.delete(itemId);
-		updatingChecklistItemIds.value = nextIds;
-	}
+  try {
+    await tasks.setChecklistItemCompleted(itemId, completed)
+  } finally {
+    const nextIds = new Set(updatingChecklistItemIds.value)
+    nextIds.delete(itemId)
+    updatingChecklistItemIds.value = nextIds
+  }
 }
 
 function isChecklistItemUpdating(itemId: string) {
-	return updatingChecklistItemIds.value.has(itemId);
+  return updatingChecklistItemIds.value.has(itemId)
 }
 </script>
 
 <template>
   <div
-    role="button"
-    tabindex="0"
+    :role="readonly ? undefined : 'button'"
+    :tabindex="readonly ? undefined : 0"
     :class="[
-      'p-3 border-l-5 gap-3 hover:bg-hover transition-all flex flex-col',
+      'p-3 border-l-5 gap-3 transition-all flex flex-col',
+      readonly ? 'cursor-default' : 'hover:bg-hover',
       {
         'border-archived opacity-80': archivedAt,
         'border-brick': isOverdue && !archivedAt,
@@ -135,11 +150,11 @@ function isChecklistItemUpdating(itemId: string) {
       <button
         v-if="checklistItems.length === 0"
         type="button"
-        :disabled="isUpdatingStatus"
+        :disabled="readonly || isUpdatingStatus"
         :aria-label="
-          status === 'completed' ? 'Marcar tarefa como pendente' : 'Concluir tarefa'
+          status === 'completed' ? t('task.reopen') : t('task.complete')
         "
-        :title="status === 'completed' ? 'Marcar como pendente' : 'Concluir tarefa'"
+        :title="status === 'completed' ? t('task.reopen') : t('task.complete')"
         :class="[
           'border w-8 h-8 shrink-0 flex items-center justify-center rounded-xl',
           'disabled:opacity-50 disabled:pointer-events-none',
@@ -176,11 +191,11 @@ function isChecklistItemUpdating(itemId: string) {
       </template>
 
       <button
-        v-if="archivedAt"
+        v-if="archivedAt && !readonly"
         type="button"
         :disabled="isRestoring"
-        aria-label="Restaurar tarefa arquivada"
-        title="Restaurar tarefa"
+        :aria-label="t('task.restore')"
+        :title="t('task.restore')"
         class="ml-auto flex h-8 w-8 shrink-0 items-center justify-center border border-border text-archived hover:border-blue hover:bg-hover hover:text-blue disabled:pointer-events-none disabled:opacity-50"
         @click.stop="restoreTask"
       >
@@ -188,10 +203,11 @@ function isChecklistItemUpdating(itemId: string) {
       </button>
 
       <button
+        v-if="!readonly"
         type="button"
         :disabled="isDeleting"
-        aria-label="Excluir tarefa"
-        title="Excluir tarefa"
+        :aria-label="t('task.delete')"
+        :title="t('task.delete')"
         :class="[
           'flex h-8 w-8 shrink-0 items-center justify-center border border-border text-ink-soft hover:border-brick hover:bg-hover hover:text-brick disabled:pointer-events-none disabled:opacity-50',
           archivedAt ? '' : 'ml-auto',
@@ -210,7 +226,7 @@ function isChecklistItemUpdating(itemId: string) {
       >
         <button
           type="button"
-          :disabled="isChecklistItemUpdating(item.id)"
+          :disabled="readonly || isChecklistItemUpdating(item.id)"
           class="flex flex-row items-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
           :aria-label="
             item.status === 'completed'
@@ -253,7 +269,7 @@ function isChecklistItemUpdating(itemId: string) {
       >{{ notes }}</span
     >
 
-    <div class="flex flex-row gap-4">
+    <div class="flex flex-row flex-wrap gap-4">
       <div
         v-if="dueAt && status === 'pending'"
         :class="[
@@ -293,7 +309,7 @@ function isChecklistItemUpdating(itemId: string) {
         class="flex bg-archived text-on-accent px-3 flex-row items-center gap-1"
       >
         <Archive :size="15" />
-        <span>Arquivada em {{ formatCalendarDateTime(archivedAt) }}</span>
+        <span>{{ t('task.archivedAt', { date: formatCalendarDateTime(archivedAt) }) }}</span>
       </div>
 
       <template v-if="reminderAt && status === 'pending'">

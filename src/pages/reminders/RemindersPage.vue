@@ -5,8 +5,10 @@ import { computed, onMounted } from "vue";
 import TaskCard from "@/features/tasks/components/TaskCard.vue";
 import type { Task } from "@/shared/types/task";
 import { useTaskStore } from "@/stores/task.store";
+import { useI18n } from "vue-i18n";
 
 const tasks = useTaskStore();
+const { t } = useI18n();
 
 type ReminderGroup = {
 	key: string;
@@ -70,32 +72,32 @@ function createEmptyGroups() {
 	return {
 		overdue: {
 			key: "overdue",
-			title: "Atrasados",
-			description: "Lembretes que já passaram e ainda precisam de atenção.",
+			title: t("reminders.groups.overdue.0"),
+			description: t("reminders.groups.overdue.1"),
 			tasks: [] as Task[],
 		},
 		today: {
 			key: "today",
-			title: "Hoje",
-			description: "Avisos que ainda vão acontecer hoje.",
+			title: t("reminders.groups.today.0"),
+			description: t("reminders.groups.today.1"),
 			tasks: [] as Task[],
 		},
 		tomorrow: {
 			key: "tomorrow",
-			title: "Amanhã",
-			description: "Próximos lembretes já separados para amanhã.",
+			title: t("reminders.groups.tomorrow.0"),
+			description: t("reminders.groups.tomorrow.1"),
 			tasks: [] as Task[],
 		},
 		week: {
 			key: "week",
-			title: "Esta semana",
-			description: "Lembretes dos próximos dias.",
+			title: t("reminders.groups.week.0"),
+			description: t("reminders.groups.week.1"),
 			tasks: [] as Task[],
 		},
 		later: {
 			key: "later",
-			title: "Mais tarde",
-			description: "Lembretes fora da janela desta semana.",
+			title: t("reminders.groups.later.0"),
+			description: t("reminders.groups.later.1"),
 			tasks: [] as Task[],
 		},
 	} satisfies Record<string, ReminderGroup>;
@@ -105,12 +107,12 @@ function createEmptyGroups() {
 <template>
   <section class="grid gap-5">
     <div class="flex flex-col">
-      <span class="text-display">Lembretes</span>
-      <span class="text-body text-ink-soft">Tarefas pendentes com notificação configurada.</span>
+      <span class="text-display">{{ t('reminders.title') }}</span>
+      <span class="text-body text-ink-soft">{{ t('reminders.subtitle') }}</span>
     </div>
 
     <div v-if="reminderGroups.length === 0" class="border border-border bg-surface p-4 text-body text-ink-soft">
-      Nenhuma tarefa com lembrete.
+      {{ t('reminders.empty') }}
     </div>
 
     <section

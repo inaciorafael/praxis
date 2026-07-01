@@ -7,6 +7,7 @@ import {
 } from "@/shared/lib/app/app-config.service";
 import type { AppConfig, AppConfigPatch, AppHealth } from "@/shared/types/app";
 import { applyTheme } from "@/shared/lib/theme/theme.service";
+import { applyLanguage } from "@/shared/lib/i18n/i18n";
 
 type AppStoreState = {
 	name: string;
@@ -30,6 +31,7 @@ export const useAppStore = defineStore("app", {
 			try {
 				this.config = await getAppConfig();
 				applyTheme(this.config.theme);
+				applyLanguage(this.config.language);
 				this.isReady = true;
 				this.error = "";
 			} catch (error) {
@@ -44,6 +46,7 @@ export const useAppStore = defineStore("app", {
 			try {
 				this.config = await updateAppConfig(patch);
 				applyTheme(this.config.theme);
+				applyLanguage(this.config.language);
 				this.error = "";
 				return true;
 			} catch (error) {
@@ -60,6 +63,7 @@ export const useAppStore = defineStore("app", {
 				this.health = await getAppHealth();
 				this.config = this.health.config;
 				applyTheme(this.config.theme);
+				applyLanguage(this.config.language);
 				this.error = "";
 				return this.health;
 			} catch (error) {

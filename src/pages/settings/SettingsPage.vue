@@ -1,250 +1,269 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import dayjs from "dayjs";
-import { Moon, Sun } from "@lucide/vue";
+import { computed, onMounted, ref } from 'vue'
+import dayjs from 'dayjs'
+import { Moon, Sun } from '@lucide/vue'
 
 import {
-	checkForAppUpdate,
-	downloadAndInstallAppUpdate,
-	type AppUpdateInfo,
-} from "@/shared/lib/app/app-update.service";
-import { seedShowcaseData } from "@/shared/lib/tasks/task.service";
-import { useAppStore } from "@/stores/app.store";
-import { useBadgeStore } from "@/stores/badge.store";
-import { useNotificationStore } from "@/stores/notification.store";
-import { useTaskStore } from "@/stores/task.store";
-import { useVaultStore } from "@/stores/vault.store";
-import type { AppTheme } from "@/shared/types/app";
-import Toggle from "@/shared/ui/Toggle.vue";
-import Select from "@/shared/ui/Select.vue";
+  checkForAppUpdate,
+  downloadAndInstallAppUpdate,
+  type AppUpdateInfo,
+} from '@/shared/lib/app/app-update.service'
+import { seedShowcaseData } from '@/shared/lib/tasks/task.service'
+import { useAppStore } from '@/stores/app.store'
+import { useBadgeStore } from '@/stores/badge.store'
+import { useNotificationStore } from '@/stores/notification.store'
+import { useTaskStore } from '@/stores/task.store'
+import { useVaultStore } from '@/stores/vault.store'
+import type { AppLanguage, AppTheme } from '@/shared/types/app'
+import Toggle from '@/shared/ui/Toggle.vue'
+import Select from '@/shared/ui/Select.vue'
+import TagManager from '@/features/tags/components/TagManager.vue'
+import { supportedLanguages } from '@/shared/lib/i18n/i18n'
+import { useI18n } from 'vue-i18n'
 
-const app = useAppStore();
-const badge = useBadgeStore();
-const notifications = useNotificationStore();
-const tasks = useTaskStore();
-const vault = useVaultStore();
-const updateInfo = ref<AppUpdateInfo | null>(null);
-const updateStatus = ref("");
-const isCheckingUpdate = ref(false);
-const isInstallingUpdate = ref(false);
-const showcaseStatus = ref("");
-const isSeedingShowcase = ref(false);
-const archiveStatus = ref("");
-const isArchivingCompleted = ref(false);
+const app = useAppStore()
+const badge = useBadgeStore()
+const notifications = useNotificationStore()
+const tasks = useTaskStore()
+const vault = useVaultStore()
+const { t } = useI18n()
+const updateInfo = ref<AppUpdateInfo | null>(null)
+const updateStatus = ref('')
+const isCheckingUpdate = ref(false)
+const isInstallingUpdate = ref(false)
+const showcaseStatus = ref('')
+const isSeedingShowcase = ref(false)
+const archiveStatus = ref('')
+const isArchivingCompleted = ref(false)
 
-const config = computed(() => app.config);
+const config = computed(() => app.config)
 const dataFilePath = computed(() =>
-	maskPath(vault.activeDataFilePath ?? vault.selectedDataFilePath),
-);
+  maskPath(vault.activeDataFilePath ?? vault.selectedDataFilePath)
+)
 const storageStatus = computed(() =>
-	vault.active ? "Cofre aberto" : "Cofre bloqueado",
-);
+  vault.active ? t('settings.vaultOpen') : t('settings.vaultLocked')
+)
+const selectedLanguage = computed(
+  () =>
+    supportedLanguages.find((language) => language.id === config.value?.language) ??
+    supportedLanguages[0]
+)
 
 onMounted(async () => {
-	await Promise.all([
-		app.hydrateConfig(),
-		vault.hydrate(),
-		badge.hydrate(),
-		notifications.hydrate(),
-		vault.hydrateSafetyCopies(),
-	]);
-});
+  await Promise.all([
+    app.hydrateConfig(),
+    vault.hydrate(),
+    badge.hydrate(),
+    notifications.hydrate(),
+    vault.hydrateSafetyCopies(),
+  ])
+})
 
 async function toggleNotifications(enabled: boolean) {
-	if (enabled) {
-		const granted = await notifications.requestPermission();
+  if (enabled) {
+    const granted = await notifications.requestPermission()
 
-		if (!granted) {
-			await app.updateConfig({ notificationsEnabled: false });
-			return;
-		}
-	} else {
-		await notifications.cancelAll();
-	}
+    if (!granted) {
+      await app.updateConfig({ notificationsEnabled: false })
+      return
+    }
+  } else {
+    await notifications.cancelAll()
+  }
 
-	await app.updateConfig({ notificationsEnabled: enabled });
+  await app.updateConfig({ notificationsEnabled: enabled })
 }
 
 async function setTheme(theme: AppTheme) {
-	await app.updateConfig({ theme });
+  await app.updateConfig({ theme })
+}
+
+async function setLanguage(language: string) {
+  await app.updateConfig({ language: language as AppLanguage })
 }
 
 async function toggleBadge(enabled: boolean) {
-	await app.updateConfig({ badgeEnabled: enabled });
+  await app.updateConfig({ badgeEnabled: enabled })
 
-	if (enabled) {
-		await tasks.hydrateViewCounts();
-		return;
-	}
+  if (enabled) {
+    await tasks.hydrateViewCounts()
+    return
+  }
 
-	await badge.clear();
+  await badge.clear()
 }
 
 async function reloadVault() {
-	await vault.reloadFromDisk();
+  await vault.reloadFromDisk()
 }
 
 async function prepareShowcase() {
-	if (isSeedingShowcase.value) {
-		return;
-	}
+  if (isSeedingShowcase.value) {
+    return
+  }
 
-	isSeedingShowcase.value = true;
-	showcaseStatus.value = "Preparando dados de showcase...";
+  isSeedingShowcase.value = true
+  showcaseStatus.value = 'Preparando dados de showcase...'
 
-	try {
-		await tasks.applyCollection(await seedShowcaseData());
-		await Promise.all([tasks.hydrateViewCounts(), vault.hydrate()]);
-		showcaseStatus.value =
-			"Showcase pronto. O cofre aberto foi substituido por dados ilustrativos.";
-	} catch (error) {
-		showcaseStatus.value =
-			error instanceof Error
-				? error.message
-				: "Nao foi possivel preparar o showcase.";
-	} finally {
-		isSeedingShowcase.value = false;
-	}
+  try {
+    await tasks.applyCollection(await seedShowcaseData())
+    await Promise.all([tasks.hydrateViewCounts(), vault.hydrate()])
+    showcaseStatus.value =
+      'Showcase pronto. O cofre aberto foi substituido por dados ilustrativos.'
+  } catch (error) {
+    showcaseStatus.value =
+      error instanceof Error ? error.message : 'Nao foi possivel preparar o showcase.'
+  } finally {
+    isSeedingShowcase.value = false
+  }
 }
 
 const selectedRetention = computed(() => {
-	const value = config.value?.completedTaskRetentionDays ?? "forever";
+  const value = config.value?.completedTaskRetentionDays ?? 'forever'
 
-	return (
-		retentionOptions.find((option) => option.id === String(value)) ??
-		retentionOptions[0]
-	);
-});
+  return (
+    retentionOptions.find((option) => option.id === String(value)) ?? retentionOptions[0]
+  )
+})
 
 async function updateCompletedRetentionDays(value: string) {
-	const retentionDays = value === "forever" ? null : Number(value);
-	await app.updateConfig({
-		completedTaskRetentionDays: Number.isFinite(retentionDays)
-			? retentionDays
-			: null,
-	});
+  const retentionDays = value === 'forever' ? null : Number(value)
+  await app.updateConfig({
+    completedTaskRetentionDays: Number.isFinite(retentionDays) ? retentionDays : null,
+  })
 }
 
 async function archiveCompletedNow() {
-	const retentionDays = config.value?.completedTaskRetentionDays;
+  const retentionDays = config.value?.completedTaskRetentionDays
 
-	if (!retentionDays || isArchivingCompleted.value) {
-		return;
-	}
+  if (!retentionDays || isArchivingCompleted.value) {
+    return
+  }
 
-	isArchivingCompleted.value = true;
-	archiveStatus.value = "Arquivando tarefas concluídas antigas...";
+  isArchivingCompleted.value = true
+  archiveStatus.value = 'Arquivando tarefas concluídas antigas...'
 
-	try {
-		const beforeDate = dayjs()
-			.subtract(retentionDays, "day")
-			.format("YYYY-MM-DD");
-		await tasks.archiveCompletedBefore(beforeDate);
-		await Promise.all([tasks.hydrateViewCounts(), vault.hydrate()]);
-		archiveStatus.value = `Concluídas antes de ${dayjs(beforeDate).format("DD/MM/YYYY")} foram arquivadas.`;
-	} catch (error) {
-		archiveStatus.value =
-			error instanceof Error
-				? error.message
-				: "Não foi possível arquivar tarefas concluídas.";
-	} finally {
-		isArchivingCompleted.value = false;
-	}
+  try {
+    const beforeDate = dayjs().subtract(retentionDays, 'day').format('YYYY-MM-DD')
+    await tasks.archiveCompletedBefore(beforeDate)
+    await Promise.all([tasks.hydrateViewCounts(), vault.hydrate()])
+    archiveStatus.value = `Concluídas antes de ${dayjs(beforeDate).format('DD/MM/YYYY')} foram arquivadas.`
+  } catch (error) {
+    archiveStatus.value =
+      error instanceof Error
+        ? error.message
+        : 'Não foi possível arquivar tarefas concluídas.'
+  } finally {
+    isArchivingCompleted.value = false
+  }
 }
 
 async function checkUpdate() {
-	if (isCheckingUpdate.value || isInstallingUpdate.value) {
-		return;
-	}
+  if (isCheckingUpdate.value || isInstallingUpdate.value) {
+    return
+  }
 
-	isCheckingUpdate.value = true;
-	updateStatus.value = "Verificando atualização...";
+  isCheckingUpdate.value = true
+  updateStatus.value = 'Verificando atualização...'
 
-	try {
-		updateInfo.value = await checkForAppUpdate();
-		updateStatus.value = updateInfo.value
-			? `Versão ${updateInfo.value.version} disponível.`
-			: "Você já está na versão mais recente.";
-	} catch (error) {
-		updateInfo.value = null;
-		updateStatus.value =
-			error instanceof Error
-				? error.message
-				: "Não foi possível verificar atualizações.";
-	} finally {
-		isCheckingUpdate.value = false;
-	}
+  try {
+    updateInfo.value = await checkForAppUpdate()
+    updateStatus.value = updateInfo.value
+      ? `Versão ${updateInfo.value.version} disponível.`
+      : 'Você já está na versão mais recente.'
+  } catch (error) {
+    updateInfo.value = null
+    updateStatus.value =
+      error instanceof Error ? error.message : 'Não foi possível verificar atualizações.'
+  } finally {
+    isCheckingUpdate.value = false
+  }
 }
 
 async function installUpdate() {
-	if (!updateInfo.value || isInstallingUpdate.value) {
-		return;
-	}
+  if (!updateInfo.value || isInstallingUpdate.value) {
+    return
+  }
 
-	isInstallingUpdate.value = true;
-	updateStatus.value = "Baixando atualização...";
+  isInstallingUpdate.value = true
+  updateStatus.value = 'Baixando atualização...'
 
-	try {
-		await downloadAndInstallAppUpdate((progress) => {
-			updateStatus.value =
-				progress.percentage === null
-					? "Baixando atualização..."
-					: `Baixando atualização... ${progress.percentage}%`;
-		});
-	} catch (error) {
-		updateStatus.value =
-			error instanceof Error
-				? error.message
-				: "Não foi possível instalar a atualização.";
-		isInstallingUpdate.value = false;
-	}
+  try {
+    await downloadAndInstallAppUpdate((progress) => {
+      updateStatus.value =
+        progress.percentage === null
+          ? 'Baixando atualização...'
+          : `Baixando atualização... ${progress.percentage}%`
+    })
+  } catch (error) {
+    updateStatus.value =
+      error instanceof Error ? error.message : 'Não foi possível instalar a atualização.'
+    isInstallingUpdate.value = false
+  }
 }
 
 function formatDate(value: string | null) {
-	return value ? dayjs(value).format("DD/MM/YYYY HH:mm") : "Não disponível";
+  return value ? dayjs(value).format('DD/MM/YYYY HH:mm') : 'Não disponível'
 }
 
 function yesNo(value: boolean | undefined) {
-	return value ? "Ativado" : "Desativado";
+  return value ? 'Ativado' : 'Desativado'
 }
 
 function maskPath(value: string | null) {
-	if (!value) {
-		return "Não selecionado";
-	}
+  if (!value) {
+    return 'Não selecionado'
+  }
 
-	const normalized = value.replace(/\//g, "\\");
-	const parts = normalized.split("\\").filter(Boolean);
-	const filename = parts[parts.length - 1] ?? normalized;
-	const root = normalized.match(/^[A-Za-z]:/)?.[0] ?? "";
+  const normalized = value.replace(/\//g, '\\')
+  const parts = normalized.split('\\').filter(Boolean)
+  const filename = parts[parts.length - 1] ?? normalized
+  const root = normalized.match(/^[A-Za-z]:/)?.[0] ?? ''
 
-	return root ? `${root}\\...\\${filename}` : `...\\${filename}`;
+  return root ? `${root}\\...\\${filename}` : `...\\${filename}`
 }
 
 const retentionOptions = [
-	{ id: "forever", label: "Manter sempre" },
-	{ id: "180", label: "Após 6 meses" },
-	{ id: "365", label: "Após 1 ano" },
-	{ id: "730", label: "Após 2 anos" },
-];
+  { id: 'forever', label: 'Manter sempre' },
+  { id: '180', label: 'Após 6 meses' },
+  { id: '365', label: 'Após 1 ano' },
+  { id: '730', label: 'Após 2 anos' },
+]
 </script>
 
 <template>
   <section class="grid max-w-4xl gap-6">
     <div class="flex flex-col gap-1">
-      <span class="text-display">Configurações</span>
+      <span class="text-display">{{ t('settings.title') }}</span>
       <span class="text-body text-ink-soft"
-        >Preferências locais e estado seguro do Praxis.</span
+        >{{ t('settings.subtitle') }}</span
       >
+    </div>
+
+    <div class="grid border border-border bg-surface">
+      <div class="flex items-center justify-between gap-6 p-4">
+        <div class="grid gap-1">
+          <span class="text-heading">{{ t('settings.language') }}</span>
+          <span class="text-body text-ink-soft">{{ t('settings.languageDescription') }}</span>
+        </div>
+        <Select
+          class="max-w-64"
+          :items="supportedLanguages"
+          :model-value="selectedLanguage"
+          @update:model-value="setLanguage(String($event.id))"
+        >
+          <template #selected="{ item }"><span>{{ item?.label }}</span></template>
+          <template #item="{ item }"><span>{{ item.label }}</span></template>
+        </Select>
+      </div>
     </div>
 
     <div class="grid border border-border bg-surface">
       <div class="grid gap-5 p-4">
         <div class="grid gap-1">
-          <span class="text-heading">Aparência</span>
+          <span class="text-heading">{{ t('settings.appearance') }}</span>
           <span class="text-body text-ink-soft">
-            Escolha entre papel fosco para ambientes claros ou tinta invertida para pouca
-            luz.
+            {{ t('settings.appearanceDescription') }}
           </span>
         </div>
 
@@ -263,10 +282,15 @@ const retentionOptions = [
             ]"
             @click="setTheme('light')"
           >
-            <span class="theme-preview-paper grid h-20 grid-cols-[2.5rem_1fr] overflow-hidden border border-border">
+            <span
+              class="theme-preview-paper grid h-20 grid-cols-[2.5rem_1fr] overflow-hidden border border-border"
+            >
               <span
                 class="border-r"
-                style="background: var(--preview-surface); border-color: var(--preview-border)"
+                style="
+                  background: var(--preview-surface);
+                  border-color: var(--preview-border);
+                "
               ></span>
               <span
                 class="grid content-center gap-2 p-3"
@@ -289,9 +313,9 @@ const retentionOptions = [
             <span class="flex items-center justify-between gap-3">
               <span class="flex items-center gap-2 text-body font-semibold text-ink">
                 <Sun :size="17" />
-                Papel
+                {{ t('settings.paper') }}
               </span>
-              <span class="text-small text-ink-muted">Fosco e suave</span>
+              <span class="text-small text-ink-muted">{{ t('settings.paperHint') }}</span>
             </span>
           </button>
 
@@ -306,10 +330,15 @@ const retentionOptions = [
             ]"
             @click="setTheme('dark')"
           >
-            <span class="theme-preview-dark grid h-20 grid-cols-[2.5rem_1fr] overflow-hidden border border-border">
+            <span
+              class="theme-preview-dark grid h-20 grid-cols-[2.5rem_1fr] overflow-hidden border border-border"
+            >
               <span
                 class="border-r"
-                style="background: var(--preview-surface); border-color: var(--preview-border)"
+                style="
+                  background: var(--preview-surface);
+                  border-color: var(--preview-border);
+                "
               ></span>
               <span
                 class="grid content-center gap-2 p-3"
@@ -332,21 +361,23 @@ const retentionOptions = [
             <span class="flex items-center justify-between gap-3">
               <span class="flex items-center gap-2 text-body font-semibold text-ink">
                 <Moon :size="17" />
-                Escuro
+                {{ t('settings.dark') }}
               </span>
-              <span class="text-small text-ink-muted">Pouca luz</span>
+              <span class="text-small text-ink-muted">{{ t('settings.darkHint') }}</span>
             </span>
           </button>
         </div>
       </div>
     </div>
 
+    <TagManager />
+
     <div class="grid border border-border bg-surface">
       <div class="flex items-center justify-between gap-6 border-b border-border p-4">
         <div class="grid gap-1">
-          <span class="text-heading">Receber notificações</span>
+          <span class="text-heading">{{ t('settings.notifications') }}</span>
           <span class="text-body text-ink-soft"
-            >Permite que lembretes de tarefas pendentes disparem notificações.</span
+            >{{ t('settings.notificationsDescription') }}</span
           >
         </div>
 
@@ -358,10 +389,9 @@ const retentionOptions = [
 
       <div class="flex items-center justify-between gap-6 border-b border-border p-4">
         <div class="grid gap-1">
-          <span class="text-heading">Mostrar badge no ícone</span>
+          <span class="text-heading">{{ t('settings.badge') }}</span>
           <span class="text-body text-ink-soft"
-            >Mostra a contagem de tarefas pendentes no ícone do aplicativo quando
-            disponível.</span
+            >{{ t('settings.badgeDescription') }}</span
           >
         </div>
 
@@ -373,9 +403,9 @@ const retentionOptions = [
 
       <div class="flex items-center justify-between gap-6 border-b border-border p-4">
         <div class="grid gap-1">
-          <span class="text-heading">Iniciar com o Windows</span>
+          <span class="text-heading">{{ t('settings.startWindows') }}</span>
           <span class="text-body text-ink-soft"
-            >Abre o Praxis automaticamente ao iniciar o sistema.</span
+            >{{ t('settings.startWindowsDescription') }}</span
           >
         </div>
 
@@ -387,9 +417,9 @@ const retentionOptions = [
 
       <div class="flex items-center justify-between gap-6 border-b border-border p-4">
         <div class="grid gap-1">
-          <span class="text-heading">Iniciar minimizado</span>
+          <span class="text-heading">{{ t('settings.startMinimized') }}</span>
           <span class="text-body text-ink-soft"
-            >Mantém o Praxis discreto quando iniciado automaticamente.</span
+            >{{ t('settings.startMinimizedDescription') }}</span
           >
         </div>
 
@@ -401,10 +431,9 @@ const retentionOptions = [
 
       <div class="flex items-center justify-between gap-6 p-4">
         <div class="grid gap-1">
-          <span class="text-heading">Minimizar para o tray quando desbloqueado</span>
+          <span class="text-heading">{{ t('settings.minimizeTray') }}</span>
           <span class="text-body text-ink-soft"
-            >Ao fechar a janela com o cofre aberto, o app continua rodando em segundo
-            plano.</span
+            >{{ t('settings.minimizeTrayDescription') }}</span
           >
         </div>
 
@@ -491,9 +520,9 @@ const retentionOptions = [
     <div class="grid border border-border bg-surface">
       <div class="flex items-center justify-between gap-6 p-4">
         <div class="grid gap-1">
-          <span class="text-heading">Atualizações</span>
+          <span class="text-heading">{{ t('settings.updates') }}</span>
           <span class="text-body text-ink-soft">
-            Baixa releases assinadas publicadas no GitHub.
+            {{ t('settings.updatesDescription') }}
           </span>
           <span
             v-if="updateStatus"
@@ -510,7 +539,7 @@ const retentionOptions = [
             :disabled="isCheckingUpdate || isInstallingUpdate"
             @click="checkUpdate"
           >
-            {{ isCheckingUpdate ? 'Verificando...' : 'Verificar' }}
+            {{ isCheckingUpdate ? t('settings.checking') : t('settings.check') }}
           </button>
 
           <button
@@ -519,7 +548,7 @@ const retentionOptions = [
             :disabled="!updateInfo || isInstallingUpdate"
             @click="installUpdate"
           >
-            {{ isInstallingUpdate ? 'Instalando...' : 'Instalar' }}
+            {{ isInstallingUpdate ? t('settings.installing') : t('settings.install') }}
           </button>
         </div>
       </div>
@@ -528,7 +557,7 @@ const retentionOptions = [
     <div class="grid border border-border bg-surface">
       <div class="grid gap-1 border-b border-border p-4">
         <div class="flex justify-between gap-4">
-          <span class="text-heading">Status do banco</span>
+          <span class="text-heading">{{ t('settings.database') }}</span>
           <span class="text-body font-semibold text-ink">{{ storageStatus }}</span>
         </div>
         <span class="text-body text-ink-soft"
@@ -550,8 +579,8 @@ const retentionOptions = [
 
       <div class="grid gap-1 border-b border-border p-4">
         <div class="flex justify-between gap-4">
-          <span class="text-heading">Criptografia</span>
-          <span class="text-body font-semibold text-ink">Ativa</span>
+          <span class="text-heading">{{ t('settings.encryption') }}</span>
+          <span class="text-body font-semibold text-ink">{{ t('settings.active') }}</span>
         </div>
         <span class="text-body text-ink-soft"
           >O Praxis não exibe senha nem conteúdo bruto do cofre.</span
@@ -638,7 +667,7 @@ const retentionOptions = [
         class="border border-border bg-surface px-3 py-2 text-body font-semibold text-ink hover:bg-hover"
         @click="reloadVault"
       >
-        Recarregar cofre do disco
+        {{ t('settings.reloadVault') }}
       </button>
     </div>
   </section>
