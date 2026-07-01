@@ -33,7 +33,9 @@ const contextDescription = computed(() => {
   }
 
   return `${contextLabel.value} · ${t('task.suggestedDue', {
-    date: new Intl.DateTimeFormat(locale.value).format(dayjs(tasks.createContext.dueDate).toDate()),
+    date: new Intl.DateTimeFormat(locale.value).format(
+      dayjs(tasks.createContext.dueDate).toDate()
+    ),
   })}`
 })
 
@@ -121,11 +123,11 @@ function resetForm() {
   <Teleport to="body">
     <div
       v-if="tasks.createModalOpen"
-      class="fixed inset-0 z-50 grid place-items-center bg-ink/20 p-6"
+      class="fixed inset-0 z-50 grid place-items-center bg-ink/20 p-4"
       @keydown.escape="closeModal"
     >
       <form
-        class="flex max-h-[calc(100vh-3rem)] w-full max-w-6xl flex-col border border-border bg-paper shadow-xl"
+        class="flex h-[calc(100vh-2rem)] w-full max-w-[96rem] flex-col border border-border bg-paper shadow-xl"
         @submit.prevent="createTask"
       >
         <header class="flex items-start justify-between gap-4 border-b border-border p-5">
@@ -146,7 +148,7 @@ function resetForm() {
         </header>
 
         <div
-          class="grid min-h-0 flex-1 gap-6 overflow-y-auto p-5 desktop:grid-cols-[minmax(0,3fr)_minmax(18rem,2fr)]"
+          class="grid min-h-0 flex-1 gap-8 overflow-y-auto p-6 desktop:grid-cols-[minmax(0,1fr)_minmax(24rem,1fr)]"
         >
           <TaskFormFields
             ref="formFields"

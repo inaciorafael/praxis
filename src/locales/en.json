@@ -123,6 +123,15 @@
     "titlePlaceholder": "What needs to be done? Use + to add tags",
     "notes": "Note",
     "notesPlaceholder": "Optional details",
+    "editor": {
+      "toolbar": "Note formatting",
+      "bold": "Bold",
+      "italic": "Italic",
+      "bulletList": "Bullet list",
+      "orderedList": "Numbered list",
+      "undo": "Undo",
+      "redo": "Redo"
+    },
     "plannedFor": "Planned for",
     "dueAt": "Due date",
     "reminderAt": "Reminder",
@@ -230,8 +239,113 @@
     "title": "How to use Praxis",
     "eyebrow": "Help center",
     "intro": "A concise guide to capture what matters, receive the right reminder, and finish the day without forgotten tasks.",
+    "topicsLabel": "Help topics",
+    "inThisGuide": "In this guide",
+    "shortcutContext": "Create in the current context",
+    "shortcutFree": "Create a task without a preset context",
+    "topics": {
+      "start": "Getting started",
+      "create": "Create tasks",
+      "views": "Organize your day",
+      "reminders": "Dates and reminders",
+      "details": "Checklist and tags",
+      "complete": "Complete and archive",
+      "privacy": "Vault and settings",
+      "support": "About and support"
+    },
+    "access": {
+      "eyebrow": "01 · access",
+      "title": "Open your vault",
+      "description": "The .praxis file is the source of your data. It stays local and encrypted, including when stored in a folder synchronized by you.",
+      "steps": [
+        "Select an existing .praxis file or choose where to create a new vault.",
+        "Enter the password. Content opens only after the correct password is validated.",
+        "Use Lock to close the vault. While it is unlocked, closing the window keeps reminders and the badge active."
+      ],
+      "existing": "Existing vault",
+      "recognized": "Vault recognized"
+    },
+    "capture": {
+      "eyebrow": "02 · capture",
+      "title": "Create without losing context",
+      "description": "Praxis supports contextual and context-free creation, so you can capture quickly while retaining control over dates, reminders, notes, tags, and checklists.",
+      "contextLabel": "Uses the current screen and selected day as context.",
+      "contextBody": "In My Day, the task is due today. In My Week, it receives the day selected in the calendar.",
+      "freeLabel": "Opens a task without a preset date.",
+      "freeBody": "Use it when you want to define every detail manually or simply capture an open task without a deadline.",
+      "newTask": "New task",
+      "exampleTitle": "Prepare presentation",
+      "todayTime": "Today · 4:00 PM",
+      "reminderTime": "Reminder · 3:30 PM",
+      "createTask": "Create task"
+    },
+    "views": {
+      "eyebrow": "03 · focus",
+      "title": "Use each view to answer one question",
+      "description": "Views are not folders. Each one answers a practical question and loads only the tasks it needs.",
+      "today": "What is overdue, due today, or completed today.",
+      "week": "The next seven days, starting tomorrow.",
+      "pending": "Everything still open, grouped by urgency.",
+      "reminders": "Only pending tasks with a notification configured."
+    },
+    "reminder": {
+      "eyebrow": "04 · time",
+      "title": "Due dates and reminders serve different purposes",
+      "description": "A due date defines urgency and lateness. A reminder defines when Windows should call your attention.",
+      "steps": [
+        "Set a due date to indicate when the task must be ready.",
+        "Set a reminder only when you want a notification at a specific time.",
+        "Keep notifications enabled in Praxis settings and in Windows."
+      ],
+      "exampleTitle": "Send commercial proposal",
+      "exampleNote": "Due at 4:00 PM with a reminder thirty minutes earlier."
+    },
+    "details": {
+      "eyebrow": "05 · execution",
+      "title": "Break work down without creating new obligations",
+      "description": "Checklists and tags enrich a task, but only the parent task has a due date, reminder, recurrence, and badge participation.",
+      "checklist": "Use a checklist for visual steps. When every item is completed, the parent task is completed automatically.",
+      "tags": "Use tags to identify contexts such as work, personal, or finance. Renaming or recoloring a tag updates every related task.",
+      "inlineTag": "When creating or editing a task, type + in the title to search for a tag. If it does not exist, confirm with Enter to create and assign it automatically.",
+      "exampleTitle": "Prepare demonstration",
+      "exampleNote": "2 of 3 steps completed"
+    },
+    "lifecycle": {
+      "eyebrow": "06 · history",
+      "title": "Complete, reopen, or restore",
+      "description": "Praxis preserves the task lifecycle so its history remains useful without occupying working views.",
+      "toggle": "Click the task indicator to switch between pending and completed.",
+      "archive": "Older completed tasks can be archived automatically according to the policy selected in Settings.",
+      "restore": "In Archived, use the blue restore icon beside the trash button. The original completion date is preserved.",
+      "completedExample": "Review contract",
+      "archivedExample": "Finish annual planning"
+    },
+    "privacy": {
+      "eyebrow": "07 · control",
+      "title": "Adjust the app without exposing your vault",
+      "description": "Settings includes appearance, notifications, badge, startup, retention, and safe technical indicators.",
+      "database": "Database status shows whether the vault is open, when the file was updated, and whether encryption is active, without revealing the password or content.",
+      "theme": "Choose between light and dark E-Ink themes. Priority colors remain stable in both modes.",
+      "encryption": "Encryption",
+      "active": "Active",
+      "lastUpdate": "Last update recorded locally"
+    },
     "supportTitle": "Built with care, supported by people who believe in it",
-    "supportDescription": "Meet the person behind Praxis and, if it makes sense to you, help keep the project moving forward."
+    "supportDescription": "Meet the person behind Praxis and, if it makes sense to you, help keep the project moving forward.",
+    "supportVisualTitle": "Praxis stays simple",
+    "supportVisualBody": "Support funds development and maintenance, not barriers for people who simply need to organize their day.",
+    "supportVisualNote": "Local privacy, reliable reminders, and a calm experience remain at the center of the product.",
+    "footerTitle": "Ready to get back to work",
+    "footerBody": "The essentials fit into creating, remembering, and completing.",
+    "goToday": "Go to My Day",
+    "preview": {
+      "nextStep": "Define the next step",
+      "review": "Review the result",
+      "todayTime": "Today at 4:00 PM",
+      "reminderTime": "Reminder at 3:30 PM",
+      "tag": "+work",
+      "weekdays": ["Tue", "Wed", "Thu", "Fri"]
+    }
   },
   "support": {
     "intro1": "Praxis is independently created and maintained by {name}, with special attention to privacy, performance, and the details that make daily use calmer.",

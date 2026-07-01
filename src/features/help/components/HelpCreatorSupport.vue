@@ -130,7 +130,9 @@ onBeforeUnmount(() => {
 
         <div class="grid content-center gap-3">
           <div class="grid gap-1">
-            <span class="text-small font-semibold text-ink">{{ t('support.pixKey') }}</span>
+            <span class="text-small font-semibold text-ink">{{
+              t('support.pixKey')
+            }}</span>
             <code
               class="break-all border border-border bg-paper px-3 py-3 text-body text-ink"
             >

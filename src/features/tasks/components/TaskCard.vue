@@ -2,6 +2,7 @@
 import type { ChecklistItem } from '@/shared/types/checklist'
 import type { Tag } from '@/shared/types/tag'
 import type { Task } from '@/shared/types/task'
+import TaskNotesContent from './TaskNotesContent.vue'
 import { useTagStore } from '@/stores/tag.store'
 import { useTaskStore } from '@/stores/task.store'
 import {
@@ -151,9 +152,7 @@ function isChecklistItemUpdating(itemId: string) {
         v-if="checklistItems.length === 0"
         type="button"
         :disabled="readonly || isUpdatingStatus"
-        :aria-label="
-          status === 'completed' ? t('task.reopen') : t('task.complete')
-        "
+        :aria-label="status === 'completed' ? t('task.reopen') : t('task.complete')"
         :title="status === 'completed' ? t('task.reopen') : t('task.complete')"
         :class="[
           'border w-8 h-8 shrink-0 flex items-center justify-center rounded-xl',
@@ -263,11 +262,10 @@ function isChecklistItemUpdating(itemId: string) {
       </div>
     </template>
 
-    <span
-      class="text-ink-soft text-body"
+    <TaskNotesContent
       v-if="notes"
-      >{{ notes }}</span
-    >
+      :notes="notes"
+    />
 
     <div class="flex flex-row flex-wrap gap-4">
       <div
@@ -309,7 +307,9 @@ function isChecklistItemUpdating(itemId: string) {
         class="flex bg-archived text-on-accent px-3 flex-row items-center gap-1"
       >
         <Archive :size="15" />
-        <span>{{ t('task.archivedAt', { date: formatCalendarDateTime(archivedAt) }) }}</span>
+        <span>{{
+          t('task.archivedAt', { date: formatCalendarDateTime(archivedAt) })
+        }}</span>
       </div>
 
       <template v-if="reminderAt && status === 'pending'">

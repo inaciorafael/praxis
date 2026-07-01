@@ -1,55 +1,58 @@
 <script setup lang="ts">
 import {
-	Bell,
-	CalendarDays,
-	CheckCircle2,
-	Clock3,
-	Hash,
-	HelpCircle,
-	HeartHandshake,
-	KeyRound,
-	LockKeyhole,
-	Moon,
-	Plus,
-	Settings,
-	ShieldCheck,
-	Sun,
-} from "@lucide/vue";
+  Bell,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Hash,
+  HelpCircle,
+  HeartHandshake,
+  KeyRound,
+  LockKeyhole,
+  Moon,
+  Plus,
+  Settings,
+  ShieldCheck,
+  Sun,
+} from '@lucide/vue'
 
-import HelpKey from "@/features/help/components/HelpKey.vue";
-import HelpSteps from "@/features/help/components/HelpSteps.vue";
-import HelpTaskPreview from "@/features/help/components/HelpTaskPreview.vue";
-import HelpTopic from "@/features/help/components/HelpTopic.vue";
-import HelpCreatorSupport from "@/features/help/components/HelpCreatorSupport.vue";
+import HelpKey from '@/features/help/components/HelpKey.vue'
+import HelpSteps from '@/features/help/components/HelpSteps.vue'
+import HelpTaskPreview from '@/features/help/components/HelpTaskPreview.vue'
+import HelpTopic from '@/features/help/components/HelpTopic.vue'
+import HelpCreatorSupport from '@/features/help/components/HelpCreatorSupport.vue'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-const topics = [
-	{ id: "comece", label: "Primeiros passos", icon: KeyRound },
-	{ id: "criar", label: "Criar tarefas", icon: Plus },
-	{ id: "visoes", label: "Organizar o dia", icon: CalendarDays },
-	{ id: "lembretes", label: "Datas e lembretes", icon: Bell },
-	{ id: "detalhes", label: "Checklist e tags", icon: Hash },
-	{ id: "concluir", label: "Concluir e arquivar", icon: CheckCircle2 },
-	{ id: "privacidade", label: "Cofre e configurações", icon: ShieldCheck },
-	{ id: "sobre", label: "Sobre e apoiar", icon: HeartHandshake },
-];
+const { t } = useI18n()
+const topics = computed(() => [
+  { id: 'comece', label: t('help.topics.start'), icon: KeyRound },
+  { id: 'criar', label: t('help.topics.create'), icon: Plus },
+  { id: 'visoes', label: t('help.topics.views'), icon: CalendarDays },
+  { id: 'lembretes', label: t('help.topics.reminders'), icon: Bell },
+  { id: 'detalhes', label: t('help.topics.details'), icon: Hash },
+  { id: 'concluir', label: t('help.topics.complete'), icon: CheckCircle2 },
+  { id: 'privacidade', label: t('help.topics.privacy'), icon: ShieldCheck },
+  { id: 'sobre', label: t('help.topics.support'), icon: HeartHandshake },
+])
 
-const vaultSteps = [
-	"Selecione um arquivo .praxis existente ou escolha onde criar um novo cofre.",
-	"Informe a senha. O conteúdo só é aberto depois que a senha correta for validada.",
-	"Use Sair para bloquear o cofre. Enquanto estiver desbloqueado, fechar a janela mantém lembretes e badge ativos.",
-];
+const vaultSteps = computed(() => [
+  t('help.access.steps.0'),
+  t('help.access.steps.1'),
+  t('help.access.steps.2'),
+])
 
-const reminderSteps = [
-	"Defina o vencimento para indicar quando a tarefa precisa estar pronta.",
-	"Defina um lembrete somente quando quiser receber uma notificação em um horário específico.",
-	"Mantenha as notificações habilitadas nas Configurações e no Windows.",
-];
+const reminderSteps = computed(() => [
+  t('help.reminder.steps.0'),
+  t('help.reminder.steps.1'),
+  t('help.reminder.steps.2'),
+])
 
 function scrollToTopic(topicId: string) {
-	document.getElementById(topicId)?.scrollIntoView({
-		behavior: "smooth",
-		block: "start",
-	});
+  document.getElementById(topicId)?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  })
 }
 </script>
 
@@ -58,24 +61,23 @@ function scrollToTopic(topicId: string) {
     <header class="grid gap-4 border-b border-border pb-7">
       <div class="flex items-center gap-3 text-blue">
         <HelpCircle :size="24" />
-        <span class="text-caption font-semibold uppercase">Central de ajuda</span>
+        <span class="text-caption font-semibold uppercase">{{ t('help.eyebrow') }}</span>
       </div>
       <div class="grid max-w-3xl gap-2">
-        <h1 class="text-display text-ink">Como usar o Praxis</h1>
+        <h1 class="text-display text-ink">{{ t('help.title') }}</h1>
         <p class="text-body leading-6 text-ink-soft">
-          Um guia curto para registrar o que importa, receber o aviso certo e terminar o
-          dia sem pendências esquecidas.
+          {{ t('help.intro') }}
         </p>
       </div>
 
       <div class="flex flex-wrap gap-x-6 gap-y-3 border-t border-border pt-4">
         <HelpKey
           :keys="['Ctrl', 'N']"
-          label="Criar no contexto atual"
+          :label="t('help.shortcutContext')"
         />
         <HelpKey
           :keys="['Ctrl', 'Shift', 'N']"
-          label="Criar tarefa livre"
+          :label="t('help.shortcutFree')"
         />
       </div>
     </header>
@@ -83,11 +85,11 @@ function scrollToTopic(topicId: string) {
     <div class="grid items-start gap-8 desktop:grid-cols-[13rem_minmax(0,1fr)]">
       <nav
         class="grid gap-1 desktop:sticky desktop:top-8"
-        aria-label="Tópicos da ajuda"
+        :aria-label="t('help.topicsLabel')"
       >
-        <span class="mb-2 text-caption font-semibold uppercase text-ink-muted"
-          >Neste guia</span
-        >
+        <span class="mb-2 text-caption font-semibold uppercase text-ink-muted">{{
+          t('help.inThisGuide')
+        }}</span>
         <button
           v-for="topic in topics"
           :key="topic.id"
@@ -106,18 +108,18 @@ function scrollToTopic(topicId: string) {
       <main class="grid gap-10">
         <HelpTopic
           id="comece"
-          eyebrow="01 · acesso"
-          title="Abra seu cofre"
-          description="O arquivo .praxis é a fonte dos seus dados. Ele permanece local e criptografado, inclusive quando estiver em uma pasta sincronizada por você."
+          :eyebrow="t('help.access.eyebrow')"
+          :title="t('help.access.title')"
+          :description="t('help.access.description')"
           :icon="KeyRound"
         >
           <HelpSteps :steps="vaultSteps" />
 
           <template #visual>
             <div class="grid gap-3 border border-border bg-surface p-4">
-              <span class="text-caption font-semibold uppercase text-ink-muted"
-                >Cofre existente</span
-              >
+              <span class="text-caption font-semibold uppercase text-ink-muted">{{
+                t('help.access.existing')
+              }}</span>
               <div
                 class="flex items-center gap-3 border border-border bg-paper px-3 py-3"
               >
@@ -134,7 +136,7 @@ function scrollToTopic(topicId: string) {
               </div>
               <div class="flex items-center gap-2 text-small font-semibold text-sage">
                 <ShieldCheck :size="16" />
-                Cofre reconhecido
+                {{ t('help.access.recognized') }}
               </div>
             </div>
           </template>
@@ -142,57 +144,56 @@ function scrollToTopic(topicId: string) {
 
         <HelpTopic
           id="criar"
-          eyebrow="02 · captura"
-          title="Crie sem perder o contexto"
-          description="O Praxis oferece uma criação contextual e outra livre. Assim você registra rápido sem abrir mão de controlar datas, lembrete, nota, tag e checklist."
+          :eyebrow="t('help.capture.eyebrow')"
+          :title="t('help.capture.title')"
+          :description="t('help.capture.description')"
           :icon="Plus"
         >
           <div class="grid gap-5">
             <div class="grid gap-2">
               <HelpKey
                 :keys="['Ctrl', 'N']"
-                label="Usa a tela e o dia atual como contexto."
+                :label="t('help.capture.contextLabel')"
               />
               <p class="text-body leading-6 text-ink-soft">
-                Em Meu Dia, a tarefa recebe vencimento para hoje. Em Minha Semana, recebe
-                o dia selecionado no calendário.
+                {{ t('help.capture.contextBody') }}
               </p>
             </div>
             <div class="grid gap-2">
               <HelpKey
                 :keys="['Ctrl', 'Shift', 'N']"
-                label="Abre uma tarefa sem data predefinida."
+                :label="t('help.capture.freeLabel')"
               />
               <p class="text-body leading-6 text-ink-soft">
-                Use quando quiser preencher cada detalhe manualmente ou apenas guardar uma
-                pendência sem prazo.
+                {{ t('help.capture.freeBody') }}
               </p>
             </div>
           </div>
 
           <template #visual>
             <div class="grid gap-3 border border-border bg-surface p-4">
-              <span class="text-caption font-semibold uppercase text-ink-muted"
-                >Nova tarefa</span
-              >
+              <span class="text-caption font-semibold uppercase text-ink-muted">{{
+                t('help.capture.newTask')
+              }}</span>
               <div class="border border-blue bg-paper px-3 py-2 text-body text-ink">
-                Preparar apresentação
+                {{ t('help.capture.exampleTitle') }}
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <div
                   class="border border-border bg-paper px-3 py-2 text-small text-ink-soft"
                 >
-                  Hoje · 16:00
+                  {{ t('help.capture.todayTime') }}
                 </div>
                 <div
                   class="border border-border bg-paper px-3 py-2 text-small text-ink-soft"
                 >
-                  Lembrete · 15:30
+                  {{ t('help.capture.reminderTime') }}
                 </div>
               </div>
               <div class="flex justify-end">
-                <span class="bg-accent px-3 py-2 text-small font-semibold text-on-accent"
-                  >Criar tarefa</span
+                <span
+                  class="bg-accent px-3 py-2 text-small font-semibold text-on-accent"
+                  >{{ t('help.capture.createTask') }}</span
                 >
               </div>
             </div>
@@ -201,35 +202,27 @@ function scrollToTopic(topicId: string) {
 
         <HelpTopic
           id="visoes"
-          eyebrow="03 · foco"
-          title="Use cada visão para uma pergunta"
-          description="As telas não são pastas. Cada uma responde a uma pergunta prática e carrega somente as tarefas necessárias."
+          :eyebrow="t('help.views.eyebrow')"
+          :title="t('help.views.title')"
+          :description="t('help.views.description')"
           :icon="CalendarDays"
         >
           <div class="grid border-t border-border">
             <div class="grid grid-cols-[8rem_1fr] gap-4 border-b border-border py-3">
-              <strong class="text-body text-ink">Meu Dia</strong>
-              <span class="text-body text-ink-soft"
-                >O que venceu, vence hoje ou foi concluído hoje.</span
-              >
+              <strong class="text-body text-ink">{{ t('nav.today') }}</strong>
+              <span class="text-body text-ink-soft">{{ t('help.views.today') }}</span>
             </div>
             <div class="grid grid-cols-[8rem_1fr] gap-4 border-b border-border py-3">
-              <strong class="text-body text-ink">Minha Semana</strong>
-              <span class="text-body text-ink-soft"
-                >Os próximos sete dias, começando amanhã.</span
-              >
+              <strong class="text-body text-ink">{{ t('nav.week') }}</strong>
+              <span class="text-body text-ink-soft">{{ t('help.views.week') }}</span>
             </div>
             <div class="grid grid-cols-[8rem_1fr] gap-4 border-b border-border py-3">
-              <strong class="text-body text-ink">Pendentes</strong>
-              <span class="text-body text-ink-soft"
-                >Tudo que continua aberto, agrupado por urgência.</span
-              >
+              <strong class="text-body text-ink">{{ t('nav.pending') }}</strong>
+              <span class="text-body text-ink-soft">{{ t('help.views.pending') }}</span>
             </div>
             <div class="grid grid-cols-[8rem_1fr] gap-4 border-b border-border py-3">
-              <strong class="text-body text-ink">Lembretes</strong>
-              <span class="text-body text-ink-soft"
-                >Somente pendentes que possuem uma notificação configurada.</span
-              >
+              <strong class="text-body text-ink">{{ t('nav.reminders') }}</strong>
+              <span class="text-body text-ink-soft">{{ t('help.views.reminders') }}</span>
             </div>
           </div>
 
@@ -238,25 +231,25 @@ function scrollToTopic(topicId: string) {
               <div
                 class="grid h-20 place-items-center border border-blue bg-blue text-on-accent"
               >
-                <span class="text-small">Ter</span
+                <span class="text-small">{{ t('help.preview.weekdays.0') }}</span
                 ><strong class="text-heading">23</strong>
               </div>
               <div
                 class="grid h-20 place-items-center border border-border bg-paper text-ink"
               >
-                <span class="text-small">Qua</span
+                <span class="text-small">{{ t('help.preview.weekdays.1') }}</span
                 ><strong class="text-heading">24</strong>
               </div>
               <div
                 class="grid h-20 place-items-center border border-border bg-paper text-ink"
               >
-                <span class="text-small">Qui</span
+                <span class="text-small">{{ t('help.preview.weekdays.2') }}</span
                 ><strong class="text-heading">25</strong>
               </div>
               <div
                 class="grid h-20 place-items-center border border-border bg-paper text-ink"
               >
-                <span class="text-small">Sex</span
+                <span class="text-small">{{ t('help.preview.weekdays.3') }}</span
                 ><strong class="text-heading">26</strong>
               </div>
             </div>
@@ -265,17 +258,17 @@ function scrollToTopic(topicId: string) {
 
         <HelpTopic
           id="lembretes"
-          eyebrow="04 · tempo"
-          title="Vencimento e lembrete têm funções diferentes"
-          description="Vencimento define urgência e atraso. Lembrete define quando o Windows deve chamar sua atenção."
+          :eyebrow="t('help.reminder.eyebrow')"
+          :title="t('help.reminder.title')"
+          :description="t('help.reminder.description')"
           :icon="Bell"
         >
           <HelpSteps :steps="reminderSteps" />
 
           <template #visual>
             <HelpTaskPreview
-              title="Enviar proposta comercial"
-              note="Vence às 16:00 e avisa trinta minutos antes."
+              :title="t('help.reminder.exampleTitle')"
+              :note="t('help.reminder.exampleNote')"
               show-reminder
             />
           </template>
@@ -283,31 +276,27 @@ function scrollToTopic(topicId: string) {
 
         <HelpTopic
           id="detalhes"
-          eyebrow="05 · execução"
-          title="Quebre o trabalho sem criar novas obrigações"
-          description="Checklist e tags enriquecem a tarefa, mas somente a tarefa principal possui vencimento, lembrete, recorrência e participação no badge."
+          :eyebrow="t('help.details.eyebrow')"
+          :title="t('help.details.title')"
+          :description="t('help.details.description')"
           :icon="Hash"
         >
           <div class="grid gap-4">
             <p class="text-body leading-6 text-ink-soft">
-              Use o checklist para passos visuais. Quando todos os itens forem concluídos,
-              a tarefa principal também será concluída automaticamente.
+              {{ t('help.details.checklist') }}
             </p>
             <p class="text-body leading-6 text-ink-soft">
-              Use tags para identificar contextos como trabalho, pessoal ou financeiro.
-              Renomear ou recolorir uma tag atualiza todas as tarefas relacionadas.
+              {{ t('help.details.tags') }}
             </p>
             <p class="text-body leading-6 text-ink-soft">
-              Ao criar uma tarefa, digite <strong class="text-ink">+</strong> no título
-              para procurar uma tag. Se o nome ainda não existir, confirme com Enter para
-              criá-la e vinculá-la automaticamente.
+              {{ t('help.details.inlineTag') }}
             </p>
           </div>
 
           <template #visual>
             <HelpTaskPreview
-              title="Preparar demonstração"
-              note="2 de 3 passos concluídos"
+              :title="t('help.details.exampleTitle')"
+              :note="t('help.details.exampleNote')"
               show-checklist
             />
           </template>
@@ -315,31 +304,29 @@ function scrollToTopic(topicId: string) {
 
         <HelpTopic
           id="concluir"
-          eyebrow="06 · histórico"
-          title="Conclua, reabra ou restaure"
-          description="O Praxis preserva o ciclo de vida da tarefa para que o histórico continue útil sem ocupar as visões de trabalho."
+          :eyebrow="t('help.lifecycle.eyebrow')"
+          :title="t('help.lifecycle.title')"
+          :description="t('help.lifecycle.description')"
           :icon="CheckCircle2"
         >
           <div class="grid gap-4 text-body leading-6 text-ink-soft">
-            <p>Clique no indicador da tarefa para alternar entre pendente e concluída.</p>
+            <p>{{ t('help.lifecycle.toggle') }}</p>
             <p>
-              Tarefas concluídas antigas podem ser arquivadas automaticamente conforme a
-              política escolhida nas Configurações.
+              {{ t('help.lifecycle.archive') }}
             </p>
             <p>
-              Na tela Arquivadas, use o ícone azul de restauração ao lado da lixeira. A
-              data original de conclusão é preservada.
+              {{ t('help.lifecycle.restore') }}
             </p>
           </div>
 
           <template #visual>
             <div class="grid gap-3">
               <HelpTaskPreview
-                title="Revisar contrato"
+                :title="t('help.lifecycle.completedExample')"
                 state="completed"
               />
               <HelpTaskPreview
-                title="Fechar planejamento anual"
+                :title="t('help.lifecycle.archivedExample')"
                 state="archived"
               />
             </div>
@@ -348,19 +335,17 @@ function scrollToTopic(topicId: string) {
 
         <HelpTopic
           id="privacidade"
-          eyebrow="07 · controle"
-          title="Ajuste o app sem expor seu cofre"
-          description="Configurações reúne aparência, notificações, badge, inicialização, retenção e indicadores técnicos seguros."
+          :eyebrow="t('help.privacy.eyebrow')"
+          :title="t('help.privacy.title')"
+          :description="t('help.privacy.description')"
           :icon="Settings"
         >
           <div class="grid gap-4">
             <p class="text-body leading-6 text-ink-soft">
-              O status do banco mostra se o cofre está aberto, quando o arquivo foi
-              atualizado e se a criptografia está ativa, sem revelar senha ou conteúdo.
+              {{ t('help.privacy.database') }}
             </p>
             <p class="text-body leading-6 text-ink-soft">
-              Escolha entre os temas E-Ink claro e escuro. As cores de prioridade
-              permanecem estáveis nos dois modos.
+              {{ t('help.privacy.theme') }}
             </p>
           </div>
 
@@ -368,25 +353,27 @@ function scrollToTopic(topicId: string) {
             <div class="grid gap-3 border border-border bg-surface p-4">
               <div class="flex items-center justify-between border-b border-border pb-3">
                 <span class="flex items-center gap-2 text-body text-ink"
-                  ><ShieldCheck :size="17" /> Criptografia</span
+                  ><ShieldCheck :size="17" /> {{ t('help.privacy.encryption') }}</span
                 >
-                <strong class="text-small text-sage">Ativa</strong>
+                <strong class="text-small text-sage">{{
+                  t('help.privacy.active')
+                }}</strong>
               </div>
               <div class="grid grid-cols-2 border border-border bg-paper p-1">
                 <span
                   class="flex items-center justify-center gap-2 bg-ink px-3 py-2 text-small text-paper"
                 >
-                  <Sun :size="15" /> Papel
+                  <Sun :size="15" /> {{ t('settings.paper') }}
                 </span>
                 <span
                   class="flex items-center justify-center gap-2 px-3 py-2 text-small text-ink-soft"
                 >
-                  <Moon :size="15" /> Escuro
+                  <Moon :size="15" /> {{ t('settings.dark') }}
                 </span>
               </div>
               <div class="flex items-center gap-2 text-small text-ink-muted">
                 <Clock3 :size="15" />
-                Última atualização registrada localmente
+                {{ t('help.privacy.lastUpdate') }}
               </div>
             </div>
           </template>
@@ -394,28 +381,32 @@ function scrollToTopic(topicId: string) {
 
         <HelpTopic
           id="sobre"
-          eyebrow="08 · sobre"
-          title="Feito com cuidado, apoiado por quem acredita"
-          description="Conheça quem está por trás do Praxis e, se fizer sentido para você, ajude a manter o projeto evoluindo."
+          eyebrow="08 · Praxis"
+          :title="t('help.supportTitle')"
+          :description="t('help.supportDescription')"
           :icon="HeartHandshake"
         >
           <HelpCreatorSupport />
 
           <template #visual>
             <div class="grid gap-4 border border-border bg-surface p-5">
-              <div class="flex h-12 w-12 items-center justify-center border border-border bg-paper text-accent">
+              <div
+                class="flex h-12 w-12 items-center justify-center border border-border bg-paper text-accent"
+              >
                 <HeartHandshake :size="24" />
               </div>
               <div class="grid gap-2">
-                <span class="text-heading text-ink">Praxis continua simples</span>
+                <span class="text-heading text-ink">{{
+                  t('help.supportVisualTitle')
+                }}</span>
                 <p class="text-body leading-6 text-ink-soft">
-                  O apoio financia evolução e manutenção, não a criação de barreiras para
-                  quem só precisa organizar o próprio dia.
+                  {{ t('help.supportVisualBody') }}
                 </p>
               </div>
-              <div class="border-l-2 border-sage pl-3 text-small leading-5 text-ink-muted">
-                Privacidade local, lembretes confiáveis e uma experiência calma continuam
-                sendo o centro do produto.
+              <div
+                class="border-l-2 border-sage pl-3 text-small leading-5 text-ink-muted"
+              >
+                {{ t('help.supportVisualNote') }}
               </div>
             </div>
           </template>
@@ -425,17 +416,15 @@ function scrollToTopic(topicId: string) {
           class="flex flex-wrap items-center justify-between gap-4 border-t border-border py-6"
         >
           <div class="grid gap-1">
-            <span class="text-heading text-ink">Pronto para voltar ao trabalho</span>
-            <span class="text-body text-ink-soft"
-              >O essencial cabe em criar, lembrar e concluir.</span
-            >
+            <span class="text-heading text-ink">{{ t('help.footerTitle') }}</span>
+            <span class="text-body text-ink-soft">{{ t('help.footerBody') }}</span>
           </div>
           <RouterLink
             to="/app/today"
             class="flex items-center gap-2 bg-blue px-4 py-2 text-body font-semibold text-on-accent"
           >
             <CalendarDays :size="17" />
-            Ir para Meu Dia
+            {{ t('help.goToday') }}
           </RouterLink>
         </footer>
       </main>

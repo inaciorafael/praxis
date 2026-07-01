@@ -9,8 +9,12 @@ import {
 import { resolveTagColor } from '@/shared/lib/tags/tag-color'
 import { useTagStore } from '@/stores/tag.store'
 import { Plus, X } from '@lucide/vue'
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+const TaskNotesEditor = defineAsyncComponent(
+  () => import('@/features/tasks/components/TaskNotesEditor.vue')
+)
 
 const props = withDefaults(
   defineProps<{
@@ -302,9 +306,8 @@ defineExpose({
 
     <label class="grid gap-1">
       <span class="font-semibold text-ink">{{ t('task.notes') }}</span>
-      <textarea
+      <TaskNotesEditor
         v-model="notes"
-        class="min-h-24 resize-y border border-border bg-surface px-3 py-2 text-body text-ink outline-none placeholder:text-ink-muted focus:border-accent"
         :placeholder="t('task.notesPlaceholder')"
       />
     </label>

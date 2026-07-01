@@ -58,10 +58,25 @@
     "createAndEnter": "Criar cofre e entrar",
     "open": "Abrir cofre"
   },
-  "today": { "title": "Meu dia", "shortcut": "Para criar uma tarefa hoje.", "empty": "Nenhuma tarefa para hoje.", "todo": "Para fazer", "completed": "Concluídas" },
-  "week": { "title": "Minha semana", "newTask": "Nova tarefa", "empty": "Nenhuma tarefa para este dia.", "todo": "Para fazer", "completed": "Concluídas", "context": "Minha semana · {date}" },
+  "today": {
+    "title": "Meu dia",
+    "shortcut": "Para criar uma tarefa hoje.",
+    "empty": "Nenhuma tarefa para hoje.",
+    "todo": "Para fazer",
+    "completed": "Concluídas"
+  },
+  "week": {
+    "title": "Minha semana",
+    "newTask": "Nova tarefa",
+    "empty": "Nenhuma tarefa para este dia.",
+    "todo": "Para fazer",
+    "completed": "Concluídas",
+    "context": "Minha semana · {date}"
+  },
   "pending": {
-    "title": "Pendentes", "subtitle": "Tudo que ainda está aberto.", "empty": "Nenhuma tarefa pendente.",
+    "title": "Pendentes",
+    "subtitle": "Tudo que ainda está aberto.",
+    "empty": "Nenhuma tarefa pendente.",
     "groups": {
       "overdue": ["Vencidas", "Tarefas pendentes cujo vencimento já passou."],
       "today": ["Hoje", "Tarefas pendentes que vencem ainda hoje."],
@@ -71,9 +86,15 @@
       "noDate": ["Sem data", "Tarefas abertas sem vencimento definido."]
     }
   },
-  "overdue": { "title": "Vencidas", "subtitle": "Pendências cujo vencimento já passou.", "empty": "Nenhuma tarefa vencida." },
+  "overdue": {
+    "title": "Vencidas",
+    "subtitle": "Pendências cujo vencimento já passou.",
+    "empty": "Nenhuma tarefa vencida."
+  },
   "reminders": {
-    "title": "Lembretes", "subtitle": "Tarefas pendentes com notificação configurada.", "empty": "Nenhuma tarefa com lembrete.",
+    "title": "Lembretes",
+    "subtitle": "Tarefas pendentes com notificação configurada.",
+    "empty": "Nenhuma tarefa com lembrete.",
     "groups": {
       "overdue": ["Atrasados", "Lembretes que já passaram e ainda precisam de atenção."],
       "today": ["Hoje", "Avisos que ainda vão acontecer hoje."],
@@ -82,19 +103,276 @@
       "later": ["Mais tarde", "Lembretes fora da janela desta semana."]
     }
   },
-  "completed": { "title": "Concluídas", "subtitle": "Histórico das tarefas finalizadas.", "viewArchived": "Ver arquivadas", "empty": "Nenhuma tarefa concluída." },
-  "archived": { "title": "Arquivadas", "subtitle": "Tarefas concluídas preservadas fora das visões de trabalho.", "emptyTitle": "O arquivo está vazio", "emptyMessage": "Tarefas arquivadas automaticamente ou manualmente aparecerão aqui." },
+  "completed": {
+    "title": "Concluídas",
+    "subtitle": "Histórico das tarefas finalizadas.",
+    "viewArchived": "Ver arquivadas",
+    "empty": "Nenhuma tarefa concluída."
+  },
+  "archived": {
+    "title": "Arquivadas",
+    "subtitle": "Tarefas concluídas preservadas fora das visões de trabalho.",
+    "emptyTitle": "O arquivo está vazio",
+    "emptyMessage": "Tarefas arquivadas automaticamente ou manualmente aparecerão aqui."
+  },
   "task": {
-    "new": "Nova tarefa", "edit": "Editar tarefa", "editSubtitle": "Ajuste e visualize antes de salvar.", "title": "Título", "titlePlaceholder": "O que precisa ser feito? Use + para adicionar tags", "notes": "Nota", "notesPlaceholder": "Detalhes opcionais", "plannedFor": "Planejado para", "dueAt": "Vencimento", "reminderAt": "Lembrete", "checklist": "Checklist", "checklistPlaceholder": "Um item por linha", "status": "Status", "preview": "Prévia", "create": "Criar tarefa", "creating": "Criando...", "saveChanges": "Salvar alterações", "saving": "Salvando...", "removeDue": "Remover vencimento", "removeReminder": "Remover lembrete", "complete": "Concluir tarefa", "reopen": "Marcar tarefa como pendente", "delete": "Excluir tarefa", "restore": "Restaurar tarefa", "archivedAt": "Arquivada em {date}", "createTag": "Criar +{name}", "removeTag": "Remover tag {name}", "noChecklist": "Nenhum item de checklist.", "newChecklistItem": "Novo item", "add": "Adicionar", "timeline": "Timeline", "timelineSubtitle": "Histórico de alterações e eventos da tarefa.", "timelineLoading": "Carregando timeline...", "deleteTask": "Remover tarefa"
+    "new": "Nova tarefa",
+    "edit": "Editar tarefa",
+    "editSubtitle": "Ajuste e visualize antes de salvar.",
+    "title": "Título",
+    "titlePlaceholder": "O que precisa ser feito? Use + para adicionar tags",
+    "notes": "Nota",
+    "notesPlaceholder": "Detalhes opcionais",
+    "editor": {
+      "toolbar": "Formatação da nota",
+      "bold": "Negrito",
+      "italic": "Itálico",
+      "bulletList": "Lista com marcadores",
+      "orderedList": "Lista numerada",
+      "undo": "Desfazer",
+      "redo": "Refazer"
+    },
+    "plannedFor": "Planejado para",
+    "dueAt": "Vencimento",
+    "reminderAt": "Lembrete",
+    "checklist": "Checklist",
+    "checklistPlaceholder": "Um item por linha",
+    "status": "Status",
+    "preview": "Prévia",
+    "create": "Criar tarefa",
+    "creating": "Criando...",
+    "saveChanges": "Salvar alterações",
+    "saving": "Salvando...",
+    "removeDue": "Remover vencimento",
+    "removeReminder": "Remover lembrete",
+    "complete": "Concluir tarefa",
+    "reopen": "Marcar tarefa como pendente",
+    "delete": "Excluir tarefa",
+    "restore": "Restaurar tarefa",
+    "archivedAt": "Arquivada em {date}",
+    "createTag": "Criar +{name}",
+    "removeTag": "Remover tag {name}",
+    "noChecklist": "Nenhum item de checklist.",
+    "newChecklistItem": "Novo item",
+    "add": "Adicionar",
+    "timeline": "Timeline",
+    "timelineSubtitle": "Histórico de alterações e eventos da tarefa.",
+    "timelineLoading": "Carregando timeline...",
+    "deleteTask": "Remover tarefa"
   },
   "search": {
-    "title": "Buscar", "subtitle": "Encontre tarefas pelo título ou pelo conteúdo das notas.", "placeholder": "Buscar em títulos e notas...", "searching": "Buscando...", "filters": "Filtros", "status": "Status", "all": "Todos", "due": "Prazo", "anyDue": "Qualquer prazo", "dueToday": "Vence hoje", "upcoming": "Próximas", "withoutDue": "Sem vencimento", "reminder": "Lembrete", "withReminder": "Com lembrete", "withoutReminder": "Sem lembrete", "tag": "Tag", "allTags": "Todas as tags", "archive": "Arquivamento", "active": "Ativas", "archived": "Arquivadas", "clear": "Limpar busca e filtros", "promptTitle": "O que você precisa encontrar?", "prompt": "Digite uma palavra ou use os filtros para pesquisar seu cofre.", "results": "{count} resultado | {count} resultados", "noResults": "Nenhuma tarefa corresponde a esta busca."
+    "title": "Buscar",
+    "subtitle": "Encontre tarefas pelo título ou pelo conteúdo das notas.",
+    "placeholder": "Buscar em títulos e notas...",
+    "searching": "Buscando...",
+    "filters": "Filtros",
+    "status": "Status",
+    "all": "Todos",
+    "due": "Prazo",
+    "anyDue": "Qualquer prazo",
+    "dueToday": "Vence hoje",
+    "upcoming": "Próximas",
+    "withoutDue": "Sem vencimento",
+    "reminder": "Lembrete",
+    "withReminder": "Com lembrete",
+    "withoutReminder": "Sem lembrete",
+    "tag": "Tag",
+    "allTags": "Todas as tags",
+    "archive": "Arquivamento",
+    "active": "Ativas",
+    "archived": "Arquivadas",
+    "clear": "Limpar busca e filtros",
+    "promptTitle": "O que você precisa encontrar?",
+    "prompt": "Digite uma palavra ou use os filtros para pesquisar seu cofre.",
+    "results": "{count} resultado | {count} resultados",
+    "noResults": "Nenhuma tarefa corresponde a esta busca."
   },
   "settings": {
-    "title": "Configurações", "subtitle": "Preferências locais e estado seguro do Praxis.", "language": "Idioma", "languageDescription": "Escolha o idioma usado em todo o aplicativo.", "appearance": "Aparência", "appearanceDescription": "Escolha entre papel fosco para ambientes claros ou tinta invertida para pouca luz.", "paper": "Papel", "paperHint": "Fosco e suave", "dark": "Escuro", "darkHint": "Pouca luz", "notifications": "Receber notificações", "notificationsDescription": "Permite que lembretes de tarefas pendentes disparem notificações.", "badge": "Mostrar badge no ícone", "badgeDescription": "Mostra a contagem de tarefas pendentes no ícone do aplicativo quando disponível.", "startWindows": "Iniciar com o Windows", "startWindowsDescription": "Abre o Praxis automaticamente ao iniciar o sistema.", "startMinimized": "Iniciar minimizado", "startMinimizedDescription": "Mantém o Praxis discreto quando iniciado automaticamente.", "minimizeTray": "Minimizar para o tray quando desbloqueado", "minimizeTrayDescription": "Ao fechar a janela com o cofre aberto, o app continua rodando em segundo plano.", "updates": "Atualizações", "updatesDescription": "Baixa releases assinadas publicadas no GitHub.", "check": "Verificar", "checking": "Verificando...", "install": "Instalar", "installing": "Instalando...", "database": "Status do banco", "vaultOpen": "Cofre aberto", "vaultLocked": "Cofre bloqueado", "encryption": "Criptografia", "active": "Ativa", "reloadVault": "Recarregar cofre do disco"
+    "title": "Configurações",
+    "subtitle": "Preferências locais e estado seguro do Praxis.",
+    "language": "Idioma",
+    "languageDescription": "Escolha o idioma usado em todo o aplicativo.",
+    "appearance": "Aparência",
+    "appearanceDescription": "Escolha entre papel fosco para ambientes claros ou tinta invertida para pouca luz.",
+    "paper": "Papel",
+    "paperHint": "Fosco e suave",
+    "dark": "Escuro",
+    "darkHint": "Pouca luz",
+    "notifications": "Receber notificações",
+    "notificationsDescription": "Permite que lembretes de tarefas pendentes disparem notificações.",
+    "badge": "Mostrar badge no ícone",
+    "badgeDescription": "Mostra a contagem de tarefas pendentes no ícone do aplicativo quando disponível.",
+    "startWindows": "Iniciar com o Windows",
+    "startWindowsDescription": "Abre o Praxis automaticamente ao iniciar o sistema.",
+    "startMinimized": "Iniciar minimizado",
+    "startMinimizedDescription": "Mantém o Praxis discreto quando iniciado automaticamente.",
+    "minimizeTray": "Minimizar para o tray quando desbloqueado",
+    "minimizeTrayDescription": "Ao fechar a janela com o cofre aberto, o app continua rodando em segundo plano.",
+    "updates": "Atualizações",
+    "updatesDescription": "Baixa releases assinadas publicadas no GitHub.",
+    "check": "Verificar",
+    "checking": "Verificando...",
+    "install": "Instalar",
+    "installing": "Instalando...",
+    "database": "Status do banco",
+    "vaultOpen": "Cofre aberto",
+    "vaultLocked": "Cofre bloqueado",
+    "encryption": "Criptografia",
+    "active": "Ativa",
+    "reloadVault": "Recarregar cofre do disco"
   },
-  "tags": { "title": "Tags", "description": "Crie contextos reutilizáveis. Alterações de nome e cor aparecem imediatamente nas tarefas relacionadas.", "newPlaceholder": "Nome da nova tag", "create": "Criar tag", "creating": "Criando...", "empty": "Nenhuma tag criada. O Praxis também pode criar uma tag quando você usa + no título de uma tarefa.", "usage": "{count} tarefa | {count} tarefas", "edit": "Editar tag", "save": "Salvar tag", "delete": "Excluir tag", "confirmDelete": "Excluir mesmo", "cancelDelete": "Cancelar exclusão" },
-  "help": { "title": "Como usar o Praxis", "eyebrow": "Central de ajuda", "intro": "Um guia curto para registrar o que importa, receber o aviso certo e terminar o dia sem pendências esquecidas.", "supportTitle": "Feito com cuidado, apoiado por quem acredita", "supportDescription": "Conheça quem está por trás do Praxis e, se fizer sentido para você, ajude a manter o projeto evoluindo." },
-  "support": { "intro1": "O Praxis é criado e mantido de forma independente por {name}, com atenção especial à privacidade, ao desempenho e aos detalhes que tornam o uso diário mais tranquilo.", "intro2": "Se a ferramenta ajuda você a lembrar do que importa, uma contribuição voluntária apoia o tempo de desenvolvimento, os testes no Windows e a continuidade do projeto. O Praxis continuará funcionando normalmente sem qualquer doação.", "optional": "Apoio único e opcional", "noSubscription": "Sem assinatura", "independent": "Projeto independente", "international": "Apoio internacional", "internationalDescription": "Contribua pelo Buy Me a Coffee usando o navegador do sistema.", "openError": "Não foi possível abrir o navegador.", "pix": "Apoiar via Pix", "pixDescription": "Qualquer valor já contribui para manter o desenvolvimento ativo.", "pixKey": "Chave Pix", "copy": "Copiar chave Pix", "copied": "Chave copiada", "copyError": "O Windows não permitiu copiar a chave. Tente novamente.", "thanks": "Obrigado por apoiar o Praxis.", "pixHint": "Escaneie o QR Code ou copie a chave. Você escolhe o valor.", "qrAlt": "QR Code Pix para apoiar o desenvolvimento do Praxis" },
-  "timeline": { "label": "Timeline da tarefa", "empty": "Nenhum evento registrado para esta tarefa.", "due": "Vencimento", "reminder": "Lembrete", "planning": "Planejamento", "name": "Nome", "removed": "{label} removido" }
+  "tags": {
+    "title": "Tags",
+    "description": "Crie contextos reutilizáveis. Alterações de nome e cor aparecem imediatamente nas tarefas relacionadas.",
+    "newPlaceholder": "Nome da nova tag",
+    "create": "Criar tag",
+    "creating": "Criando...",
+    "empty": "Nenhuma tag criada. O Praxis também pode criar uma tag quando você usa + no título de uma tarefa.",
+    "usage": "{count} tarefa | {count} tarefas",
+    "edit": "Editar tag",
+    "save": "Salvar tag",
+    "delete": "Excluir tag",
+    "confirmDelete": "Excluir mesmo",
+    "cancelDelete": "Cancelar exclusão"
+  },
+  "help": {
+    "title": "Como usar o Praxis",
+    "eyebrow": "Central de ajuda",
+    "intro": "Um guia curto para registrar o que importa, receber o aviso certo e terminar o dia sem pendências esquecidas.",
+    "topicsLabel": "Tópicos da ajuda",
+    "inThisGuide": "Neste guia",
+    "shortcutContext": "Criar no contexto atual",
+    "shortcutFree": "Criar tarefa livre",
+    "topics": {
+      "start": "Primeiros passos",
+      "create": "Criar tarefas",
+      "views": "Organizar o dia",
+      "reminders": "Datas e lembretes",
+      "details": "Checklist e tags",
+      "complete": "Concluir e arquivar",
+      "privacy": "Cofre e configurações",
+      "support": "Sobre e apoiar"
+    },
+    "access": {
+      "eyebrow": "01 · acesso",
+      "title": "Abra seu cofre",
+      "description": "O arquivo .praxis é a fonte dos seus dados. Ele permanece local e criptografado, inclusive quando estiver em uma pasta sincronizada por você.",
+      "steps": [
+        "Selecione um arquivo .praxis existente ou escolha onde criar um novo cofre.",
+        "Informe a senha. O conteúdo só é aberto depois que a senha correta for validada.",
+        "Use Bloquear para fechar o cofre. Enquanto estiver desbloqueado, fechar a janela mantém lembretes e badge ativos."
+      ],
+      "existing": "Cofre existente",
+      "recognized": "Cofre reconhecido"
+    },
+    "capture": {
+      "eyebrow": "02 · captura",
+      "title": "Crie sem perder o contexto",
+      "description": "O Praxis oferece uma criação contextual e outra livre. Assim você registra rápido sem abrir mão de controlar datas, lembrete, nota, tag e checklist.",
+      "contextLabel": "Usa a tela e o dia atual como contexto.",
+      "contextBody": "Em Meu Dia, a tarefa recebe vencimento para hoje. Em Minha Semana, recebe o dia selecionado no calendário.",
+      "freeLabel": "Abre uma tarefa sem data predefinida.",
+      "freeBody": "Use quando quiser preencher cada detalhe manualmente ou apenas guardar uma pendência sem prazo.",
+      "newTask": "Nova tarefa",
+      "exampleTitle": "Preparar apresentação",
+      "todayTime": "Hoje · 16:00",
+      "reminderTime": "Lembrete · 15:30",
+      "createTask": "Criar tarefa"
+    },
+    "views": {
+      "eyebrow": "03 · foco",
+      "title": "Use cada visão para uma pergunta",
+      "description": "As telas não são pastas. Cada uma responde a uma pergunta prática e carrega somente as tarefas necessárias.",
+      "today": "O que venceu, vence hoje ou foi concluído hoje.",
+      "week": "Os próximos sete dias, começando amanhã.",
+      "pending": "Tudo que continua aberto, agrupado por urgência.",
+      "reminders": "Somente pendentes que possuem uma notificação configurada."
+    },
+    "reminder": {
+      "eyebrow": "04 · tempo",
+      "title": "Vencimento e lembrete têm funções diferentes",
+      "description": "Vencimento define urgência e atraso. Lembrete define quando o Windows deve chamar sua atenção.",
+      "steps": [
+        "Defina o vencimento para indicar quando a tarefa precisa estar pronta.",
+        "Defina um lembrete somente quando quiser receber uma notificação em um horário específico.",
+        "Mantenha as notificações habilitadas nas Configurações e no Windows."
+      ],
+      "exampleTitle": "Enviar proposta comercial",
+      "exampleNote": "Vence às 16:00 e avisa trinta minutos antes."
+    },
+    "details": {
+      "eyebrow": "05 · execução",
+      "title": "Quebre o trabalho sem criar novas obrigações",
+      "description": "Checklist e tags enriquecem a tarefa, mas somente a tarefa principal possui vencimento, lembrete, recorrência e participação no badge.",
+      "checklist": "Use o checklist para passos visuais. Quando todos os itens forem concluídos, a tarefa principal também será concluída automaticamente.",
+      "tags": "Use tags para identificar contextos como trabalho, pessoal ou financeiro. Renomear ou recolorir uma tag atualiza todas as tarefas relacionadas.",
+      "inlineTag": "Ao criar ou editar uma tarefa, digite + no título para procurar uma tag. Se o nome ainda não existir, confirme com Enter para criá-la e vinculá-la automaticamente.",
+      "exampleTitle": "Preparar demonstração",
+      "exampleNote": "2 de 3 passos concluídos"
+    },
+    "lifecycle": {
+      "eyebrow": "06 · histórico",
+      "title": "Conclua, reabra ou restaure",
+      "description": "O Praxis preserva o ciclo de vida da tarefa para que o histórico continue útil sem ocupar as visões de trabalho.",
+      "toggle": "Clique no indicador da tarefa para alternar entre pendente e concluída.",
+      "archive": "Tarefas concluídas antigas podem ser arquivadas automaticamente conforme a política escolhida nas Configurações.",
+      "restore": "Na tela Arquivadas, use o ícone azul de restauração ao lado da lixeira. A data original de conclusão é preservada.",
+      "completedExample": "Revisar contrato",
+      "archivedExample": "Fechar planejamento anual"
+    },
+    "privacy": {
+      "eyebrow": "07 · controle",
+      "title": "Ajuste o app sem expor seu cofre",
+      "description": "Configurações reúne aparência, notificações, badge, inicialização, retenção e indicadores técnicos seguros.",
+      "database": "O status do banco mostra se o cofre está aberto, quando o arquivo foi atualizado e se a criptografia está ativa, sem revelar senha ou conteúdo.",
+      "theme": "Escolha entre os temas E-Ink claro e escuro. As cores de prioridade permanecem estáveis nos dois modos.",
+      "encryption": "Criptografia",
+      "active": "Ativa",
+      "lastUpdate": "Última atualização registrada localmente"
+    },
+    "supportTitle": "Feito com cuidado, apoiado por quem acredita",
+    "supportDescription": "Conheça quem está por trás do Praxis e, se fizer sentido para você, ajude a manter o projeto evoluindo.",
+    "supportVisualTitle": "Praxis continua simples",
+    "supportVisualBody": "O apoio financia evolução e manutenção, não a criação de barreiras para quem só precisa organizar o próprio dia.",
+    "supportVisualNote": "Privacidade local, lembretes confiáveis e uma experiência calma continuam sendo o centro do produto.",
+    "footerTitle": "Pronto para voltar ao trabalho",
+    "footerBody": "O essencial cabe em criar, lembrar e concluir.",
+    "goToday": "Ir para Meu Dia",
+    "preview": {
+      "nextStep": "Definir próximo passo",
+      "review": "Revisar resultado",
+      "todayTime": "Hoje às 16:00",
+      "reminderTime": "Lembrete às 15:30",
+      "tag": "+trabalho",
+      "weekdays": ["Ter", "Qua", "Qui", "Sex"]
+    }
+  },
+  "support": {
+    "intro1": "O Praxis é criado e mantido de forma independente por {name}, com atenção especial à privacidade, ao desempenho e aos detalhes que tornam o uso diário mais tranquilo.",
+    "intro2": "Se a ferramenta ajuda você a lembrar do que importa, uma contribuição voluntária apoia o tempo de desenvolvimento, os testes no Windows e a continuidade do projeto. O Praxis continuará funcionando normalmente sem qualquer doação.",
+    "optional": "Apoio único e opcional",
+    "noSubscription": "Sem assinatura",
+    "independent": "Projeto independente",
+    "international": "Apoio internacional",
+    "internationalDescription": "Contribua pelo Buy Me a Coffee usando o navegador do sistema.",
+    "openError": "Não foi possível abrir o navegador.",
+    "pix": "Apoiar via Pix",
+    "pixDescription": "Qualquer valor já contribui para manter o desenvolvimento ativo.",
+    "pixKey": "Chave Pix",
+    "copy": "Copiar chave Pix",
+    "copied": "Chave copiada",
+    "copyError": "O Windows não permitiu copiar a chave. Tente novamente.",
+    "thanks": "Obrigado por apoiar o Praxis.",
+    "pixHint": "Escaneie o QR Code ou copie a chave. Você escolhe o valor.",
+    "qrAlt": "QR Code Pix para apoiar o desenvolvimento do Praxis"
+  },
+  "timeline": {
+    "label": "Timeline da tarefa",
+    "empty": "Nenhum evento registrado para esta tarefa.",
+    "due": "Vencimento",
+    "reminder": "Lembrete",
+    "planning": "Planejamento",
+    "name": "Nome",
+    "removed": "{label} removido"
+  }
 }

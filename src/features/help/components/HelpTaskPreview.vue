@@ -1,27 +1,24 @@
 <script setup lang="ts">
-import {
-	ArchiveRestore,
-	Bell,
-	CalendarDays,
-	Check,
-	Tag,
-} from "@lucide/vue";
+import { ArchiveRestore, Bell, CalendarDays, Check, Tag } from '@lucide/vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 withDefaults(
-	defineProps<{
-		title: string;
-		note?: string;
-		state?: "pending" | "completed" | "overdue" | "archived";
-		showReminder?: boolean;
-		showChecklist?: boolean;
-	}>(),
-	{
-		note: "",
-		state: "pending",
-		showReminder: false,
-		showChecklist: false,
-	},
-);
+  defineProps<{
+    title: string
+    note?: string
+    state?: 'pending' | 'completed' | 'overdue' | 'archived'
+    showReminder?: boolean
+    showChecklist?: boolean
+  }>(),
+  {
+    note: '',
+    state: 'pending',
+    showReminder: false,
+    showChecklist: false,
+  }
+)
 </script>
 
 <template>
@@ -45,7 +42,10 @@ withDefaults(
             : 'border-border text-ink-soft',
         ]"
       >
-        <Check v-if="state === 'completed'" :size="16" />
+        <Check
+          v-if="state === 'completed'"
+          :size="16"
+        />
       </span>
 
       <span
@@ -57,28 +57,52 @@ withDefaults(
         {{ title }}
       </span>
 
-      <ArchiveRestore v-if="state === 'archived'" :size="17" class="text-blue" />
+      <ArchiveRestore
+        v-if="state === 'archived'"
+        :size="17"
+        class="text-blue"
+      />
     </div>
 
-    <p v-if="note" class="text-body text-ink-soft">{{ note }}</p>
+    <p
+      v-if="note"
+      class="text-body text-ink-soft"
+    >
+      {{ note }}
+    </p>
 
-    <div v-if="showChecklist" class="grid gap-2 pl-10 text-small text-ink-soft">
-      <span class="flex items-center gap-2"><Check :size="14" class="text-sage" /> Definir próximo passo</span>
-      <span class="flex items-center gap-2"><span class="h-3.5 w-3.5 border border-border" /> Revisar resultado</span>
+    <div
+      v-if="showChecklist"
+      class="grid gap-2 pl-10 text-small text-ink-soft"
+    >
+      <span class="flex items-center gap-2"
+        ><Check
+          :size="14"
+          class="text-sage"
+        />
+        {{ t('help.preview.nextStep') }}</span
+      >
+      <span class="flex items-center gap-2"
+        ><span class="h-3.5 w-3.5 border border-border" />
+        {{ t('help.preview.review') }}</span
+      >
     </div>
 
     <div class="flex flex-wrap gap-2 text-caption">
       <span class="flex items-center gap-1 bg-blue px-2 py-1 text-on-accent">
         <CalendarDays :size="13" />
-        Hoje às 16:00
+        {{ t('help.preview.todayTime') }}
       </span>
-      <span v-if="showReminder" class="flex items-center gap-1 bg-purple px-2 py-1 text-on-accent">
+      <span
+        v-if="showReminder"
+        class="flex items-center gap-1 bg-purple px-2 py-1 text-on-accent"
+      >
         <Bell :size="13" />
-        15:30
+        {{ t('help.preview.reminderTime') }}
       </span>
       <span class="flex items-center gap-1 border border-border px-2 py-1 text-ink-soft">
         <Tag :size="13" />
-        work
+        {{ t('help.preview.tag') }}
       </span>
     </div>
   </div>
