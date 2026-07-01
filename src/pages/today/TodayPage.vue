@@ -1,37 +1,37 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
-import { useI18n } from "vue-i18n";
+import { computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-import TaskCard from "@/features/tasks/components/TaskCard.vue";
-import { todayLocalDate } from "@/shared/lib/tasks/task.rules";
-import { useTaskStore } from "@/stores/task.store";
-import HelpKey from "@/features/help/components/HelpKey.vue";
-import { formatLongDate } from "@/shared/lib/date/date-format";
+import TaskCard from '@/features/tasks/components/TaskCard.vue'
+import { todayLocalDate } from '@/shared/lib/tasks/task.rules'
+import { useTaskStore } from '@/stores/task.store'
+import HelpKey from '@/features/help/components/HelpKey.vue'
+import { formatLongDate } from '@/shared/lib/date/date-format'
 
-const tasks = useTaskStore();
-const { t } = useI18n();
+const tasks = useTaskStore()
+const { t } = useI18n()
 const pendingTasks = computed(() =>
-	tasks.myDay.filter((task) => task.status === "pending"),
-);
+  tasks.myDay.filter((task) => task.status === 'pending')
+)
 const completedTasks = computed(() =>
-	tasks.myDay.filter((task) => task.status === "completed"),
-);
+  tasks.myDay.filter((task) => task.status === 'completed')
+)
 
 onMounted(async () => {
-	tasks.setActiveTaskView("today");
-	setTodayCreateContext();
-	await tasks.hydrateToday({ limit: 100 });
-});
+  tasks.setActiveTaskView('today')
+  setTodayCreateContext()
+  await tasks.hydrateToday({ limit: 100 })
+})
 
 function setTodayCreateContext() {
-	const today = todayLocalDate();
+  const today = todayLocalDate()
 
-	tasks.setCreateContext({
-		source: "today",
-		label: t("nav.today"),
-		plannedFor: today,
-		dueDate: today,
-	});
+  tasks.setCreateContext({
+    source: 'today',
+    label: t('nav.today'),
+    plannedFor: today,
+    dueDate: today,
+  })
 }
 </script>
 

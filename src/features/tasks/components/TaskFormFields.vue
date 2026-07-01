@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { TaskFormDraft } from '@/features/tasks/lib/task-form'
 import {
+  applySmartSchedule,
+  resolveSmartDueAt,
+  type SmartSchedulePreset,
+} from '@/features/tasks/lib/smart-schedule'
+import {
   findActiveInlineTag,
   normalizeTagName,
   removeInlineTagToken,
@@ -69,6 +74,12 @@ const canCreateInlineTag = computed(
 const tagSuggestionCount = computed(
   () => matchingTags.value.length + (canCreateInlineTag.value ? 1 : 0)
 )
+const smartSchedulePresets: SmartSchedulePreset[] = [
+  'oneHour',
+  'laterToday',
+  'tomorrowMorning',
+  'nextWeek',
+]
 const tagSuggestionsOpen = computed(() =>
   Boolean(activeTag.value && tagSuggestionCount.value > 0)
 )
@@ -214,6 +225,27 @@ function selectedTagStyle(name: string) {
   return resolveTagColor(tag?.color ?? '', name)
 }
 
+function applySchedulePreset(preset: SmartSchedulePreset) {
+  const nextValues = applySmartSchedule(
+    { dueAt: dueAt.value, reminderAt: reminderAt.value },
+    preset
+  )
+
+  if (!nextValues) {
+    return
+  }
+
+  model.value = {
+    ...model.value,
+    dueAt: nextValues.dueAt,
+    reminderAt: nextValues.reminderAt,
+  }
+}
+
+function schedulePresetAvailable(preset: SmartSchedulePreset) {
+  return resolveSmartDueAt(preset) !== null
+}
+
 defineExpose({
   focusTitle,
   commitPendingTag,
@@ -341,6 +373,23 @@ defineExpose({
           type="datetime-local"
           class="border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus:border-accent"
         />
+        <div class="mt-1 grid gap-1">
+          <span class="text-caption text-ink-muted">{{
+            t('task.quickSchedule.label')
+          }}</span>
+          <div class="flex flex-wrap gap-1">
+            <button
+              v-for="preset in smartSchedulePresets"
+              :key="preset"
+              type="button"
+              :disabled="!schedulePresetAvailable(preset)"
+              class="border border-border bg-paper px-2 py-1 text-caption font-semibold text-ink-soft hover:border-accent hover:bg-hover hover:text-accent disabled:pointer-events-none disabled:opacity-35"
+              @click="applySchedulePreset(preset)"
+            >
+              {{ t(`task.quickSchedule.${preset}`) }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 

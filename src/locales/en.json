@@ -145,6 +145,13 @@
     "saving": "Saving...",
     "removeDue": "Remove due date",
     "removeReminder": "Remove reminder",
+    "quickSchedule": {
+      "label": "Quick schedule",
+      "oneHour": "+1 hour",
+      "laterToday": "Later today",
+      "tomorrowMorning": "Tomorrow at 9 AM",
+      "nextWeek": "Next Monday"
+    },
     "complete": "Complete task",
     "reopen": "Mark task as pending",
     "delete": "Delete task",

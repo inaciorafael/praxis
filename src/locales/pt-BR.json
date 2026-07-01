@@ -145,6 +145,13 @@
     "saving": "Salvando...",
     "removeDue": "Remover vencimento",
     "removeReminder": "Remover lembrete",
+    "quickSchedule": {
+      "label": "Agendamento rápido",
+      "oneHour": "+1 hora",
+      "laterToday": "Mais tarde hoje",
+      "tomorrowMorning": "Amanhã às 9h",
+      "nextWeek": "Próxima segunda"
+    },
     "complete": "Concluir tarefa",
     "reopen": "Marcar tarefa como pendente",
     "delete": "Excluir tarefa",
