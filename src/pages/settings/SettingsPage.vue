@@ -1,259 +1,275 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import dayjs from 'dayjs'
-import { Moon, Sun } from '@lucide/vue'
+import { computed, onMounted, ref } from "vue";
+import dayjs from "dayjs";
+import { Moon, Sun } from "@lucide/vue";
 
 import {
-  checkForAppUpdate,
-  downloadAndInstallAppUpdate,
-  type AppUpdateInfo,
-} from '@/shared/lib/app/app-update.service'
-import { seedShowcaseData } from '@/shared/lib/tasks/task.service'
-import { useAppStore } from '@/stores/app.store'
-import { useBadgeStore } from '@/stores/badge.store'
-import { useNotificationStore } from '@/stores/notification.store'
-import { useTaskStore } from '@/stores/task.store'
-import { useVaultStore } from '@/stores/vault.store'
-import type { AppLanguage, AppTheme } from '@/shared/types/app'
-import Toggle from '@/shared/ui/Toggle.vue'
-import Select from '@/shared/ui/Select.vue'
-import TagManager from '@/features/tags/components/TagManager.vue'
-import { supportedLanguages } from '@/shared/lib/i18n/i18n'
-import { useI18n } from 'vue-i18n'
+	checkForAppUpdate,
+	downloadAndInstallAppUpdate,
+	type AppUpdateInfo,
+} from "@/shared/lib/app/app-update.service";
+import { seedShowcaseData } from "@/shared/lib/tasks/task.service";
+import { useAppStore } from "@/stores/app.store";
+import { useBadgeStore } from "@/stores/badge.store";
+import { useNotificationStore } from "@/stores/notification.store";
+import { useTaskStore } from "@/stores/task.store";
+import { useVaultStore } from "@/stores/vault.store";
+import type { AppLanguage, AppTheme } from "@/shared/types/app";
+import Toggle from "@/shared/ui/Toggle.vue";
+import Select from "@/shared/ui/Select.vue";
+import TagManager from "@/features/tags/components/TagManager.vue";
+import { supportedLanguages } from "@/shared/lib/i18n/i18n";
+import { useI18n } from "vue-i18n";
 
-const app = useAppStore()
-const badge = useBadgeStore()
-const notifications = useNotificationStore()
-const tasks = useTaskStore()
-const vault = useVaultStore()
-const { t } = useI18n()
-const updateInfo = ref<AppUpdateInfo | null>(null)
-const updateStatus = ref('')
-const isCheckingUpdate = ref(false)
-const isInstallingUpdate = ref(false)
-const showcaseStatus = ref('')
-const isSeedingShowcase = ref(false)
-const archiveStatus = ref('')
-const isArchivingCompleted = ref(false)
+const app = useAppStore();
+const badge = useBadgeStore();
+const notifications = useNotificationStore();
+const tasks = useTaskStore();
+const vault = useVaultStore();
+const { t } = useI18n();
+const updateInfo = ref<AppUpdateInfo | null>(null);
+const updateStatus = ref("");
+const isCheckingUpdate = ref(false);
+const isInstallingUpdate = ref(false);
+const showcaseStatus = ref("");
+const isSeedingShowcase = ref(false);
+const archiveStatus = ref("");
+const isArchivingCompleted = ref(false);
 
-const config = computed(() => app.config)
+const config = computed(() => app.config);
 const dataFilePath = computed(() =>
-  maskPath(vault.activeDataFilePath ?? vault.selectedDataFilePath)
-)
+	maskPath(vault.activeDataFilePath ?? vault.selectedDataFilePath),
+);
 const storageStatus = computed(() =>
-  vault.active ? t('settings.vaultOpen') : t('settings.vaultLocked')
-)
+	vault.active ? t("settings.vaultOpen") : t("settings.vaultLocked"),
+);
 const selectedLanguage = computed(
-  () =>
-    supportedLanguages.find((language) => language.id === config.value?.language) ??
-    supportedLanguages[0]
-)
+	() =>
+		supportedLanguages.find(
+			(language) => language.id === config.value?.language,
+		) ?? supportedLanguages[0],
+);
 
 onMounted(async () => {
-  await Promise.all([
-    app.hydrateConfig(),
-    vault.hydrate(),
-    badge.hydrate(),
-    notifications.hydrate(),
-    vault.hydrateSafetyCopies(),
-  ])
-})
+	await Promise.all([
+		app.hydrateConfig(),
+		vault.hydrate(),
+		badge.hydrate(),
+		notifications.hydrate(),
+		vault.hydrateSafetyCopies(),
+	]);
+});
 
 async function toggleNotifications(enabled: boolean) {
-  if (enabled) {
-    const granted = await notifications.requestPermission()
+	if (enabled) {
+		const granted = await notifications.requestPermission();
 
-    if (!granted) {
-      await app.updateConfig({ notificationsEnabled: false })
-      return
-    }
-  } else {
-    await notifications.cancelAll()
-  }
+		if (!granted) {
+			await app.updateConfig({ notificationsEnabled: false });
+			return;
+		}
+	} else {
+		await notifications.cancelAll();
+	}
 
-  await app.updateConfig({ notificationsEnabled: enabled })
+	await app.updateConfig({ notificationsEnabled: enabled });
 }
 
 async function setTheme(theme: AppTheme) {
-  await app.updateConfig({ theme })
+	await app.updateConfig({ theme });
 }
 
 async function setLanguage(language: string) {
-  await app.updateConfig({ language: language as AppLanguage })
+	await app.updateConfig({ language: language as AppLanguage });
 }
 
 async function toggleBadge(enabled: boolean) {
-  await app.updateConfig({ badgeEnabled: enabled })
+	await app.updateConfig({ badgeEnabled: enabled });
 
-  if (enabled) {
-    await tasks.hydrateViewCounts()
-    return
-  }
+	if (enabled) {
+		await tasks.hydrateViewCounts();
+		return;
+	}
 
-  await badge.clear()
+	await badge.clear();
 }
 
 async function reloadVault() {
-  await vault.reloadFromDisk()
+	await vault.reloadFromDisk();
 }
 
 async function prepareShowcase() {
-  if (isSeedingShowcase.value) {
-    return
-  }
+	if (isSeedingShowcase.value) {
+		return;
+	}
 
-  isSeedingShowcase.value = true
-  showcaseStatus.value = 'Preparando dados de showcase...'
+	isSeedingShowcase.value = true;
+	showcaseStatus.value = "Preparando dados de showcase...";
 
-  try {
-    await tasks.applyCollection(await seedShowcaseData())
-    await Promise.all([tasks.hydrateViewCounts(), vault.hydrate()])
-    showcaseStatus.value =
-      'Showcase pronto. O cofre aberto foi substituido por dados ilustrativos.'
-  } catch (error) {
-    showcaseStatus.value =
-      error instanceof Error ? error.message : 'Nao foi possivel preparar o showcase.'
-  } finally {
-    isSeedingShowcase.value = false
-  }
+	try {
+		await tasks.applyCollection(await seedShowcaseData());
+		await Promise.all([tasks.hydrateViewCounts(), vault.hydrate()]);
+		showcaseStatus.value =
+			"Showcase pronto. O cofre aberto foi substituido por dados ilustrativos.";
+	} catch (error) {
+		showcaseStatus.value =
+			error instanceof Error
+				? error.message
+				: "Nao foi possivel preparar o showcase.";
+	} finally {
+		isSeedingShowcase.value = false;
+	}
 }
 
 const selectedRetention = computed(() => {
-  const value = config.value?.completedTaskRetentionDays ?? 'forever'
+	const value = config.value?.completedTaskRetentionDays ?? "forever";
 
-  return (
-    retentionOptions.find((option) => option.id === String(value)) ?? retentionOptions[0]
-  )
-})
+	return (
+		retentionOptions.find((option) => option.id === String(value)) ??
+		retentionOptions[0]
+	);
+});
 
 async function updateCompletedRetentionDays(value: string) {
-  const retentionDays = value === 'forever' ? null : Number(value)
-  await app.updateConfig({
-    completedTaskRetentionDays: Number.isFinite(retentionDays) ? retentionDays : null,
-  })
+	const retentionDays = value === "forever" ? null : Number(value);
+	await app.updateConfig({
+		completedTaskRetentionDays: Number.isFinite(retentionDays)
+			? retentionDays
+			: null,
+	});
 }
 
 async function archiveCompletedNow() {
-  const retentionDays = config.value?.completedTaskRetentionDays
+	const retentionDays = config.value?.completedTaskRetentionDays;
 
-  if (!retentionDays || isArchivingCompleted.value) {
-    return
-  }
+	if (!retentionDays || isArchivingCompleted.value) {
+		return;
+	}
 
-  isArchivingCompleted.value = true
-  archiveStatus.value = 'Arquivando tarefas concluídas antigas...'
+	isArchivingCompleted.value = true;
+	archiveStatus.value = "Arquivando tarefas concluídas antigas...";
 
-  try {
-    const beforeDate = dayjs().subtract(retentionDays, 'day').format('YYYY-MM-DD')
-    await tasks.archiveCompletedBefore(beforeDate)
-    await Promise.all([tasks.hydrateViewCounts(), vault.hydrate()])
-    archiveStatus.value = `Concluídas antes de ${dayjs(beforeDate).format('DD/MM/YYYY')} foram arquivadas.`
-  } catch (error) {
-    archiveStatus.value =
-      error instanceof Error
-        ? error.message
-        : 'Não foi possível arquivar tarefas concluídas.'
-  } finally {
-    isArchivingCompleted.value = false
-  }
+	try {
+		const beforeDate = dayjs()
+			.subtract(retentionDays, "day")
+			.format("YYYY-MM-DD");
+		await tasks.archiveCompletedBefore(beforeDate);
+		await Promise.all([tasks.hydrateViewCounts(), vault.hydrate()]);
+		archiveStatus.value = `Concluídas antes de ${dayjs(beforeDate).format("DD/MM/YYYY")} foram arquivadas.`;
+	} catch (error) {
+		archiveStatus.value =
+			error instanceof Error
+				? error.message
+				: "Não foi possível arquivar tarefas concluídas.";
+	} finally {
+		isArchivingCompleted.value = false;
+	}
 }
 
 async function checkUpdate() {
-  if (isCheckingUpdate.value || isInstallingUpdate.value) {
-    return
-  }
+	if (isCheckingUpdate.value || isInstallingUpdate.value) {
+		return;
+	}
 
-  isCheckingUpdate.value = true
-  updateStatus.value = 'Verificando atualização...'
+	isCheckingUpdate.value = true;
+	updateStatus.value = "Verificando atualização...";
 
-  try {
-    updateInfo.value = await checkForAppUpdate()
-    updateStatus.value = updateInfo.value
-      ? `Versão ${updateInfo.value.version} disponível.`
-      : 'Você já está na versão mais recente.'
-  } catch (error) {
-    updateInfo.value = null
-    updateStatus.value =
-      error instanceof Error ? error.message : 'Não foi possível verificar atualizações.'
-  } finally {
-    isCheckingUpdate.value = false
-  }
+	try {
+		updateInfo.value = await checkForAppUpdate();
+		updateStatus.value = updateInfo.value
+			? `Versão ${updateInfo.value.version} disponível.`
+			: "Você já está na versão mais recente.";
+	} catch (error) {
+		updateInfo.value = null;
+		updateStatus.value =
+			error instanceof Error
+				? error.message
+				: "Não foi possível verificar atualizações.";
+	} finally {
+		isCheckingUpdate.value = false;
+	}
 }
 
 async function installUpdate() {
-  if (!updateInfo.value || isInstallingUpdate.value) {
-    return
-  }
+	if (!updateInfo.value || isInstallingUpdate.value) {
+		return;
+	}
 
-  isInstallingUpdate.value = true
-  updateStatus.value = 'Baixando atualização...'
+	isInstallingUpdate.value = true;
+	updateStatus.value = "Baixando atualização...";
 
-  try {
-    await downloadAndInstallAppUpdate((progress) => {
-      updateStatus.value =
-        progress.percentage === null
-          ? 'Baixando atualização...'
-          : `Baixando atualização... ${progress.percentage}%`
-    })
-  } catch (error) {
-    updateStatus.value =
-      error instanceof Error ? error.message : 'Não foi possível instalar a atualização.'
-    isInstallingUpdate.value = false
-  }
+	try {
+		await downloadAndInstallAppUpdate((progress) => {
+			updateStatus.value =
+				progress.percentage === null
+					? "Baixando atualização..."
+					: `Baixando atualização... ${progress.percentage}%`;
+		});
+	} catch (error) {
+		updateStatus.value =
+			error instanceof Error
+				? error.message
+				: "Não foi possível instalar a atualização.";
+		isInstallingUpdate.value = false;
+	}
 }
 
 function formatDate(value: string | null) {
-  return value ? dayjs(value).format('DD/MM/YYYY HH:mm') : 'Não disponível'
+	return value ? dayjs(value).format("DD/MM/YYYY HH:mm") : "Não disponível";
 }
 
 function yesNo(value: boolean | undefined) {
-  return value ? 'Ativado' : 'Desativado'
+	return value ? "Ativado" : "Desativado";
 }
 
 function maskPath(value: string | null) {
-  if (!value) {
-    return 'Não selecionado'
-  }
+	if (!value) {
+		return "Não selecionado";
+	}
 
-  const normalized = value.replace(/\//g, '\\')
-  const parts = normalized.split('\\').filter(Boolean)
-  const filename = parts[parts.length - 1] ?? normalized
-  const root = normalized.match(/^[A-Za-z]:/)?.[0] ?? ''
+	const normalized = value.replace(/\//g, "\\");
+	const parts = normalized.split("\\").filter(Boolean);
+	const filename = parts[parts.length - 1] ?? normalized;
+	const root = normalized.match(/^[A-Za-z]:/)?.[0] ?? "";
 
-  return root ? `${root}\\...\\${filename}` : `...\\${filename}`
+	return root ? `${root}\\...\\${filename}` : `...\\${filename}`;
 }
 
 const retentionOptions = [
-  { id: 'forever', label: 'Manter sempre' },
-  { id: '180', label: 'Após 6 meses' },
-  { id: '365', label: 'Após 1 ano' },
-  { id: '730', label: 'Após 2 anos' },
-]
+	{ id: "forever", label: "Manter sempre" },
+	{ id: "180", label: "Após 6 meses" },
+	{ id: "365", label: "Após 1 ano" },
+	{ id: "730", label: "Após 2 anos" },
+];
 </script>
 
 <template>
   <section class="grid max-w-4xl gap-6">
     <div class="flex flex-col gap-1">
       <span class="text-display">{{ t('settings.title') }}</span>
-      <span class="text-body text-ink-soft"
-        >{{ t('settings.subtitle') }}</span
-      >
+      <span class="text-body text-ink-soft">{{ t('settings.subtitle') }}</span>
     </div>
 
     <div class="grid border border-border bg-surface">
       <div class="flex items-center justify-between gap-6 p-4">
         <div class="grid gap-1">
           <span class="text-heading">{{ t('settings.language') }}</span>
-          <span class="text-body text-ink-soft">{{ t('settings.languageDescription') }}</span>
+          <span class="text-body text-ink-soft">{{
+            t('settings.languageDescription')
+          }}</span>
         </div>
         <Select
           class="max-w-64"
-          :items="supportedLanguages"
+          :items="supportedLanguages as any"
           :model-value="selectedLanguage"
           @update:model-value="setLanguage(String($event.id))"
         >
-          <template #selected="{ item }"><span>{{ item?.label }}</span></template>
-          <template #item="{ item }"><span>{{ item.label }}</span></template>
+          <template #selected="{ item }"
+            ><span>{{ item?.label }}</span></template
+          >
+          <template #item="{ item }"
+            ><span>{{ item.label }}</span></template
+          >
         </Select>
       </div>
     </div>
@@ -376,9 +392,9 @@ const retentionOptions = [
       <div class="flex items-center justify-between gap-6 border-b border-border p-4">
         <div class="grid gap-1">
           <span class="text-heading">{{ t('settings.notifications') }}</span>
-          <span class="text-body text-ink-soft"
-            >{{ t('settings.notificationsDescription') }}</span
-          >
+          <span class="text-body text-ink-soft">{{
+            t('settings.notificationsDescription')
+          }}</span>
         </div>
 
         <Toggle
@@ -390,9 +406,9 @@ const retentionOptions = [
       <div class="flex items-center justify-between gap-6 border-b border-border p-4">
         <div class="grid gap-1">
           <span class="text-heading">{{ t('settings.badge') }}</span>
-          <span class="text-body text-ink-soft"
-            >{{ t('settings.badgeDescription') }}</span
-          >
+          <span class="text-body text-ink-soft">{{
+            t('settings.badgeDescription')
+          }}</span>
         </div>
 
         <Toggle
@@ -404,9 +420,9 @@ const retentionOptions = [
       <div class="flex items-center justify-between gap-6 border-b border-border p-4">
         <div class="grid gap-1">
           <span class="text-heading">{{ t('settings.startWindows') }}</span>
-          <span class="text-body text-ink-soft"
-            >{{ t('settings.startWindowsDescription') }}</span
-          >
+          <span class="text-body text-ink-soft">{{
+            t('settings.startWindowsDescription')
+          }}</span>
         </div>
 
         <Toggle
@@ -418,9 +434,9 @@ const retentionOptions = [
       <div class="flex items-center justify-between gap-6 border-b border-border p-4">
         <div class="grid gap-1">
           <span class="text-heading">{{ t('settings.startMinimized') }}</span>
-          <span class="text-body text-ink-soft"
-            >{{ t('settings.startMinimizedDescription') }}</span
-          >
+          <span class="text-body text-ink-soft">{{
+            t('settings.startMinimizedDescription')
+          }}</span>
         </div>
 
         <Toggle
@@ -432,9 +448,9 @@ const retentionOptions = [
       <div class="flex items-center justify-between gap-6 p-4">
         <div class="grid gap-1">
           <span class="text-heading">{{ t('settings.minimizeTray') }}</span>
-          <span class="text-body text-ink-soft"
-            >{{ t('settings.minimizeTrayDescription') }}</span
-          >
+          <span class="text-body text-ink-soft">{{
+            t('settings.minimizeTrayDescription')
+          }}</span>
         </div>
 
         <Toggle
@@ -465,7 +481,7 @@ const retentionOptions = [
         </div>
 
         <Select
-          :items="retentionOptions"
+          :items="retentionOptions as any"
           :model-value="selectedRetention"
           @update:model-value="updateCompletedRetentionDays($event.id)"
           placeholder="Selecione a prioridade"
