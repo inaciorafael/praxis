@@ -417,10 +417,13 @@ Before claiming tags/filtros are ready:
 
 ## 14. E-Ink Themes
 
-Praxis supports two explicit appearance modes:
+Praxis supports five explicit appearance themes:
 
 - `light`: matte electronic-paper background, presented to the user as `Papel`
 - `dark`: charcoal electronic-paper background with soft light ink
+- `sepia`: warm light paper
+- `forest`: dark green surfaces
+- `midnight`: dark blue surfaces
 
 Rules:
 
@@ -428,6 +431,8 @@ Rules:
 - A localStorage mirror is applied before Vue mounts to avoid a light-theme flash.
 - The backend configuration remains the authoritative preference.
 - Tauri's native application theme is synchronized so the Windows title bar follows the selected mode.
+- `light` and `sepia` map to the native light scheme; `dark`, `forest`, and `midnight` map to the native dark scheme.
+- The frontend theme catalog drives the settings selector. Keep its IDs/schemes aligned with the inline startup script, CSS palettes, and Rust enum.
 - Neutral tokens (`paper`, `surface`, `hover`, `selection`, `border`, `ink`, `ink-soft`, and `ink-muted`) change by theme.
 - Status and identity colors remain stable between themes.
 - Text placed over accent/status colors must use `on-accent`, never `paper`.
@@ -500,7 +505,7 @@ The startup splash is rendered directly by `index.html`, before Vue and the appl
 Rules:
 
 - Never show an unstyled white frame while the WebView initializes.
-- Apply the locally stored light or dark theme before the first paint.
+- Apply any supported locally stored theme before the first paint; fall back to `light` for unknown values or unavailable storage.
 - Keep the splash lightweight and independent from Vue, Pinia, Tauri commands and remote assets.
 - Remove it only after configuration and vault initialization complete and the mounted UI paints.
 - Keep a ten-second failsafe so initialization errors can never leave the application permanently covered.
@@ -534,4 +539,28 @@ Rules:
 - The creator explicitly authorizes the public Pix key and QR Code distributed with Praxis.
 - Public support data lives in `src/shared/config/support.ts`; the QR Code lives in `public/assets`.
 - `VITE_PRAXIS_PIX_KEY` remains available as an optional build-time override.
-- Show the complete public key, provide explicit copy feedback and preserve a white quiet zone around the QR Code for reliable scanning in both themes.
+- Show the complete public key, provide explicit copy feedback and preserve a white quiet zone around the QR Code for reliable scanning in every theme.
+
+## 20. Flexible Visual Boards
+
+- Boards start with a blank canvas for general sketches, flows and drawings. Official task links are optional, exposed in element details, and existing semantic cards remain compatible. Content stays inside the encrypted vault. Product scope is personal use, screen sharing and explicit PNG export.
+- The SVG/Vue editor loads lazily through `/app/boards`; it adds no graphics dependency or second frontend runtime.
+- Board task cards reference official task IDs. Opening a linked task loads its exact current task and checklist; deleting a visual reference does not delete the task.
+- Task creation and board linking share one Rust document mutation with idempotent operation IDs.
+- Autosave coalesces settled edits and never persists camera motion at pointer frequency. Failed saves preserve the in-memory draft and pause automatic retries.
+- Every vault write checks a document revision. Board mutations hold the lock across fresh read/mutation/commit; stale task snapshots are rejected rather than overwriting newer edits.
+- Encrypted vault writes use a synced temporary file and final replacement; headers and fingerprints advance only after successful commit.
+- Tray exit, route exit and vault lock flush pending board text/content and require explicit discard on save failure.
+- See `docs/BOARDS.md` for limits and recovery semantics. Large-scene performance, a durable unsaved-draft journal and backup retention remain separate future work.
+
+## 21. Reusable Papers
+
+- Papers belong to the main thinking workflow; task views belong to the action workflow. The visible model distinguishes free visual documents, written task notes, official actions and their reminders. See `PAPER_CONCEPT.md`.
+- Task-to-Paper navigation retains `fromTaskId` and optional `elementId`. Return opens the exact official task beside the canvas only when the origin belongs to its loaded real contexts. Both whole-document and element-reference navigation save the task draft and flush the canvas before leaving.
+- Whole-document links can be created from either the task editor or the Paper context menu using existing atomic persistence. Library cards use summary data only; no per-card context reads or scene loading are introduced.
+
+- Paper is the product concept/name for the existing Board canvas, with its white background, drawing styles, rich text and PNG export. Legacy `kind: board|paper` metadata remains compatible but does not distinguish capabilities or libraries. Reading older documents requires no migration write.
+- All canvases share one Papers library at `/app/papers`; `/app/boards` redirects there preserving context parameters. Any existing canvas may be attached to multiple official tasks. Task notes and reminders use the same task editor, without embedding canvas JSON in notes HTML or introducing another task model.
+- `paperLinks` stores task/document relations separately from element-level task links. Creation with attachment is atomic and idempotent. Deleting either endpoint cleans relations while preserving the other endpoint.
+- Switching documents commits text and flushes the current canvas. Opening from the task editor saves its draft and verifies tag persistence; failures block navigation and retain the draft.
+- Link mutations refresh library and context views only after successful persistence. Opening a linked task validates the exact reference and loads its current checklist, including archived tasks.

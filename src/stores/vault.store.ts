@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { clearBoardMemory, prepareBoardExit } from '@/shared/lib/boards/board-lifecycle.service';
 
 import {
 	closeDataFile,
@@ -203,9 +204,13 @@ export const useVaultStore = defineStore("vault", {
 
 		async close() {
 			try {
+				if (!(await prepareBoardExit())) return false;
 				this.applyStatus(await closeDataFile());
+				await clearBoardMemory();
+				return true;
 			} catch (error) {
 				this.error = errorMessage(error, "Nao foi possivel bloquear o cofre.");
+				return false;
 			}
 		},
 	},

@@ -1,6 +1,7 @@
 mod app_config;
 mod app_navigation;
 mod badge;
+mod boards;
 mod checklist;
 mod jump_list;
 mod lifecycle;
@@ -125,6 +126,22 @@ pub fn run() {
             app_config::get_app_config,
             app_config::update_app_config,
             app_config::get_app_health,
+            tray::finish_quit,
+            boards::list_boards,
+            boards::get_board,
+            boards::create_board,
+            boards::save_board,
+            boards::delete_board,
+            boards::create_board_task,
+            boards::get_board_tasks,
+            boards::get_board_task_details,
+            boards::list_task_board_refs,
+            boards::list_task_papers,
+            boards::list_paper_task_contexts,
+            boards::create_task_paper,
+            boards::attach_task_paper,
+            boards::detach_task_paper,
+            boards::export_board_png,
             app_navigation::take_app_navigation_request,
             lifecycle::list_task_timeline,
             badge::get_badge_count,

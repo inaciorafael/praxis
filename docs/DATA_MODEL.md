@@ -741,6 +741,16 @@ Frontend should not directly access persistence. It should call service boundari
 
 ## Open Decisions
 
+### Implemented visual document extension
+
+The encrypted structured document contains an optional `boards` collection. All its visual documents are Papers in the product. Legacy metadata `kind: board|paper`, including missing kind, is preserved for compatibility without writing during hydration. It does not distinguish libraries or capabilities. Every document uses the versioned scene, elements and revision checks described in `BOARDS.md`.
+
+Optional `paperLinks` entries contain `taskId`, `paperId` and `createdAt`. A reference must point to an official task and an existing visual document, including a legacy Board. One Paper can serve several tasks. Archived tasks retain links. Permanent task deletion removes only its references; Paper deletion removes only its references and document. Optional `paperCreateOperations` entries record `operationId`, `taskId` and `paperId` for atomic creation retry protection. Deleted Papers are not recreated by replaying an old operation.
+
+Task `notes` and `reminderAt` remain unchanged. There is no separate annotation entity in this implementation. Reading older vaults does not create Paper sections.
+
+Visual elements may carry `strokeWidth` (0.5–32, optional), `strokeColor` (strict hexadecimal `#RRGGBB`, optional) and `opacity` (0.05–1, default 1). Missing stroke width/color retain existing style defaults. These fields are encrypted with the scene, validated on write, and participate in autosave, undo and PNG export.
+
 - Whether the user must create a password, or whether the encryption key is fully OS-managed.
 - Whether file password recovery is explicitly impossible, or whether Praxis offers a recovery key flow.
 - Whether the first MVP stores encrypted SQLite directly in `.praxis`, or stores an encrypted structured document and later migrates to SQLite.

@@ -1,5 +1,6 @@
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
+import { prepareBoardExit } from '@/shared/lib/boards/board-lifecycle.service';
 
 export type AppUpdateInfo = {
 	currentVersion: string;
@@ -36,6 +37,7 @@ export async function downloadAndInstallAppUpdate(
 
 	let downloadedBytes = 0;
 	let totalBytes: number | null = null;
+	if (!(await prepareBoardExit())) return false;
 
 	await pendingUpdate.downloadAndInstall((event) => {
 		const progress = readDownloadProgress(event, downloadedBytes, totalBytes);

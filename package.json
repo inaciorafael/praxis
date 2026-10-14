@@ -11,6 +11,7 @@
 		"tauri": "node scripts/tauri.mjs"
 	},
 	"dependencies": {
+		"@fontsource/caveat": "^5.3.0",
 		"@lucide/vue": "^1.21.0",
 		"@tauri-apps/api": "^2",
 		"@tauri-apps/plugin-autostart": "^2",
@@ -24,6 +25,7 @@
 		"@tiptap/vue-3": "^3.27.1",
 		"dayjs": "^1.11.21",
 		"pinia": "^3.0.4",
+		"roughjs": "^4.6.6",
 		"vue": "^3.5.13",
 		"vue-i18n": "^11.4.6",
 		"vue-router": "^4.6.4"

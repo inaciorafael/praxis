@@ -1,5 +1,5 @@
 :root,
-html[data-theme='light'] {
+[data-theme='light'] {
   color-scheme: light;
 
   /* Matte E-Ink paper: deliberately dimmer than a conventional light UI. */
@@ -21,7 +21,7 @@ html[data-theme='light'] {
   --shadow-color: rgba(53, 51, 47, 0.12);
 }
 
-html[data-theme='dark'] {
+[data-theme='dark'] {
   color-scheme: dark;
 
   --paper: #20211f;
@@ -38,6 +38,69 @@ html[data-theme='dark'] {
   --on-accent: #f4f1e9;
 
   --focus-ring: rgba(180, 106, 43, 0.28);
+  --overlay: rgba(0, 0, 0, 0.42);
+  --shadow-color: rgba(0, 0, 0, 0.28);
+}
+
+[data-theme='sepia'] {
+  color-scheme: light;
+
+  --paper: #e8ddc7;
+  --surface: #dfd1b7;
+  --surface-strong: #d5c5a8;
+  --hover: #cdbb9b;
+  --selection: #c4af8b;
+  --border: #baa685;
+  --border-strong: #a48d6b;
+
+  --ink: #3e3326;
+  --ink-soft: #665744;
+  --ink-muted: #726048;
+  --on-accent: #f4f1e9;
+
+  --focus-ring: rgba(168, 95, 31, 0.24);
+  --overlay: rgba(62, 51, 38, 0.24);
+  --shadow-color: rgba(62, 51, 38, 0.12);
+}
+
+[data-theme='forest'] {
+  color-scheme: dark;
+
+  --paper: #1c2722;
+  --surface: #25332b;
+  --surface-strong: #2d3d33;
+  --hover: #35473b;
+  --selection: #405446;
+  --border: #4b6052;
+  --border-strong: #617767;
+
+  --ink: #e1e8de;
+  --ink-soft: #b7c6b5;
+  --ink-muted: #91a58f;
+  --on-accent: #f4f1e9;
+
+  --focus-ring: rgba(180, 106, 43, 0.32);
+  --overlay: rgba(0, 0, 0, 0.42);
+  --shadow-color: rgba(0, 0, 0, 0.28);
+}
+
+[data-theme='midnight'] {
+  color-scheme: dark;
+
+  --paper: #1c2433;
+  --surface: #252f42;
+  --surface-strong: #2d394f;
+  --hover: #35435b;
+  --selection: #40516d;
+  --border: #4c5e78;
+  --border-strong: #637792;
+
+  --ink: #e2e6ef;
+  --ink-soft: #bac5d8;
+  --ink-muted: #94a5bf;
+  --on-accent: #f4f1e9;
+
+  --focus-ring: rgba(180, 106, 43, 0.32);
   --overlay: rgba(0, 0, 0, 0.42);
   --shadow-color: rgba(0, 0, 0, 0.28);
 }
@@ -99,16 +162,9 @@ html[data-theme='dark'] {
   --tag-rosewood-bg: rgba(155, 95, 92, 0.15);
 }
 
-.theme-preview-paper {
-  --preview-paper: #dddcd6;
-  --preview-surface: #d6d4cd;
-  --preview-border: #b9b5ac;
-  --preview-ink: #35332f;
-}
-
-.theme-preview-dark {
-  --preview-paper: #20211f;
-  --preview-surface: #292a27;
-  --preview-border: #484941;
-  --preview-ink: #e7e3d9;
+.theme-preview {
+  --preview-paper: var(--paper);
+  --preview-surface: var(--surface);
+  --preview-border: var(--border);
+  --preview-ink: var(--ink);
 }

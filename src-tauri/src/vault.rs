@@ -1,5 +1,6 @@
 use std::{
     fs,
+    io::Write,
     path::{Path, PathBuf},
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
@@ -495,8 +496,15 @@ pub fn read_active_document(state: &VaultStore) -> Result<Value, String> {
         .active
         .as_ref()
         .ok_or_else(|| "Abra um arquivo .praxis antes de continuar.".to_string())?;
+    read_document(active)
+}
+
+fn read_document(active: &ActiveVault) -> Result<Value, String> {
     let data_file = read_data_file(&active.path)?;
     let header = validate_header(data_file.header)?;
+    if header.file_id != active.header.file_id {
+        return Err("O arquivo selecionado nao e o mesmo cofre aberto.".into());
+    }
     let nonce = decode_fixed::<24>(&header.encryption.nonce, "nonce")?;
     let document = decrypt_payload(&active.key, &nonce, &data_file.ciphertext)?;
     validate_plaintext(&document)?;
@@ -515,27 +523,232 @@ pub fn write_active_document(state: &VaultStore, document: &mut Value) -> Result
         .active
         .as_mut()
         .ok_or_else(|| "Abra um arquivo .praxis antes de continuar.".to_string())?;
+    commit_document(active, document)
+}
+
+/// Runs a fresh read, domain mutation and encrypted commit under the same vault lock.
+pub(crate) fn mutate_active_document<T>(
+    state: &VaultStore,
+    mutate: impl FnOnce(&mut Value) -> Result<T, String>,
+) -> Result<T, String> {
+    let mut state = state
+        .0
+        .lock()
+        .map_err(|_| "Nao foi possivel acessar o cofre.")?;
+    let active = state
+        .active
+        .as_mut()
+        .ok_or("Abra um arquivo .praxis antes de continuar.")?;
     ensure_file_was_not_changed_externally(active)?;
+    let mut document = read_document(active)?;
+    let before = document.clone();
+    let result = mutate(&mut document)?;
+    if document != before {
+        commit_document(active, &mut document)?;
+    }
+    Ok(result)
+}
+
+fn document_revision(document: &Value) -> Result<u64, String> {
+    match document.pointer("/metadata/revision") {
+        None => Ok(0),
+        Some(value) => value
+            .as_u64()
+            .ok_or_else(|| "Revisao do cofre invalida.".into()),
+    }
+}
+
+#[cfg(test)]
+mod persistence_tests {
+    use super::*;
+
+    struct Fixture {
+        state: VaultStore,
+        directory: PathBuf,
+        path: PathBuf,
+    }
+    impl Fixture {
+        fn new() -> Self {
+            let directory =
+                std::env::temp_dir().join(format!("praxis-vault-test-{}", Uuid::new_v4()));
+            let path = directory.join("fixture.praxis");
+            let now = now_iso().unwrap();
+            let key = Zeroizing::new([7_u8; 32]);
+            let nonce = [3_u8; 24];
+            let header = DataFileHeader {
+                app: APP_NAME.into(),
+                format_version: FORMAT_VERSION,
+                file_id: Uuid::new_v4().to_string(),
+                created_at: now.clone(),
+                updated_at: now.clone(),
+                schema_version: SCHEMA_VERSION,
+                encryption: EncryptionHeader {
+                    algorithm: "XChaCha20-Poly1305".into(),
+                    kdf: "Argon2id".into(),
+                    salt: BASE64.encode([1_u8; 16]),
+                    nonce: BASE64.encode(nonce),
+                },
+            };
+            let document = initial_plaintext(&now);
+            write_data_file(
+                &path,
+                &PraxisDataFile {
+                    header: header.clone(),
+                    ciphertext: encrypt_payload(&key, &nonce, &document).unwrap(),
+                },
+            )
+            .unwrap();
+            let active = ActiveVault {
+                path: path.clone(),
+                header,
+                file_fingerprint: file_fingerprint(&path).unwrap(),
+                safety_copies_dir: directory.join("copies"),
+                key,
+            };
+            Self {
+                state: VaultStore(Mutex::new(VaultState {
+                    active: Some(active),
+                    auto_unlock_error: None,
+                })),
+                directory,
+                path,
+            }
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.directory);
+        }
+    }
+
+    #[test]
+    fn encrypted_atomic_roundtrip_rejects_stale_writers_and_skips_noop() {
+        let fixture = Fixture::new();
+        let mut stale = read_active_document(&fixture.state).unwrap();
+        let mut latest = stale.clone();
+        latest["settings"]["privateNote"] = json!("secret-board-text");
+        write_active_document(&fixture.state, &mut latest).unwrap();
+        assert_eq!(document_revision(&latest).unwrap(), 1);
+        assert_eq!(read_active_document(&fixture.state).unwrap(), latest);
+        assert!(!fs::read_to_string(&fixture.path)
+            .unwrap()
+            .contains("secret-board-text"));
+        let bytes = fs::read(&fixture.path).unwrap();
+        write_active_document(&fixture.state, &mut latest).unwrap();
+        mutate_active_document(&fixture.state, |_| Ok(())).unwrap();
+        assert_eq!(fs::read(&fixture.path).unwrap(), bytes);
+        assert_eq!(
+            fs::read_dir(fixture.directory.join("copies"))
+                .unwrap()
+                .count(),
+            1
+        );
+        stale["settings"]["stale"] = json!(true);
+        assert!(write_active_document(&fixture.state, &mut stale).is_err());
+        assert_eq!(fs::read(&fixture.path).unwrap(), bytes);
+        assert_eq!(
+            fs::read_dir(&fixture.directory)
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "tmp"))
+                .count(),
+            0
+        );
+    }
+
+    #[test]
+    fn failed_mutation_and_external_conflict_preserve_file_and_header() {
+        let fixture = Fixture::new();
+        let bytes = fs::read(&fixture.path).unwrap();
+        let result: Result<(), String> = mutate_active_document(&fixture.state, |document| {
+            document["settings"]["changed"] = json!(true);
+            Err("Domain validation failed".into())
+        });
+        assert!(result.is_err());
+        assert_eq!(fs::read(&fixture.path).unwrap(), bytes);
+        let mut stale = read_active_document(&fixture.state).unwrap();
+        let nonce = fixture
+            .state
+            .0
+            .lock()
+            .unwrap()
+            .active
+            .as_ref()
+            .unwrap()
+            .header
+            .encryption
+            .nonce
+            .clone();
+        let mut external = bytes.clone();
+        external.push(b' ');
+        fs::write(&fixture.path, &external).unwrap();
+        stale["settings"]["changed"] = json!(true);
+        assert!(write_active_document(&fixture.state, &mut stale).is_err());
+        assert_eq!(fs::read(&fixture.path).unwrap(), external);
+        assert_eq!(
+            fixture
+                .state
+                .0
+                .lock()
+                .unwrap()
+                .active
+                .as_ref()
+                .unwrap()
+                .header
+                .encryption
+                .nonce,
+            nonce
+        );
+    }
+}
+
+fn commit_document(active: &mut ActiveVault, document: &mut Value) -> Result<(), String> {
+    validate_plaintext(document)?;
+    ensure_file_was_not_changed_externally(active)?;
+    let current = read_document(active)?;
+    let revision = document_revision(&current)?;
+    if document_revision(document)? != revision {
+        return Err(
+            "O cofre mudou durante esta operacao. Recarregue os dados antes de tentar novamente."
+                .into(),
+        );
+    }
+    if document == &current {
+        return Ok(());
+    }
+    let next_revision = revision
+        .checked_add(1)
+        .ok_or("Limite de revisoes do cofre atingido.")?;
     create_safety_copy(active, "before-write")?;
 
     let now = now_iso()?;
     let mut nonce = [0_u8; 24];
     rand::thread_rng().fill_bytes(&mut nonce);
 
-    if let Some(metadata) = document.get_mut("metadata").and_then(Value::as_object_mut) {
-        metadata.insert("updatedAt".into(), Value::String(now.clone()));
-    }
+    let mut saved = document.clone();
+    let object = saved
+        .as_object_mut()
+        .ok_or("Documento do cofre invalido.")?;
+    let metadata = object.entry("metadata").or_insert_with(|| json!({}));
+    let metadata = metadata
+        .as_object_mut()
+        .ok_or("Metadados do cofre invalidos.")?;
+    metadata.insert("updatedAt".into(), Value::String(now.clone()));
+    metadata.insert("revision".into(), json!(next_revision));
 
-    active.header.updated_at = now;
-    active.header.encryption.nonce = BASE64.encode(nonce);
-    let ciphertext = encrypt_payload(&active.key, &nonce, document)?;
+    let mut header = active.header.clone();
+    header.updated_at = now;
+    header.encryption.nonce = BASE64.encode(nonce);
+    let ciphertext = encrypt_payload(&active.key, &nonce, &saved)?;
     let data_file = PraxisDataFile {
-        header: active.header.clone(),
+        header: header.clone(),
         ciphertext,
     };
 
     write_data_file(&active.path, &data_file)?;
+    active.header = header;
     active.file_fingerprint = file_fingerprint(&active.path)?;
+    *document = saved;
     Ok(())
 }
 
@@ -612,7 +825,49 @@ fn write_data_file(path: &Path, data_file: &PraxisDataFile) -> Result<(), String
     }
 
     let content = serde_json::to_string_pretty(data_file).map_err(|error| error.to_string())?;
-    fs::write(path, content).map_err(|error| error.to_string())
+    let temporary = path.with_file_name(format!(".praxis-{}.tmp", Uuid::new_v4()));
+    let result = (|| {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(|error| error.to_string())?;
+        file.write_all(content.as_bytes())
+            .map_err(|error| error.to_string())?;
+        file.sync_all().map_err(|error| error.to_string())?;
+        drop(file);
+        replace_file(&temporary, path)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+#[cfg(target_os = "windows")]
+fn replace_file(source: &Path, target: &Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::{
+        core::PCWSTR,
+        Win32::Storage::FileSystem::{
+            MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+        },
+    };
+    let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
+    let target: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
+    unsafe {
+        MoveFileExW(
+            PCWSTR(source.as_ptr()),
+            PCWSTR(target.as_ptr()),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    }
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn replace_file(source: &Path, target: &Path) -> Result<(), String> {
+    fs::rename(source, target).map_err(|error| error.to_string())
 }
 
 fn ensure_file_was_not_changed_externally(active: &ActiveVault) -> Result<(), String> {
@@ -639,10 +894,11 @@ fn create_safety_copy(active: &ActiveVault, reason: &str) -> Result<PathBuf, Str
         .and_then(|value| value.to_str())
         .unwrap_or("praxis");
     let copy_path = active.safety_copies_dir.join(format!(
-        "{}-{}-{}.praxis",
+        "{}-{}-{}-{}.praxis",
         file_stem,
         now_file_stamp(),
-        reason
+        reason,
+        Uuid::new_v4()
     ));
 
     fs::copy(&active.path, &copy_path).map_err(|error| error.to_string())?;

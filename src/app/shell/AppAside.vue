@@ -1,44 +1,44 @@
 <script setup lang="ts">
-import { RouterLink, useRouter } from "vue-router";
+import { RouterLink, useRouter } from 'vue-router'
 
-import { AppNavigationItem, appNavigationItems } from "@/app/shell/navigation";
-import { useTaskStore } from "@/stores/task.store";
-import { useTagStore } from "@/stores/tag.store";
-import { useVaultStore } from "@/stores/vault.store";
-import { useBadgeStore } from "@/stores/badge.store";
-import { LogOut, Plus, RefreshCw, Search } from "@lucide/vue";
-import dayjs from "dayjs";
-import { useI18n } from "vue-i18n";
+import { AppNavigationItem, appNavigationGroups } from '@/app/shell/navigation'
+import { useTaskStore } from '@/stores/task.store'
+import { useTagStore } from '@/stores/tag.store'
+import { useVaultStore } from '@/stores/vault.store'
+import { useBadgeStore } from '@/stores/badge.store'
+import { LogOut, Plus, RefreshCw, Search } from '@lucide/vue'
+import dayjs from 'dayjs'
+import { useI18n } from 'vue-i18n'
 
-const vault = useVaultStore();
-const tasks = useTaskStore();
-const tags = useTagStore();
-const badge = useBadgeStore();
-const router = useRouter();
-const { t } = useI18n();
+const vault = useVaultStore()
+const tasks = useTaskStore()
+const tags = useTagStore()
+const badge = useBadgeStore()
+const router = useRouter()
+const { t } = useI18n()
 
 const emit = defineEmits<{
-	handleClickSearchTask: [];
-}>();
+  handleClickSearchTask: []
+}>()
 
-function getBadgeCount(key: AppNavigationItem["badgeKey"]) {
-	if (!key) {
-		return 0;
-	}
+function getBadgeCount(key: AppNavigationItem['badgeKey']) {
+  if (!key) {
+    return 0
+  }
 
-	return tasks.viewCounts[key] ?? 0;
+  return tasks.viewCounts[key] ?? 0
 }
 
 async function lockVault() {
-	await vault.close();
-	tasks.resetLocal();
-	tags.resetLocal();
-	await badge.clear();
-	await router.replace({ name: "vault" });
+  if (!(await vault.close())) return
+  tasks.resetLocal()
+  tags.resetLocal()
+  await badge.clear()
+  await router.replace({ name: 'vault' })
 }
 
 function openFreeCreateModal() {
-	tasks.openFreeCreateTaskModal();
+  tasks.openFreeCreateTaskModal()
 }
 </script>
 
@@ -68,9 +68,19 @@ function openFreeCreateModal() {
         <span>{{ t('nav.newTask') }}</span>
       </button>
 
-      <div class="flex flex-col gap-2">
+      <section
+        v-for="group in appNavigationGroups"
+        :key="group.labelKey"
+        class="flex flex-col gap-1"
+        :aria-label="t(group.labelKey)"
+      >
+        <h2
+          class="px-3 text-caption font-semibold uppercase tracking-wider text-ink-muted"
+        >
+          {{ t(group.labelKey) }}
+        </h2>
         <RouterLink
-          v-for="item in appNavigationItems"
+          v-for="item in group.items"
           v-slot="{ isActive }"
           :key="item.to"
           :to="item.to"
@@ -99,10 +109,17 @@ function openFreeCreateModal() {
             </span>
           </div>
         </RouterLink>
-      </div>
+      </section>
     </div>
 
     <div class="border-t flex flex-col gap-3 border-border py-3">
+      <p
+        v-if="vault.error"
+        class="text-small text-brick"
+        role="alert"
+      >
+        {{ vault.error }}
+      </p>
       <div
         v-if="vault.active"
         class="flex text-sage font-semibold flex-row gap-2 items-center"

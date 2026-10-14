@@ -39,6 +39,16 @@ export const router = createRouter({
       meta: { requiresVault: true },
       children: [
         {
+          path: 'papers',
+          name: 'papers',
+          component: () => import('@/pages/boards/BoardsPage.vue'),
+        },
+        {
+          path: 'boards',
+          name: 'boards',
+          redirect: to => ({ name: 'papers', query: to.query, hash: to.hash }),
+        },
+        {
           path: 'today',
           name: 'today',
           component: TodayPage,

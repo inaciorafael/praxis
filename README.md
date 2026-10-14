@@ -1,6 +1,6 @@
 # Praxis
 
-Praxis is a private desktop task manager built for one clear promise: create a task, remember it at the right time, and finish the day with nothing important forgotten.
+Praxis is a private desktop workspace for understanding work, preserving its context, and completing it without forgetting decisions or commitments.
 
 Most task apps become project management systems. Praxis goes the other way. It is focused on daily execution, simple planning, reminders, pending counts, and a calm interface inspired by e-ink screens.
 
@@ -29,7 +29,7 @@ Praxis is guided by four principles:
 - **Daily clarity**: the most important view is what needs attention now.
 - **Low friction**: create, update, complete, and move on.
 
-Praxis is not trying to replace a full project management suite. It is a focused workspace for daily tasks, simple planning, reminders, and private personal execution.
+Praxis brings flexible visual thinking and daily execution together: drawings, open questions, decisions, tasks, and reminders stay connected in an encrypted local vault.
 
 ## Screenshots
 
@@ -52,6 +52,22 @@ Reminders are grouped by urgency, including overdue reminders, today, tomorrow, 
 ![Praxis reminders grouped](docs/assets/praxis-reminders.png)
 
 ## Features
+
+### Papers for visual thinking
+
+A Paper is an infinite digital sheet for exploring ideas before, during and after a task. Keep it independent, or link the same document to several tasks. Task notes preserve written context; tasks hold actions and reminders. Papers live in the main **Think** navigation, alongside **Act** task views. See [the Paper product concept](docs/PAPER_CONCEPT.md).
+
+- Draw flows using text, notes, rectangles, ellipses, frames, connectors, and freehand strokes.
+- Use pencil/pen strokes, locally bundled Caveat handwriting, and sketch-style text highlights on a white canvas.
+- Import local PNG/JPEG/WebP images or paste screenshots.
+- Start with a blank canvas and a compact drawing toolbar; use focus mode for more space.
+- Sketch freely; optionally create or link official Praxis tasks from the element details.
+- Open a task with its current checklist, or return from the task editor to its board context.
+- Pan/zoom, select multiple elements, resize, duplicate, change layer order, and undo/redo drawing changes.
+- Save board content in the encrypted vault, with explicit save/error states and safeguards when leaving or locking.
+- Export a PNG through the native save dialog to share with your team.
+
+Papers currently support personal use and screen sharing. See [Paper usage and limits](docs/BOARDS.md).
 
 ### Task management
 
@@ -264,6 +280,7 @@ Internal technical documentation lives in `docs/`:
 - [Technical decisions](docs/TECHNICAL_DECISIONS.md)
 - [Memory strategy](docs/MEMORY_STRATEGY.md)
 - [Quality audit](docs/QUALITY_AUDIT.md)
+- [Boards](docs/BOARDS.md)
 
 ## Current status
 
@@ -280,4 +297,4 @@ Praxis is not a team workspace.
 Praxis is not a calendar replacement.
 Praxis is not a productivity social network.
 
-Praxis is a small private tool for remembering, planning, and finishing the work that matters.
+Praxis connects private visual thinking, planning, and execution of the work that matters.

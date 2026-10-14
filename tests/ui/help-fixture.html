@@ -1,0 +1,42 @@
+<!doctype html>
+<html
+  lang="pt-BR"
+  data-theme="light"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1"
+    />
+    <title>Praxis — help fixture</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      // Development-only preview. It reads no vault and creates no user data.
+      import { createApp, h } from 'vue'
+      import { createRouter, createWebHashHistory, RouterView } from 'vue-router'
+      import HelpPage from '/src/pages/help/HelpPage.vue'
+      import { i18n } from '/src/shared/lib/i18n/i18n.ts'
+      import '/src/app/styles/main.css'
+      import '/src/app/styles/theme.css'
+      const router = createRouter({
+        history: createWebHashHistory(),
+        routes: [
+          { path: '/', component: HelpPage },
+          {
+            path: '/app/papers',
+            component: { render: () => h('div', 'Papers preview') },
+          },
+          { path: '/app/today', component: { render: () => h('div', 'Today preview') } },
+        ],
+      })
+      i18n.global.locale.value = 'pt-BR'
+      createApp({ render: () => h('div', { class: 'p-8' }, [h(RouterView)]) })
+        .use(router)
+        .use(i18n)
+        .mount('#app')
+    </script>
+  </body>
+</html>

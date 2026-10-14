@@ -9,6 +9,7 @@ import {
   // Archive,
   Bell,
   BookOpen,
+  FilePenLine,
   Settings,
 } from '@lucide/vue'
 
@@ -20,6 +21,11 @@ export type AppNavigationItem = {
 }
 
 export const appNavigationItems: AppNavigationItem[] = [
+  {
+    labelKey: 'nav.papers',
+    to: '/app/papers',
+    icon: FilePenLine,
+  },
   {
     labelKey: 'nav.today',
     to: '/app/today',
@@ -69,5 +75,19 @@ export const appNavigationItems: AppNavigationItem[] = [
     labelKey: 'nav.help',
     to: '/app/help',
     icon: BookOpen,
+  },
+]
+
+export const appNavigationGroups = [
+  {
+    labelKey: 'nav.thinking',
+    items: appNavigationItems.filter((item) => item.to === '/app/papers'),
+  },
+  { labelKey: 'nav.doing', items: appNavigationItems.filter((item) => item.badgeKey) },
+  {
+    labelKey: 'nav.application',
+    items: appNavigationItems.filter(
+      (item) => !item.badgeKey && item.to !== '/app/papers'
+    ),
   },
 ]

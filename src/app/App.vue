@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from "vue";
+import { isTauri, invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { prepareBoardExit } from '@/shared/lib/boards/board-lifecycle.service';
 
 import OverlayHost from "@/shared/ui/OverlayHost.vue";
 import { useAppStore } from "@/stores/app.store";
@@ -14,9 +17,22 @@ import {
 const app = useAppStore();
 const vault = useVaultStore();
 let stopNavigationListener: (() => void) | null = null;
+let stopQuitListener: (() => void) | null = null;
+let isPreparingQuit = false;
 
 onMounted(async () => {
 	try {
+		if (isTauri()) {
+			stopQuitListener = await listen('praxis://quit-requested', async () => {
+				if (isPreparingQuit) return;
+				isPreparingQuit = true;
+				try {
+					if (await prepareBoardExit()) await invoke('finish_quit');
+				} finally {
+					isPreparingQuit = false;
+				}
+			});
+		}
 		stopNavigationListener = await initializeAppNavigation(
 			handleNavigationRequest,
 		);
@@ -34,6 +50,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
 	stopNavigationListener?.();
+	stopQuitListener?.();
 });
 
 async function handleNavigationRequest(request: AppNavigationRequest) {

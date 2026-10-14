@@ -117,9 +117,9 @@ pub struct TaskListResult {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskSearchResult {
-    tasks: Vec<TaskView>,
-    checklist_items: Vec<ChecklistItem>,
-    total: usize,
+    pub(crate) tasks: Vec<TaskView>,
+    pub(crate) checklist_items: Vec<ChecklistItem>,
+    pub(crate) total: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -493,7 +493,19 @@ pub fn create_task(
     today: String,
 ) -> Result<TaskCollection, String> {
     let mut document = read_active_document(&vault)?;
-    let mut tasks = read_tasks_from_document(&document)?;
+    create_task_in_document(&mut document, input)?;
+    let tasks = read_tasks_from_document(&document)?;
+    let reminder_sync = reminders::sync_task_reminders_in_document(&mut document, &tasks)?;
+    write_active_document(&vault, &mut document)?;
+    native_reminders::reconcile_native_reminders(&app, &reminder_sync.reminders);
+    finish_task_collection(app, badge_state, tasks, reminder_sync.reminders, &today)
+}
+
+pub(crate) fn create_task_in_document(
+    document: &mut Value,
+    input: CreateTaskInput,
+) -> Result<String, String> {
+    let mut tasks = read_tasks_from_document(document)?;
     let now = now_iso()?;
     let title = input.title.trim();
 
@@ -525,7 +537,7 @@ pub fn create_task(
     tasks.push(task);
 
     lifecycle::append_events(
-        &mut document,
+        document,
         initial_task_events(
             &task_id,
             &task_title,
@@ -535,11 +547,8 @@ pub fn create_task(
         ),
     )?;
 
-    write_tasks_to_document(&mut document, &tasks)?;
-    let reminder_sync = reminders::sync_task_reminders_in_document(&mut document, &tasks)?;
-    write_active_document(&vault, &mut document)?;
-    native_reminders::reconcile_native_reminders(&app, &reminder_sync.reminders);
-    finish_task_collection(app, badge_state, tasks, reminder_sync.reminders, &today)
+    write_tasks_to_document(document, &tasks)?;
+    Ok(task_id)
 }
 
 #[tauri::command]
@@ -793,6 +802,7 @@ pub fn delete_task(
 
     write_tasks_to_document(&mut document, &tasks)?;
     checklist::remove_task_checklist_items_from_document(&mut document, &id)?;
+    crate::boards::remove_task_paper_links(&mut document, &id)?;
     remove_task_tag_relations_from_document(&mut document, &id)?;
     if let Some(task) = removed_task {
         lifecycle::append_event(
@@ -1210,7 +1220,7 @@ fn active_tasks(tasks: &[Task]) -> Vec<Task> {
         .collect()
 }
 
-fn task_view(task: &Task, checklist_items: &[ChecklistItem], today: &str) -> TaskView {
+pub(crate) fn task_view(task: &Task, checklist_items: &[ChecklistItem], today: &str) -> TaskView {
     TaskView {
         id: task.id.clone(),
         title: task.title.clone(),

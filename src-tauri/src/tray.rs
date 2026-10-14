@@ -4,7 +4,7 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    App, AppHandle, Manager,
+    App, AppHandle, Emitter, Manager,
 };
 
 const OPEN_MENU_ID: &str = "praxis_open";
@@ -72,6 +72,22 @@ pub fn show_main_window(app: &AppHandle) {
 }
 
 fn quit_app(app: &AppHandle) {
+    let vault_active = app
+        .state::<crate::vault::VaultStore>()
+        .0
+        .lock()
+        .map(|state| state.active.is_some())
+        .unwrap_or(false);
+    if vault_active {
+        show_main_window(app);
+        let _ = app.emit("praxis://quit-requested", ());
+        return;
+    }
+    finish_quit(app.clone());
+}
+
+#[tauri::command]
+pub fn finish_quit(app: AppHandle) {
     app.state::<AppLifecycle>().request_quit();
     app.exit(0);
 }

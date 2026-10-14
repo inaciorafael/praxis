@@ -1,4 +1,4 @@
-export type AppTheme = "light" | "dark";
+export type AppTheme = "light" | "dark" | "sepia" | "forest" | "midnight";
 export type AppLanguage = "en" | "pt-BR";
 
 export type AppConfig = {

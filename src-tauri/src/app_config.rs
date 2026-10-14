@@ -28,11 +28,14 @@ pub struct AppConfig {
     pub completed_task_retention_days: Option<u32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AppTheme {
     Light,
     Dark,
+    Sepia,
+    Forest,
+    Midnight,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -324,4 +327,58 @@ fn now_iso() -> Result<String, String> {
     OffsetDateTime::now_utc()
         .format(&Rfc3339)
         .map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AppConfig, AppConfigPatch, AppTheme};
+
+    #[test]
+    fn themes_round_trip_through_persisted_config_and_command_patch() {
+        for (theme, value) in [
+            (AppTheme::Light, "light"),
+            (AppTheme::Dark, "dark"),
+            (AppTheme::Sepia, "sepia"),
+            (AppTheme::Forest, "forest"),
+            (AppTheme::Midnight, "midnight"),
+        ] {
+            let config = AppConfig {
+                theme: theme.clone(),
+                ..AppConfig::default()
+            };
+            let serialized = serde_json::to_value(&config).expect("serialize app config");
+            assert_eq!(serialized["theme"], value);
+
+            let restored: AppConfig =
+                serde_json::from_value(serialized).expect("deserialize app config");
+            assert_eq!(restored.theme, theme);
+
+            let patch: AppConfigPatch = serde_json::from_value(serde_json::json!({
+                "theme": value,
+            }))
+            .expect("deserialize theme patch");
+            assert_eq!(patch.theme, Some(theme));
+        }
+    }
+
+    #[test]
+    fn legacy_config_without_theme_keeps_light_default_and_existing_preferences() {
+        let config: AppConfig = serde_json::from_value(serde_json::json!({
+            "notificationsEnabled": false,
+            "completedTaskRetentionDays": null,
+        }))
+        .expect("deserialize legacy config");
+
+        assert_eq!(config.theme, AppTheme::Light);
+        assert!(!config.notifications_enabled);
+        assert_eq!(config.completed_task_retention_days, None);
+    }
+
+    #[test]
+    fn unknown_theme_is_rejected_instead_of_silently_overwriting_preferences() {
+        let config = serde_json::json!({ "theme": "unknown" });
+
+        assert!(serde_json::from_value::<AppConfig>(config.clone()).is_err());
+        assert!(serde_json::from_value::<AppConfigPatch>(config).is_err());
+    }
 }

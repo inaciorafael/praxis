@@ -15,6 +15,7 @@ import { useNotificationStore } from "@/stores/notification.store";
 import { useTaskStore } from "@/stores/task.store";
 import { useVaultStore } from "@/stores/vault.store";
 import type { AppLanguage, AppTheme } from "@/shared/types/app";
+import { APP_THEMES } from "@/shared/lib/theme/theme.catalog";
 import Toggle from "@/shared/ui/Toggle.vue";
 import Select from "@/shared/ui/Select.vue";
 import TagManager from "@/features/tags/components/TagManager.vue";
@@ -35,6 +36,8 @@ const showcaseStatus = ref("");
 const isSeedingShowcase = ref(false);
 const archiveStatus = ref("");
 const isArchivingCompleted = ref(false);
+const isSavingTheme = ref(false);
+const isHydratingConfig = ref(true);
 
 const config = computed(() => app.config);
 const dataFilePath = computed(() =>
@@ -51,13 +54,17 @@ const selectedLanguage = computed(
 );
 
 onMounted(async () => {
-	await Promise.all([
-		app.hydrateConfig(),
-		vault.hydrate(),
-		badge.hydrate(),
-		notifications.hydrate(),
-		vault.hydrateSafetyCopies(),
-	]);
+	try {
+		await Promise.all([
+			app.hydrateConfig(),
+			vault.hydrate(),
+			badge.hydrate(),
+			notifications.hydrate(),
+			vault.hydrateSafetyCopies(),
+		]);
+	} finally {
+		isHydratingConfig.value = false;
+	}
 });
 
 async function toggleNotifications(enabled: boolean) {
@@ -76,7 +83,18 @@ async function toggleNotifications(enabled: boolean) {
 }
 
 async function setTheme(theme: AppTheme) {
-	await app.updateConfig({ theme });
+	if (
+		isHydratingConfig.value || isSavingTheme.value ||
+		!config.value || config.value.theme === theme
+	) {
+		return;
+	}
+	isSavingTheme.value = true;
+	try {
+		await app.updateConfig({ theme });
+	} finally {
+		isSavingTheme.value = false;
+	}
 }
 
 async function setLanguage(language: string) {
@@ -283,106 +301,37 @@ const retentionOptions = [
           </span>
         </div>
 
-        <div
-          class="grid gap-3 tablet:grid-cols-2"
-          aria-label="Tema do aplicativo"
-        >
+        <div class="grid gap-3 tablet:grid-cols-2 desktop:grid-cols-3" role="group" :aria-label="t('settings.themeLabel')" :aria-busy="isSavingTheme">
           <button
+            v-for="theme in APP_THEMES"
+            :key="theme.id"
             type="button"
-            :aria-pressed="config?.theme === 'light'"
+            :aria-pressed="config?.theme === theme.id"
+            :disabled="isHydratingConfig || !config || isSavingTheme"
             :class="[
-              'grid gap-3 border p-3 text-left transition-colors',
-              config?.theme === 'light'
-                ? 'border-accent bg-selection'
-                : 'border-border bg-paper hover:border-border-strong hover:bg-hover',
+              'grid gap-3 border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-60',
+              config?.theme === theme.id ? 'border-accent bg-selection' : 'border-border bg-paper hover:border-border-strong hover:bg-hover',
             ]"
-            @click="setTheme('light')"
+            @click="setTheme(theme.id)"
           >
-            <span
-              class="theme-preview-paper grid h-20 grid-cols-[2.5rem_1fr] overflow-hidden border border-border"
-            >
-              <span
-                class="border-r"
-                style="
-                  background: var(--preview-surface);
-                  border-color: var(--preview-border);
-                "
-              ></span>
-              <span
-                class="grid content-center gap-2 p-3"
-                style="background: var(--preview-paper)"
-              >
-                <span
-                  class="h-2 w-2/3"
-                  style="background: var(--preview-ink)"
-                ></span>
-                <span
-                  class="h-1.5 w-full opacity-40"
-                  style="background: var(--preview-ink)"
-                ></span>
-                <span
-                  class="h-1.5 w-4/5 opacity-25"
-                  style="background: var(--preview-ink)"
-                ></span>
+            <span class="theme-preview grid h-20 grid-cols-[2.5rem_1fr] overflow-hidden border" :data-theme="theme.id" aria-hidden="true" style="border-color: var(--preview-border)">
+              <span class="border-r" style="background: var(--preview-surface); border-color: var(--preview-border)"></span>
+              <span class="grid content-center gap-2 p-3" style="background: var(--preview-paper)">
+                <span class="h-2 w-2/3" style="background: var(--preview-ink)"></span>
+                <span class="h-1.5 w-full opacity-40" style="background: var(--preview-ink)"></span>
+                <span class="h-1.5 w-4/5 opacity-25" style="background: var(--preview-ink)"></span>
               </span>
             </span>
-            <span class="flex items-center justify-between gap-3">
+            <span class="grid gap-1">
               <span class="flex items-center gap-2 text-body font-semibold text-ink">
-                <Sun :size="17" />
-                {{ t('settings.paper') }}
+                <component :is="theme.colorScheme === 'dark' ? Moon : Sun" :size="17" aria-hidden="true" />
+                {{ t(theme.labelKey) }}
               </span>
-              <span class="text-small text-ink-muted">{{ t('settings.paperHint') }}</span>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            :aria-pressed="config?.theme === 'dark'"
-            :class="[
-              'grid gap-3 border p-3 text-left transition-colors',
-              config?.theme === 'dark'
-                ? 'border-accent bg-selection'
-                : 'border-border bg-paper hover:border-border-strong hover:bg-hover',
-            ]"
-            @click="setTheme('dark')"
-          >
-            <span
-              class="theme-preview-dark grid h-20 grid-cols-[2.5rem_1fr] overflow-hidden border border-border"
-            >
-              <span
-                class="border-r"
-                style="
-                  background: var(--preview-surface);
-                  border-color: var(--preview-border);
-                "
-              ></span>
-              <span
-                class="grid content-center gap-2 p-3"
-                style="background: var(--preview-paper)"
-              >
-                <span
-                  class="h-2 w-2/3"
-                  style="background: var(--preview-ink)"
-                ></span>
-                <span
-                  class="h-1.5 w-full opacity-40"
-                  style="background: var(--preview-ink)"
-                ></span>
-                <span
-                  class="h-1.5 w-4/5 opacity-25"
-                  style="background: var(--preview-ink)"
-                ></span>
-              </span>
-            </span>
-            <span class="flex items-center justify-between gap-3">
-              <span class="flex items-center gap-2 text-body font-semibold text-ink">
-                <Moon :size="17" />
-                {{ t('settings.dark') }}
-              </span>
-              <span class="text-small text-ink-muted">{{ t('settings.darkHint') }}</span>
+              <span class="text-small text-ink-muted">{{ t(theme.hintKey) }}</span>
             </span>
           </button>
         </div>
+        <p v-if="app.error" role="alert" class="text-body text-brick">{{ app.error }}</p>
       </div>
     </div>
 

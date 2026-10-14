@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="forest">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Praxis — board fixture</title><link rel="stylesheet" href="/src/app/styles/theme.css"></head>
+<body><div id="app"></div>
+<script type="module">
+// Development-only fixture: all content is synthetic and persistence remains in memory.
+import { createApp, h } from 'vue'
+import { createPinia } from 'pinia'
+import { createRouter, createWebHashHistory, RouterView } from 'vue-router'
+import BoardsPage from '/src/pages/boards/BoardsPage.vue'
+import TaskPapers from '/src/features/papers/components/TaskPapers.vue'
+import { i18n } from '/src/shared/lib/i18n/i18n.ts'
+import '/src/app/styles/main.css'
+const boards = []
+const tasks = []
+const paperLinks = []
+const paperFixture = new URLSearchParams(location.search).has('papers')
+const now = () => new Date().toISOString()
+if (paperFixture) tasks.push({id:'fixture-task',title:'Organizar ideias do projeto',notes:'Anotações de teste',status:'pending',plannedFor:null,dueAt:null,reminderAt:now(),recurrenceId:null,occurrenceDate:null,completedAt:null,archivedAt:null,createdAt:now(),updatedAt:now(),isOverdue:false,progress:{total:0,completed:0,percentage:0}})
+window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
+  if (command === 'list_boards') return boards.map(({elements,...board}) => ({...board,elementCount:elements.length}))
+  if (command === 'get_board') return structuredClone(boards.find(board => board.id === args.id))
+  if (command === 'create_board') {
+    const board = {id:crypto.randomUUID(),kind:args.input.kind??'board',title:args.input.title,elements:args.input.elements,revision:1,formatVersion:1,createdAt:now(),updatedAt:now()}
+    boards.push(board); return structuredClone(board)
+  }
+  if (command === 'save_board') {
+    const board = boards.find(board => board.id === args.input.id)
+    if (args.input.expectedRevision !== board.revision) throw Error('Fixture revision conflict')
+    Object.assign(board,{title:args.input.title,elements:args.input.elements,revision:board.revision+1,updatedAt:now()})
+    return structuredClone(board)
+  }
+  if (command === 'get_board_tasks') {
+    const ids = boards.find(board => board.id === args.boardId).elements.map(element => element.taskId)
+    return structuredClone(tasks.filter(task => ids.includes(task.id)))
+  }
+  if (command === 'create_board_task') {
+    const board = boards.find(board => board.id === args.boardId)
+    const element = board.elements.find(element => element.id === args.elementId)
+    const task = {id:crypto.randomUUID(),title:args.title,notes:args.notes,status:'pending',plannedFor:null,dueAt:null,reminderAt:null,recurrenceId:null,occurrenceDate:null,completedAt:null,archivedAt:null,createdAt:now(),updatedAt:now(),isOverdue:false,progress:{total:0,completed:0,percentage:0}}
+    tasks.push(task);element.taskId=task.id;board.revision++;return {board:structuredClone(board),taskId:task.id}
+  }
+  if (command === 'get_task_view_counts') return {today:0,week:0,pending:tasks.length,overdue:0,upcoming:0,reminders:0,completed:0,archived:0,badge:{count:0,supported:true}}
+  if (command === 'get_board_task_details') { const task=tasks.find(task=>task.id===args.taskId); return {tasks:task?[structuredClone(task)]:[],checklistItems:[],total:task?1:0} }
+  if (command === 'search_tasks') return {tasks:structuredClone(tasks),checklistItems:[],total:tasks.length}
+  if (command === 'list_task_board_refs') return []
+  if (command === 'list_task_papers') return boards.filter(board=>paperLinks.some(link=>link.taskId===args.taskId&&link.paperId===board.id)).map(({elements,...board})=>({...board,elementCount:elements.length}))
+  if (command === 'list_paper_task_contexts') return structuredClone(tasks.filter(task=>paperLinks.some(link=>link.paperId===args.paperId&&link.taskId===task.id)))
+  if (command === 'create_task_paper') {
+    const board={id:crypto.randomUUID(),kind:'paper',title:args.title,elements:[],revision:1,formatVersion:1,createdAt:now(),updatedAt:now()}
+    boards.push(board);paperLinks.push({taskId:args.taskId,paperId:board.id});return structuredClone(board)
+  }
+  if (command === 'attach_task_paper') {if(!paperLinks.some(link=>link.taskId===args.taskId&&link.paperId===args.paperId))paperLinks.push({taskId:args.taskId,paperId:args.paperId});return}
+  if (command === 'detach_task_paper') {const index=paperLinks.findIndex(link=>link.taskId===args.taskId&&link.paperId===args.paperId);if(index>=0)paperLinks.splice(index,1);return}
+  if (command === 'delete_board') {boards.splice(boards.findIndex(board=>board.id===args.id),1);return}
+  if (command === 'reload_active_data_file') return {}
+  throw Error(`Unmocked fixture command: ${command}`)
+}}
+const router = createRouter({history:createWebHashHistory(),routes:[{path:'/papers',name:'papers',component:BoardsPage},{path:'/:pathMatch(.*)*',name:'boards',redirect:to=>({name:'papers',query:to.query})}]})
+if(paperFixture) await router.push({name:'papers'})
+i18n.global.locale.value='pt-BR'
+createApp({render:()=>h('main',{style:`height:100vh;${paperFixture?'display:grid;grid-template-columns:280px minmax(0,1fr)':''}`},paperFixture?[h('aside',{style:'padding:16px;border-right:1px solid var(--color-border);overflow:auto'},[h('h2','Lembrete: organizar ideias'),h(TaskPapers,{taskId:'fixture-task',taskTitle:tasks[0].title,onOpen:paperId=>router.push({name:'papers',query:{boardId:paperId,fromTaskId:'fixture-task'}})})]),h(RouterView)]:h(RouterView))}).use(createPinia()).use(i18n).use(router).mount('#app')
+</script></body></html>

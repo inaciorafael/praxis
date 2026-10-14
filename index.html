@@ -7,10 +7,15 @@
     <title>Praxis</title>
     <script>
       (() => {
-        const theme =
-          localStorage.getItem("praxis:theme") === "dark" ? "dark" : "light";
+        let storedTheme = null;
+        try {
+          storedTheme = localStorage.getItem("praxis:theme");
+        } catch {}
+        const themes = { light: "light", dark: "dark", sepia: "light", forest: "dark", midnight: "dark" };
+        const theme = Object.prototype.hasOwnProperty.call(themes, storedTheme)
+          ? storedTheme : "light";
         document.documentElement.dataset.theme = theme;
-        document.documentElement.style.colorScheme = theme;
+        document.documentElement.style.colorScheme = themes[theme];
       })();
     </script>
     <link

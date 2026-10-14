@@ -2,6 +2,7 @@
 import TaskFormFields from '@/features/tasks/components/TaskFormFields.vue'
 import TaskFormPreview from '@/features/tasks/components/TaskFormPreview.vue'
 import TaskTimelinePanel from '@/features/tasks/components/TaskTimelinePanel.vue'
+import TaskPapers from '@/features/papers/components/TaskPapers.vue'
 import {
   createTaskFormDraft,
   syncTaskTags,
@@ -15,13 +16,21 @@ import BaseButton from '@/shared/ui/BaseButton.vue'
 import Input from '@/shared/ui/Input.vue'
 import { useTagStore } from '@/stores/tag.store'
 import { useTaskStore } from '@/stores/task.store'
+import { useBoardStore } from '@/stores/board.store'
+import { normalizeTagName } from '@/shared/lib/tags/inline-tag'
 import { X } from '@lucide/vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
+import { listTaskBoardReferences } from '@/shared/lib/boards/board-context.service'
+import type { BoardTaskReference } from '@/shared/types/board'
 
 const tasks = useTaskStore()
 const tags = useTagStore()
 const { t } = useI18n()
+const router = useRouter()
+const boardReferences = ref<BoardTaskReference[]>([])
+const boardReferenceError = ref(false)
 const formFields = ref<InstanceType<typeof TaskFormFields> | null>(null)
 const draft = ref<TaskFormDraft>(createTaskFormDraft())
 const selectedTagNames = ref<string[]>([])
@@ -29,8 +38,30 @@ const newChecklistItem = ref('')
 const checklistTitles = ref<Record<string, string>>({})
 const isSaving = ref(false)
 const isLoadingTimeline = ref(false)
+const paperNavigationError = ref(false)
+const isOpeningPaper = ref(false)
 
 const selectedTask = computed(() => tasks.getSelectedTask())
+watch(
+  () => selectedTask.value?.id,
+  async (taskId) => {
+    boardReferences.value = []
+    boardReferenceError.value = false
+    paperNavigationError.value = false
+    if (!taskId) return
+    try {
+      const references = await listTaskBoardReferences(taskId)
+      if (selectedTask.value?.id === taskId) boardReferences.value = references
+    } catch {
+      if (selectedTask.value?.id === taskId) boardReferenceError.value = true
+    }
+  },
+  { immediate: true }
+)
+
+async function openBoardContext(reference: BoardTaskReference) {
+  await openPaper(reference.boardId, reference.elementId)
+}
 const checklistItems = computed(() => {
   if (!selectedTask.value) {
     return []
@@ -83,31 +114,83 @@ watch([() => tags.tags, () => tags.taskTags], () => {
   }
 })
 
-async function saveTask() {
-  formFields.value?.commitPendingTag()
-  await nextTick()
+async function saveTask(): Promise<boolean> {
   const task = selectedTask.value
-
-  if (!task || !canSave.value) {
-    return
+  if (!task || !canSave.value) return false
+  formFields.value?.commitPendingTag()
+  const savedDraft = { ...draft.value }
+  const savedTagNames = [...selectedTagNames.value]
+  if (!savedDraft.title.trim()) return false
+  const preserveDraft = () => {
+    if (selectedTask.value?.id === task.id) {
+      draft.value = savedDraft
+      selectedTagNames.value = savedTagNames
+    }
   }
 
   isSaving.value = true
 
   try {
+    await nextTick()
     const updated = await tasks.update(task.id, {
-      title: draft.value.title.trim(),
-      notes: draft.value.notes.trim() || null,
-      plannedFor: draft.value.plannedFor || null,
-      dueAt: toIsoDateTime(draft.value.dueAt),
-      reminderAt: toIsoDateTime(draft.value.reminderAt),
+      title: savedDraft.title.trim(),
+      notes: savedDraft.notes.trim() || null,
+      plannedFor: savedDraft.plannedFor || null,
+      dueAt: toIsoDateTime(savedDraft.dueAt),
+      reminderAt: toIsoDateTime(savedDraft.reminderAt),
     })
 
-    if (updated) {
-      await syncTaskTags(tags, task.id, selectedTagNames.value)
+    if (!updated) {
+      preserveDraft()
+      return false
     }
+    await syncTaskTags(tags, task.id, savedTagNames)
+    const expectedTags = new Set(savedTagNames.map(normalizeTagName))
+    const actualTags = new Set(tagNamesForTask(tags, task.id).map(normalizeTagName))
+    if (
+      expectedTags.size !== actualTags.size ||
+      [...expectedTags].some((name) => !actualTags.has(name))
+    ) {
+      preserveDraft()
+      return false
+    }
+    return true
+  } catch {
+    preserveDraft()
+    return false
   } finally {
     isSaving.value = false
+  }
+}
+
+async function openPaper(paperId: string, elementId?: string) {
+  const taskId = selectedTask.value?.id
+  if (!taskId || isSaving.value || isOpeningPaper.value) return
+  paperNavigationError.value = false
+  isOpeningPaper.value = true
+  try {
+    window.dispatchEvent(new Event('praxis:commit-board-edit'))
+    const flushed = await useBoardStore().flush()
+    if (selectedTask.value?.id !== taskId) return
+    if (!flushed || !(await saveTask())) {
+      paperNavigationError.value = true
+      return
+    }
+    if (selectedTask.value?.id !== taskId) return
+    const failure = await router.push({
+      name: 'papers',
+      query: {
+        boardId: paperId,
+        fromTaskId: taskId,
+        ...(elementId ? { elementId } : {}),
+      },
+    })
+    if (!failure && selectedTask.value?.id === taskId) tasks.clearSelectedTask()
+    else if (selectedTask.value?.id === taskId) paperNavigationError.value = true
+  } catch {
+    if (selectedTask.value?.id === taskId) paperNavigationError.value = true
+  } finally {
+    isOpeningPaper.value = false
   }
 }
 
@@ -228,6 +311,29 @@ function resetForm() {
         :completed-at="selectedTask.completedAt"
       />
 
+      <section
+        v-if="boardReferences.length || boardReferenceError"
+        class="grid gap-2 border-y border-border py-3"
+      >
+        <span class="text-body font-semibold">{{ t('papers.appearsIn') }}</span>
+        <p class="text-small text-ink-soft">{{ t('papers.referenceHint') }}</p>
+        <p
+          v-if="boardReferenceError"
+          class="text-small text-ink-muted"
+        >
+          {{ t('boards.contextUnavailable') }}
+        </p>
+        <button
+          v-for="reference in boardReferences"
+          :key="reference.boardId + reference.elementId"
+          type="button"
+          class="border border-border bg-paper px-3 py-2 text-left text-body hover:bg-hover"
+          @click="openBoardContext(reference)"
+        >
+          {{ reference.boardTitle }}
+        </button>
+      </section>
+
       <div class="grid gap-3">
         <div class="grid gap-1">
           <span class="font-semibold text-ink">{{ t('task.status') }}</span>
@@ -241,7 +347,11 @@ function resetForm() {
             ]"
             @click="toggleCompleted"
           >
-            {{ selectedTask.status === 'completed' ? t('common.completed') : t('common.pending') }}
+            {{
+              selectedTask.status === 'completed'
+                ? t('common.completed')
+                : t('common.pending')
+            }}
           </button>
         </div>
 
@@ -252,6 +362,19 @@ function resetForm() {
           field-id-prefix="edit-task"
           compact
         />
+
+        <TaskPapers
+          :task-id="selectedTask.id"
+          :task-title="draft.title"
+          @open="openPaper"
+        />
+        <p
+          v-if="paperNavigationError"
+          role="alert"
+          class="text-small text-brick"
+        >
+          {{ t('papers.openError') }}
+        </p>
 
         <BaseButton
           :disabled="!canSave"
@@ -329,9 +452,7 @@ function resetForm() {
       <div class="grid gap-3 border-t border-border pt-4">
         <div class="grid gap-1">
           <span class="text-heading">{{ t('task.timeline') }}</span>
-          <span class="text-body text-ink-soft"
-            >{{ t('task.timelineSubtitle') }}</span
-          >
+          <span class="text-body text-ink-soft">{{ t('task.timelineSubtitle') }}</span>
         </div>
 
         <div

@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  FilePenLine,
   Hash,
   HelpCircle,
   HeartHandshake,
@@ -16,12 +17,14 @@ import {
   Sun,
 } from '@lucide/vue'
 
+import { APP_THEMES } from '@/shared/lib/theme/theme.catalog'
 import HelpKey from '@/features/help/components/HelpKey.vue'
 import HelpSteps from '@/features/help/components/HelpSteps.vue'
 import HelpTaskPreview from '@/features/help/components/HelpTaskPreview.vue'
 import HelpTopic from '@/features/help/components/HelpTopic.vue'
 import HelpCreatorSupport from '@/features/help/components/HelpCreatorSupport.vue'
-import { computed } from 'vue'
+import HelpPaperPreview from '@/features/help/components/HelpPaperPreview.vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -31,6 +34,7 @@ const topics = computed(() => [
   { id: 'visoes', label: t('help.topics.views'), icon: CalendarDays },
   { id: 'lembretes', label: t('help.topics.reminders'), icon: Bell },
   { id: 'detalhes', label: t('help.topics.details'), icon: Hash },
+  { id: 'papers', label: t('help.topics.papers'), icon: FilePenLine },
   { id: 'concluir', label: t('help.topics.complete'), icon: CheckCircle2 },
   { id: 'privacidade', label: t('help.topics.privacy'), icon: ShieldCheck },
   { id: 'sobre', label: t('help.topics.support'), icon: HeartHandshake },
@@ -47,6 +51,20 @@ const reminderSteps = computed(() => [
   t('help.reminder.steps.1'),
   t('help.reminder.steps.2'),
 ])
+
+const paperStages = ['create', 'draw', 'text', 'organize', 'link', 'share'] as const
+const paperStage = ref<(typeof paperStages)[number]>('create')
+const paperShortcuts = computed(
+  () =>
+    ({
+      create: [],
+      draw: [['P'], ['B'], ['R']],
+      text: [['T'], ['Enter']],
+      organize: [['V'], ['H'], ['Shift'], ['Ctrl', 'Z']],
+      link: [],
+      share: [['Esc']],
+    })[paperStage.value]
+)
 
 function scrollToTopic(topicId: string) {
   document.getElementById(topicId)?.scrollIntoView({
@@ -303,6 +321,80 @@ function scrollToTopic(topicId: string) {
         </HelpTopic>
 
         <HelpTopic
+          id="papers"
+          :eyebrow="t('help.papers.eyebrow')"
+          :title="t('help.papers.title')"
+          :description="t('help.papers.description')"
+          :icon="FilePenLine"
+        >
+          <div class="grid gap-4">
+            <p class="text-body leading-6 text-ink-soft">{{ t('help.papers.roles') }}</p>
+            <div
+              class="grid grid-cols-2 gap-2"
+              role="group"
+              :aria-label="t('help.papers.tutorial.stepsLabel')"
+            >
+              <button
+                v-for="(stage, index) in paperStages"
+                :key="stage"
+                type="button"
+                class="flex items-center gap-2 border px-2 py-2 text-left text-small"
+                :class="
+                  paperStage === stage
+                    ? 'border-blue bg-hover text-ink'
+                    : 'border-transparent text-ink-soft hover:bg-hover'
+                "
+                :aria-pressed="paperStage === stage"
+                @click="paperStage = stage"
+              >
+                <span
+                  class="flex h-7 w-7 shrink-0 items-center justify-center border border-border bg-surface text-small font-semibold"
+                  >{{ index + 1 }}</span
+                >{{ t(`help.papers.tutorial.${stage}.title`) }}
+              </button>
+            </div>
+            <div
+              class="grid gap-3 border-t border-border pt-4"
+              aria-live="polite"
+            >
+              <h3 class="text-body font-semibold text-ink">
+                {{ t(`help.papers.tutorial.${paperStage}.title`) }}
+              </h3>
+              <p class="text-body leading-6 text-ink-soft">
+                {{ t(`help.papers.tutorial.${paperStage}.body`) }}
+              </p>
+              <div
+                v-if="paperShortcuts.length"
+                class="flex flex-wrap gap-3"
+              >
+                <HelpKey
+                  v-for="keys in paperShortcuts"
+                  :key="keys.join('+')"
+                  :keys="keys"
+                  :label="t(`help.papers.tutorial.shortcuts.${keys.join('_')}`)"
+                />
+              </div>
+            </div>
+            <p class="text-small leading-5 text-ink-muted">
+              {{ t('help.papers.reuse') }}
+            </p>
+            <RouterLink
+              to="/app/papers"
+              class="flex w-fit items-center gap-2 border border-accent bg-accent px-4 py-2 text-body font-semibold text-on-accent"
+            >
+              <FilePenLine
+                :size="17"
+                aria-hidden="true"
+              />
+              {{ t('help.papers.openLibrary') }}
+            </RouterLink>
+          </div>
+          <template #visual>
+            <HelpPaperPreview :stage="paperStage" />
+          </template>
+        </HelpTopic>
+
+        <HelpTopic
           id="concluir"
           :eyebrow="t('help.lifecycle.eyebrow')"
           :title="t('help.lifecycle.title')"
@@ -359,16 +451,18 @@ function scrollToTopic(topicId: string) {
                   t('help.privacy.active')
                 }}</strong>
               </div>
-              <div class="grid grid-cols-2 border border-border bg-paper p-1">
+              <div class="flex flex-wrap gap-1 border border-border bg-paper p-1">
                 <span
-                  class="flex items-center justify-center gap-2 bg-ink px-3 py-2 text-small text-paper"
+                  v-for="theme in APP_THEMES"
+                  :key="theme.id"
+                  class="flex items-center gap-2 px-3 py-2 text-small text-ink-soft"
                 >
-                  <Sun :size="15" /> {{ t('settings.paper') }}
-                </span>
-                <span
-                  class="flex items-center justify-center gap-2 px-3 py-2 text-small text-ink-soft"
-                >
-                  <Moon :size="15" /> {{ t('settings.dark') }}
+                  <component
+                    :is="theme.colorScheme === 'dark' ? Moon : Sun"
+                    :size="15"
+                    aria-hidden="true"
+                  />
+                  {{ t(theme.labelKey) }}
                 </span>
               </div>
               <div class="flex items-center gap-2 text-small text-ink-muted">
@@ -381,7 +475,7 @@ function scrollToTopic(topicId: string) {
 
         <HelpTopic
           id="sobre"
-          eyebrow="08 · Praxis"
+          eyebrow="09 · Praxis"
           :title="t('help.supportTitle')"
           :description="t('help.supportDescription')"
           :icon="HeartHandshake"
