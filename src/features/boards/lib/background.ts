@@ -28,6 +28,7 @@ export function paperBackgroundStyle(
     backgroundSize: `${step}px ${step}px`,
     backgroundPosition: `${camera.x}px ${camera.y}px`,
     '--paper-canvas-ink': ink,
+    '--paper-canvas-bg': paper,
     '--paper-canvas-muted': muted,
   }
 }

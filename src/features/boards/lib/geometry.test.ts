@@ -32,6 +32,45 @@ const element = (values: Partial<BoardElement>): BoardElement => ({
   ...values,
 })
 describe('board geometry', () => {
+  it('hit tests polygon edges instead of their surrounding rectangles, including rotation', () => {
+    for (const kind of ['triangle', 'hexagon'] as const) {
+      const shape = element({ kind, width: 100, height: 100, angle: Math.PI / 3 })
+      const center = { x: 50, y: 50 }
+      expect(pointInElement(shape, center)).toBe(true)
+      expect(
+        pointInElement(shape, rotatePoint({ x: 2, y: 2 }, center, shape.angle!))
+      ).toBe(false)
+      expect(
+        pointInElement(shape, rotatePoint({ x: 50, y: 0 }, center, shape.angle!))
+      ).toBe(true)
+    }
+  })
+  it('anchors connectors to triangle and hexagon outlines', () => {
+    const target = element({ id: 'target', x: 300, y: 25, height: 50 })
+    for (const [kind, expectedX] of [
+      ['triangle', 75],
+      ['hexagon', 100],
+    ] as const) {
+      const source = element({ kind, width: 100, height: 100 })
+      const arrow = element({ kind: 'arrow', startId: source.id, endId: target.id })
+      expect(connectorPoints(arrow, [source, target])[0]).toEqual({ x: expectedX, y: 50 })
+    }
+  })
+  it('bounds rotated reverse lines using the two visible endpoints', () => {
+    const line = element({
+      kind: 'line',
+      x: 100,
+      y: 100,
+      width: -100,
+      height: -100,
+      angle: Math.PI / 4,
+    })
+    const box = bounds([line])
+    expect(box.x).toBeCloseTo(50)
+    expect(box.width).toBe(1)
+    expect(box.y).toBeCloseTo(50 - Math.sqrt(5000))
+    expect(box.height).toBeCloseTo(Math.sqrt(20000))
+  })
   it('normalizes rotations and bounds oriented corners', () => {
     expect(normalizeAngle(3 * Math.PI)).toBeCloseTo(-Math.PI)
     expect(normalizeAngle(Infinity)).toBe(0)
@@ -48,10 +87,23 @@ describe('board geometry', () => {
     const shape = element({ angle: Math.PI / 5, x: 20, y: -40 })
     const center = { x: 70, y: -15 }
     const corners = elementCorners(shape)
-    const cases = [{ handle: 'nw', opposite: 2, sx: -1, sy: -1 }, { handle: 'ne', opposite: 3, sx: 1, sy: -1 }, { handle: 'sw', opposite: 1, sx: -1, sy: 1 }, { handle: 'se', opposite: 0, sx: 1, sy: 1 }] as const
+    const cases = [
+      { handle: 'nw', opposite: 2, sx: -1, sy: -1 },
+      { handle: 'ne', opposite: 3, sx: 1, sy: -1 },
+      { handle: 'sw', opposite: 1, sx: -1, sy: 1 },
+      { handle: 'se', opposite: 0, sx: 1, sy: 1 },
+    ] as const
     for (const { handle, opposite, sx, sy } of cases) {
-      const pointer = rotatePoint({ x: center.x + sx * 150, y: center.y + sy * 40 }, center, shape.angle!)
-      const resized = resizeElement(shape, pointer, { handle, proportional: true, fromCenter: false })
+      const pointer = rotatePoint(
+        { x: center.x + sx * 150, y: center.y + sy * 40 },
+        center,
+        shape.angle!
+      )
+      const resized = resizeElement(shape, pointer, {
+        handle,
+        proportional: true,
+        fromCenter: false,
+      })
       expect(resized.width / resized.height).toBeCloseTo(2)
       const anchor = elementCorners({ ...shape, ...resized })[opposite]!
       expect(anchor.x).toBeCloseTo(corners[opposite]!.x)
@@ -62,24 +114,39 @@ describe('board geometry', () => {
     const shape = element({ angle: -Math.PI / 3 })
     const center = { x: 50, y: 25 }
     const pointer = rotatePoint({ x: 180, y: 100 }, center, shape.angle!)
-    const resized = resizeElement(shape, pointer, { handle: 'se', proportional: false, fromCenter: true })
+    const resized = resizeElement(shape, pointer, {
+      handle: 'se',
+      proportional: false,
+      fromCenter: true,
+    })
     expect(resized.x + resized.width / 2).toBeCloseTo(center.x)
     expect(resized.y + resized.height / 2).toBeCloseTo(center.y)
     expect(resized.width).toBeCloseTo(260)
     expect(resized.height).toBeCloseTo(150)
-    const minimum = resizeElement(shape, center, { handle: 'nw', proportional: true, fromCenter: true })
+    const minimum = resizeElement(shape, center, {
+      handle: 'nw',
+      proportional: true,
+      fromCenter: true,
+    })
     expect(minimum.width).toBeGreaterThanOrEqual(24)
     expect(minimum.height).toBeGreaterThanOrEqual(24)
     expect(minimum.width / minimum.height).toBeCloseTo(2)
   })
   it('intersects connectors with rotated rectangle and text ellipse boundaries', () => {
     for (const textBackground of ['rectangle', 'ellipse'] as const) {
-      const source = element({ kind: 'text', textBackground, angle: Math.PI / 4, width: 200, height: 80 })
+      const source = element({
+        kind: 'text',
+        textBackground,
+        angle: Math.PI / 4,
+        width: 200,
+        height: 80,
+      })
       const target = element({ id: 'target', x: 400, y: 20 })
       const arrow = element({ kind: 'arrow', startId: source.id, endId: target.id })
       const endpoint = connectorPoints(arrow, [source, target])[0]
       const local = rotatePoint(endpoint, { x: 100, y: 40 }, -source.angle!)
-      const dx = (local.x - 100) / 100, dy = (local.y - 40) / 40
+      const dx = (local.x - 100) / 100,
+        dy = (local.y - 40) / 40
       if (textBackground === 'ellipse') expect(dx ** 2 + dy ** 2).toBeCloseTo(1)
       else expect(Math.max(Math.abs(dx), Math.abs(dy))).toBeCloseTo(1)
     }
@@ -113,25 +180,48 @@ describe('board geometry', () => {
     })
     const [start, end] = connectorPoints(arrow, [element({ x: 30, y: 60 })])
     expect(start.x).toBe(130)
-    expect(start.y).toBeCloseTo(85 + 165 * 50 / 420)
+    expect(start.y).toBeCloseTo(85 + (165 * 50) / 420)
     expect(end).toEqual({ x: 500, y: 250 })
   })
   it('keeps arrowheads visible on rectangular and elliptical boundaries', () => {
     const start = element({ id: 'start', height: 100 })
     const end = element({ id: 'end', x: 300, kind: 'ellipse', height: 100 })
     const arrow = element({ kind: 'arrow', startId: 'start', endId: 'end' })
-    expect(connectorPoints(arrow, [start, end])).toEqual([{ x: 100, y: 50 }, { x: 300, y: 50 }])
-    const diagonal = connectorPoints({ ...arrow, startId: null, x: 100, y: -100 }, [end])[1]
+    expect(connectorPoints(arrow, [start, end])).toEqual([
+      { x: 100, y: 50 },
+      { x: 300, y: 50 },
+    ])
+    const diagonal = connectorPoints({ ...arrow, startId: null, x: 100, y: -100 }, [
+      end,
+    ])[1]
     expect(((diagonal.x - 350) / 50) ** 2 + ((diagonal.y - 50) / 50) ** 2).toBeCloseTo(1)
   })
   it('uses actual arrow geometry after linked nodes have moved', () => {
     const start = element({ id: 'start', x: 800, height: 100 })
     const end = element({ id: 'end', x: 1200, height: 100 })
-    const arrow = element({ kind: 'arrow', x: 0, y: 0, width: -100, height: 0, startId: 'start', endId: 'end' })
-    expect(bounds([arrow], [start, end])).toEqual({ x: 900, y: 50, width: 300, height: 1 })
+    const arrow = element({
+      kind: 'arrow',
+      x: 0,
+      y: 0,
+      width: -100,
+      height: 0,
+      startId: 'start',
+      endId: 'end',
+    })
+    expect(bounds([arrow], [start, end])).toEqual({
+      x: 900,
+      y: 50,
+      width: 300,
+      height: 1,
+    })
   })
   it('anchors connectors on the ellipse boundary of a text background', () => {
-    const source = element({ kind: 'text', textBackground: 'ellipse', width: 200, height: 100 })
+    const source = element({
+      kind: 'text',
+      textBackground: 'ellipse',
+      width: 200,
+      height: 100,
+    })
     const target = element({ id: 'target', x: 300, y: 150, width: 200, height: 100 })
     const arrow = element({ kind: 'arrow', startId: source.id, endId: target.id })
     const [start] = connectorPoints(arrow, [source, target])

@@ -1,6 +1,6 @@
 import type { BoardElement } from '@/shared/types/board'
 
-function sameValue(left: unknown, right: unknown): boolean {
+export function sameValue(left: unknown, right: unknown): boolean {
   if (left === right || (left == null && right == null)) return true
   // JSON round trips through Rust can differ by a few floating-point bits.
   // Treat only representation noise as equal; real edits still reset history.
@@ -54,27 +54,37 @@ export function sameElements(left: BoardElement[], right: BoardElement[]): boole
 export const copyElements = (elements: BoardElement[]): BoardElement[] =>
   elements.map((e) => ({
     ...e,
+    ...(e.sketch ? { sketch: { ...e.sketch } } : {}),
     points: e.points.map((p) => ({ ...p })),
     ...(e.richText ? { richText: JSON.parse(JSON.stringify(e.richText)) } : {}),
     ...(e.textAnnotation
       ? { textAnnotation: JSON.parse(JSON.stringify(e.textAnnotation)) }
       : {}),
   }))
+export const elementSnapshotBytes = (snapshot: BoardElement[]) =>
+  snapshot.reduce(
+    (total, element) =>
+      total +
+      256 +
+      element.text.length * 2 +
+      (element.imageData?.length ?? 0) * 2 +
+      (element.richText ? JSON.stringify(element.richText).length * 2 : 0) +
+      (element.textAnnotation ? JSON.stringify(element.textAnnotation).length * 2 : 0) +
+      element.points.length * 16,
+    0
+  )
 export function createHistory(limit = 100, byteBudget = 20 * 1024 * 1024) {
-  const undo: BoardElement[][] = []
-  const redo: BoardElement[][] = []
-  const bytes = (snapshot: BoardElement[]) =>
-    snapshot.reduce(
-      (total, element) =>
-        total +
-        256 +
-        element.text.length * 2 +
-        (element.imageData?.length ?? 0) * 2 +
-        (element.richText ? JSON.stringify(element.richText).length * 2 : 0) +
-        (element.textAnnotation ? JSON.stringify(element.textAnnotation).length * 2 : 0) +
-        element.points.length * 16,
-      0
-    )
+  return createSnapshotHistory(copyElements, elementSnapshotBytes, limit, byteBudget)
+}
+
+export function createSnapshotHistory<T>(
+  copy: (snapshot: T) => T,
+  bytes: (snapshot: T) => number,
+  limit = 100,
+  byteBudget = 20 * 1024 * 1024
+) {
+  const undo: T[] = []
+  const redo: T[] = []
   function trim() {
     let total = [...undo, ...redo].reduce((sum, snapshot) => sum + bytes(snapshot), 0)
     while (
@@ -92,22 +102,22 @@ export function createHistory(limit = 100, byteBudget = 20 * 1024 * 1024) {
     get canRedo() {
       return redo.length > 0
     },
-    push(elements: BoardElement[]) {
-      undo.push(copyElements(elements))
+    push(snapshot: T) {
+      undo.push(copy(snapshot))
       redo.length = 0
       trim()
     },
-    undo(current: BoardElement[]) {
+    undo(current: T) {
       const previous = undo.pop()
       if (!previous) return null
-      redo.push(copyElements(current))
+      redo.push(copy(current))
       trim()
       return previous
     },
-    redo(current: BoardElement[]) {
+    redo(current: T) {
       const next = redo.pop()
       if (!next) return null
-      undo.push(copyElements(current))
+      undo.push(copy(current))
       trim()
       return next
     },

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Ellipsis, LockKeyholeOpen, SlidersHorizontal } from '@lucide/vue'
+import { Ellipsis, Eraser, LockKeyholeOpen, SlidersHorizontal } from '@lucide/vue'
 import BoardColorPresets from './BoardColorPresets.vue'
 import { PEN_COLORS } from '../lib/ink-colors'
 
@@ -73,7 +73,7 @@ const primary = computed(() =>
   })
 )
 const additional = computed(() =>
-  props.tools.filter((tool) => !primaryIds.includes(tool.id))
+  props.tools.filter((tool) => !primaryIds.includes(tool.id) && tool.id !== 'eraser')
 )
 const label = (tool: { id: string; shortcut?: string }) =>
   `${t(`boards.tools.${tool.id}`)}${tool.shortcut ? ` (${tool.shortcut})` : ''}`
@@ -143,17 +143,25 @@ function openBrushLibrary() {
         type="button"
         class="paper-tool-center"
         data-tool-settings
+        :disabled="activeTool === 'eraser'"
         :aria-label="t('boards.studio.toolSettings')"
         :title="t('boards.studio.toolSettings')"
         :aria-expanded="settingsOpen"
         @click="toggleSettings"
       >
         <span
+          v-if="activeTool !== 'eraser'"
           class="paper-tool-swatch"
           :style="{ backgroundColor: color, opacity }"
           aria-hidden="true"
         />
+        <Eraser
+          v-else
+          :size="22"
+          aria-hidden="true"
+        />
         <SlidersHorizontal
+          v-if="activeTool !== 'eraser'"
           :size="16"
           aria-hidden="true"
         />
@@ -216,6 +224,16 @@ function openBrushLibrary() {
       </button>
     </div>
     <button
+      v-if="tools.some((tool) => tool.id === 'eraser')"
+      class="paper-brush-library-toggle"
+      data-tool="eraser"
+      :aria-label="t('boards.eraser.shortcut')"
+      :aria-pressed="activeTool === 'eraser'"
+      @click="choose('eraser')"
+    >
+      <Eraser :size="18" /> {{ t('boards.tools.eraser') }} <kbd>E</kbd>
+    </button>
+    <button
       class="paper-brush-library-toggle"
       type="button"
       data-brush-library
@@ -261,6 +279,9 @@ function openBrushLibrary() {
 </template>
 
 <style scoped>
+.paper-tool-center:disabled .paper-tool-values > span:not(:first-child) {
+  display: none;
+}
 .paper-pen-colors {
   margin-top: 10px;
   justify-content: center;

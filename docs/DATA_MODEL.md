@@ -747,11 +747,13 @@ The encrypted structured document contains an optional `boards` collection. All 
 
 Optional `paperLinks` entries contain `taskId`, `paperId` and `createdAt`. A reference must point to an official task and an existing visual document, including a legacy Board. One Paper can serve several tasks. Archived tasks retain links. Permanent task deletion removes only its references; Paper deletion removes only its references and document. Optional `paperCreateOperations` entries record `operationId`, `taskId` and `paperId` for atomic creation retry protection. Deleted Papers are not recreated by replaying an old operation.
 
+Each Paper optionally stores ordered `scenes` for presentation: `{ id, title, x, y, width, height, aspectRatio }`, where `aspectRatio` is `16:9`, `4:3` or `free`. These are camera windows, independent of visual elements. Missing scenes read as an empty list without migration writes; save requests omitting scenes preserve existing scenes. An explicit empty list clears them. A Paper allows up to 100 scenes with unique valid IDs, nonempty titles of at most 200 characters and finite coordinates/dimensions bounded to 1,000,000; dimensions must be positive. Scenes share the Paper revision, encrypted storage, autosave and read-only guards. Summaries omit scene data. Unlock requests must preserve scenes as well as elements and appearance.
+
 Task `notes` and `reminderAt` remain unchanged. There is no separate annotation entity in this implementation. Reading older vaults does not create Paper sections.
 
 Visual elements may carry `strokeWidth` (0.5–32, optional), `strokeColor` (strict hexadecimal `#RRGGBB`, optional) and `opacity` (0.05–1, default 1). Missing stroke width/color retain existing style defaults. These fields are encrypted with the scene, validated on write, and participate in autosave, undo and PNG export.
 
-`fillColor` is optional: missing/null retains legacy appearance; `transparent` removes the fill; `#RRGGBB` selects an independent fill. Only geometry/cards and text with a rectangle/ellipse background accept it. Rich text is also allowed in notes, geometric shapes, frames and semantic cards, preserving shape dimensions during edits. Linked task titles remain sourced from the task domain; retained rich text allows task linking without discarding prior formatting. Image, drawing and arrow elements reject rich text.
+`fillColor` is optional: missing/null retains legacy appearance; `transparent` removes the fill; `#RRGGBB` selects an independent fill. Only geometry/cards and text with a rectangle/ellipse background accept it. `fillStyle` is an optional enum (`solid`, `hachure`, `cross-hatch`, `dots`, `zigzag`) on the same elements. Missing/null keeps the current default: hachure on geometric shapes/text backgrounds, solid on cards. Unknown styles are rejected; reading older documents does not migrate or write them. Rich text is also allowed in notes, geometric shapes, frames and semantic cards, preserving shape dimensions during edits. Linked task titles remain sourced from the task domain; retained rich text allows task linking without discarding prior formatting. Image, drawing and arrow elements reject rich text.
 
 Boards and their summaries carry optional `locked` (legacy default false). Saving an omitted lock value preserves the existing state. While locked, content changes, deletion and task creation from an element are rejected. An unlock save must preserve title, elements and appearance; subsequent content saves use the newly returned revision. Locking saves pending edits first; state changes only after persistence succeeds. This does not alter the vault's independent authentication/lock lifecycle.
 
@@ -770,3 +772,12 @@ Text elements optionally carry `textAnnotation`; rich text runs optionally carry
 - Whether overdue tasks should show a separate visual state in "Meu Dia".
 - Whether missed reminders should fire immediately on startup or appear as in-app alerts first.
 - Whether saved filters/views should exist later; folders/areas are intentionally out of the MVP.
+
+### BoardElement.sketch
+
+Objeto opcional: strokePattern (solid/dashed/dotted), roughness e bowing (multiplicadores de 0 a 2), hachureAngle (-90 a 90), hachureGap (5 a 24). Apenas formas, conectores e texto com fundo possuem acabamento; draw e image nao aceitam o objeto. Ausencia preserva o desenho anterior sem migracao ou escrita na leitura. Rust valida os limites e rejeita propriedades desconhecidas dentro do objeto. Ao remover o fundo do texto, seu acabamento e preenchimento sao removidos na mesma edicao.
+
+### BoardElement.groupId
+
+String opcional, nao vazia, com ate 100 bytes. Elementos com o mesmo groupId pertencem a um grupo plano dentro do Paper. Os elementos mantem seus tipos, estilos, ids e coordenadas individuais; nao ha imagem rasterizada ou entidade de tarefa adicional. Ausencia ou null indica elemento livre, sem migracao ou escrita na leitura. O historico inclui agrupamento, desagrupamento e transformacoes de membros. Duplicacao cria um novo groupId.
+

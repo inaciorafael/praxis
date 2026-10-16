@@ -174,10 +174,40 @@ pub struct BoardRichText {
     pub paragraphs: Vec<BoardTextParagraph>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BoardFillStyle {
+    Solid,
+    Hachure,
+    CrossHatch,
+    Dots,
+    Zigzag,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardStrokePattern {
+    Solid,
+    Dashed,
+    Dotted,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BoardSketchOptions {
+    pub stroke_pattern: BoardStrokePattern,
+    pub roughness: f64,
+    pub bowing: f64,
+    pub hachure_angle: f64,
+    pub hachure_gap: f64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BoardElement {
     pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<String>,
     pub kind: String,
     pub x: f64,
     pub y: f64,
@@ -199,6 +229,10 @@ pub struct BoardElement {
     pub stroke_color: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fill_color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill_style: Option<BoardFillStyle>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sketch: Option<BoardSketchOptions>,
     #[serde(default)]
     pub text_highlight: BoardTextHighlight,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -249,6 +283,28 @@ pub enum BoardColorScheme {
     Dark,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum BoardSceneAspectRatio {
+    #[serde(rename = "16:9")]
+    Wide,
+    #[serde(rename = "4:3")]
+    Standard,
+    #[serde(rename = "free")]
+    Free,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BoardScene {
+    pub id: String,
+    pub title: String,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub aspect_ratio: BoardSceneAspectRatio,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Board {
@@ -265,6 +321,8 @@ pub struct Board {
     pub format_version: u32,
     pub revision: u64,
     pub elements: Vec<BoardElement>,
+    #[serde(default)]
+    pub scenes: Vec<BoardScene>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -289,6 +347,8 @@ pub struct BoardSummary {
 #[serde(rename_all = "camelCase")]
 pub struct CreateBoardInput {
     #[serde(default)]
+    scenes: Vec<BoardScene>,
+    #[serde(default)]
     kind: BoardKind,
     #[serde(default)]
     background: BoardBackground,
@@ -301,6 +361,8 @@ pub struct CreateBoardInput {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveBoardInput {
+    #[serde(default)]
+    scenes: Option<Vec<BoardScene>>,
     id: String,
     #[serde(default)]
     locked: Option<bool>,
@@ -398,8 +460,51 @@ fn validate_board(board: &Board) -> Result<(), String> {
     if board.elements.len() > 2000 {
         return Err("Quadro excede 2000 elementos.".into());
     }
+    if board.scenes.len() > 100 {
+        return Err("Paper excede 100 cenas.".into());
+    }
+    let mut scene_ids = HashSet::new();
+    for scene in &board.scenes {
+        if !valid_id(&scene.id) || !scene_ids.insert(&scene.id) {
+            return Err("Identificacao de cena invalida ou duplicada.".into());
+        }
+        if scene.title.trim().is_empty() || scene.title.chars().count() > 200 {
+            return Err("Informe um titulo de cena de ate 200 caracteres.".into());
+        }
+        if [scene.x, scene.y, scene.width, scene.height]
+            .iter()
+            .any(|v| !v.is_finite() || v.abs() > 1_000_000.0)
+            || scene.width <= 0.0
+            || scene.height <= 0.0
+        {
+            return Err("Enquadramento de cena invalido.".into());
+        }
+    }
     let mut ids = HashSet::new();
     for element in &board.elements {
+        if element
+            .group_id
+            .as_ref()
+            .is_some_and(|id| id.trim().is_empty() || id.len() > 100)
+        {
+            return Err("Identificador de grupo invalido.".into());
+        }
+        if let Some(sketch) = &element.sketch {
+            if element.kind == "draw"
+                || element.kind == "image"
+                || (element.kind == "text" && element.text_background == BoardTextBackground::None)
+                || !sketch.roughness.is_finite()
+                || !(0.0..=2.0).contains(&sketch.roughness)
+                || !sketch.bowing.is_finite()
+                || !(0.0..=2.0).contains(&sketch.bowing)
+                || !sketch.hachure_angle.is_finite()
+                || !(-90.0..=90.0).contains(&sketch.hachure_angle)
+                || !sketch.hachure_gap.is_finite()
+                || !(5.0..=24.0).contains(&sketch.hachure_gap)
+            {
+                return Err("Acabamento de forma invalido.".into());
+            }
+        }
         if element.draw_brush.is_some() && element.kind != "draw" {
             return Err("Pincel artistico permitido apenas em desenho livre.".into());
         }
@@ -422,10 +527,12 @@ fn validate_board(board: &Board) -> Result<(), String> {
         if !element.angle.is_finite() || element.angle.abs() > std::f64::consts::TAU {
             return Err("Angulo de elemento deve estar entre -2pi e 2pi radianos.".into());
         }
-        if let Some(color) = &element.fill_color {
+        if element.fill_color.is_some() || element.fill_style.is_some() {
             let supports_fill = [
                 "rectangle",
                 "ellipse",
+                "triangle",
+                "hexagon",
                 "frame",
                 "note",
                 "question",
@@ -434,7 +541,12 @@ fn validate_board(board: &Board) -> Result<(), String> {
             ]
             .contains(&element.kind.as_str())
                 || (element.kind == "text" && element.text_background != BoardTextBackground::None);
-            if !supports_fill || (color != "transparent" && !valid_hex_color(color)) {
+            if !supports_fill
+                || element
+                    .fill_color
+                    .as_ref()
+                    .is_some_and(|color| color != "transparent" && !valid_hex_color(color))
+            {
                 return Err("Preenchimento requer uma forma e cor #RRGGBB ou transparent.".into());
             }
         }
@@ -452,8 +564,11 @@ fn validate_board(board: &Board) -> Result<(), String> {
             "note",
             "rectangle",
             "ellipse",
+            "triangle",
+            "hexagon",
             "frame",
             "arrow",
+            "line",
             "draw",
             "question",
             "decision",
@@ -471,9 +586,13 @@ fn validate_board(board: &Board) -> Result<(), String> {
         if [element.x, element.y, element.width, element.height]
             .iter()
             .any(|v| !v.is_finite() || v.abs() > 1_000_000.0)
-            || (element.kind != "arrow" && (element.width <= 0.0 || element.height <= 0.0))
+            || (!["arrow", "line"].contains(&element.kind.as_str())
+                && (element.width <= 0.0 || element.height <= 0.0))
         {
             return Err("Dimensoes de elemento invalidas.".into());
+        }
+        if element.kind == "line" && (element.start_id.is_some() || element.end_id.is_some()) {
+            return Err("Linha reta nao pode possuir conexoes ancoradas.".into());
         }
         if element.text.len() > 100_000
             || element.points.len() > 20_000
@@ -559,6 +678,8 @@ fn validate_rich_text(element: &BoardElement, rich_text: &BoardRichText) -> Resu
         "note",
         "rectangle",
         "ellipse",
+        "triangle",
+        "hexagon",
         "frame",
         "question",
         "decision",
@@ -661,6 +782,7 @@ fn create_in_document(document: &mut Value, input: CreateBoardInput) -> Result<B
         format_version: FORMAT_VERSION,
         revision: 1,
         elements: input.elements,
+        scenes: input.scenes,
         created_at: now.clone(),
         updated_at: now,
     };
@@ -678,8 +800,10 @@ fn save_in_document(document: &mut Value, input: SaveBoardInput) -> Result<Board
     let background = input.background.unwrap_or(board.background);
     let color_scheme = input.color_scheme.unwrap_or(board.color_scheme);
     let locked = input.locked.unwrap_or(board.locked);
+    let scenes = input.scenes.unwrap_or_else(|| board.scenes.clone());
     let content_changed = board.title != input.title.trim()
         || board.elements != input.elements
+        || board.scenes != scenes
         || board.background != background
         || board.color_scheme != color_scheme;
     if board.locked && content_changed {
@@ -687,6 +811,7 @@ fn save_in_document(document: &mut Value, input: SaveBoardInput) -> Result<Board
     }
     if board.title == input.title.trim()
         && board.elements == input.elements
+        && board.scenes == scenes
         && board.background == background
         && board.color_scheme == color_scheme
         && board.locked == locked
@@ -695,6 +820,7 @@ fn save_in_document(document: &mut Value, input: SaveBoardInput) -> Result<Board
     }
     board.title = input.title.trim().into();
     board.elements = input.elements;
+    board.scenes = scenes;
     board.background = background;
     board.color_scheme = color_scheme;
     board.locked = locked;
@@ -913,6 +1039,7 @@ fn create_paper_in_document(
     let paper = create_in_document(
         &mut staged,
         CreateBoardInput {
+            scenes: vec![],
             background: BoardBackground::Plain,
             color_scheme: BoardColorScheme::Light,
             kind: BoardKind::Paper,
@@ -1295,6 +1422,9 @@ mod tests {
             opacity: 1.0,
             stroke_color: None,
             fill_color: None,
+            fill_style: None,
+            sketch: None,
+            group_id: None,
             text_highlight: BoardTextHighlight::None,
             text_annotation: None,
             text_font: BoardTextFont::Sans,
@@ -1318,6 +1448,7 @@ mod tests {
         create_in_document(
             document,
             CreateBoardInput {
+                scenes: vec![],
                 background: BoardBackground::Plain,
                 color_scheme: BoardColorScheme::Light,
                 kind: BoardKind::Board,
@@ -1341,8 +1472,108 @@ mod tests {
         assert!(boards[0].elements[0].rich_text.is_none());
     }
 
+    fn scene() -> BoardScene {
+        BoardScene {
+            id: "scene-1".into(),
+            title: "Overview".into(),
+            x: -120.0,
+            y: 40.0,
+            width: 1600.0,
+            height: 900.0,
+            aspect_ratio: BoardSceneAspectRatio::Wide,
+        }
+    }
+
+    #[test]
+    fn scenes_migrate_roundtrip_and_follow_revision_and_lock_guards() {
+        let mut document = document();
+        let board = create(&mut document);
+        document["boards"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("scenes");
+        let before = document.clone();
+        assert!(read_boards(&document).unwrap()[0].scenes.is_empty());
+        assert_eq!(document, before);
+        let mut input = save_input(&board, None);
+        input.scenes = Some(vec![scene()]);
+        let saved = save_in_document(&mut document, input).unwrap();
+        assert_eq!(saved.scenes, vec![scene()]);
+        assert_eq!(read_boards(&document).unwrap()[0], saved);
+        assert!(serde_json::to_value(board_summary(saved.clone()))
+            .unwrap()
+            .get("scenes")
+            .is_none());
+        let mut stale = save_input(&board, None);
+        stale.scenes = Some(vec![]);
+        assert!(save_in_document(&mut document, stale).is_err());
+        let locked = save_in_document(&mut document, save_input(&saved, Some(true))).unwrap();
+        assert_eq!(locked.scenes, saved.scenes);
+        let before = document.clone();
+        let mut edit = save_input(&locked, Some(false));
+        edit.scenes = Some(vec![]);
+        assert!(save_in_document(&mut document, edit).is_err());
+        assert_eq!(document, before);
+        let unlocked = save_in_document(&mut document, save_input(&locked, Some(false))).unwrap();
+        let mut clear = save_input(&unlocked, None);
+        clear.scenes = Some(vec![]);
+        assert!(save_in_document(&mut document, clear)
+            .unwrap()
+            .scenes
+            .is_empty());
+    }
+
+    #[test]
+    fn creating_a_paper_preserves_ordered_scenes_and_omitted_saves_are_noops() {
+        let mut document = document();
+        let mut second = scene();
+        second.id = "scene-2".into();
+        second.aspect_ratio = BoardSceneAspectRatio::Free;
+        let input: CreateBoardInput = serde_json::from_value(json!({
+            "title": "Presentation", "kind": "paper", "elements": [],
+            "scenes": [second, scene()]
+        }))
+        .unwrap();
+        let board = create_in_document(&mut document, input).unwrap();
+        assert_eq!(board.scenes[0].id, "scene-2");
+        assert_eq!(board.scenes[1].id, "scene-1");
+        let before = document.clone();
+        assert_eq!(
+            save_in_document(&mut document, save_input(&board, None)).unwrap(),
+            board
+        );
+        assert_eq!(document, before);
+    }
+
+    #[test]
+    fn invalid_scenes_never_mutate_the_document() {
+        let mut invalid = vec![vec![scene(); 101], vec![scene(); 2]];
+        for field in 0..6 {
+            let mut item = scene();
+            match field {
+                0 => item.width = 0.0,
+                1 => item.height = -1.0,
+                2 => item.x = f64::NAN,
+                3 => item.y = 1_000_001.0,
+                4 => item.title = "x".repeat(201),
+                _ => item.id = "bad/id".into(),
+            }
+            invalid.push(vec![item]);
+        }
+        for scenes in invalid {
+            let mut document = document();
+            let board = create(&mut document);
+            let before = document.clone();
+            let mut input = save_input(&board, None);
+            input.scenes = Some(scenes);
+            assert!(save_in_document(&mut document, input).is_err());
+            assert_eq!(document, before);
+        }
+    }
+
     fn save_input(board: &Board, locked: Option<bool>) -> SaveBoardInput {
         SaveBoardInput {
+            scenes: None,
             id: board.id.clone(),
             title: board.title.clone(),
             elements: board.elements.clone(),
@@ -1454,10 +1685,44 @@ mod tests {
     }
 
     #[test]
+    fn straight_lines_roundtrip_signed_and_zero_axis_dimensions() {
+        for (width, height) in [(100.0, 0.0), (0.0, -100.0), (-100.0, 75.0)] {
+            let mut document = document();
+            let board = create(&mut document);
+            let mut item = element();
+            item.kind = "line".into();
+            item.width = width;
+            item.height = height;
+            let saved = save_in_document(
+                &mut document,
+                SaveBoardInput {
+                    scenes: None,
+                    locked: None,
+                    background: None,
+                    color_scheme: None,
+                    id: board.id,
+                    title: board.title,
+                    elements: vec![item.clone()],
+                    expected_revision: board.revision,
+                },
+            )
+            .unwrap();
+            assert_eq!(saved.elements[0], item);
+            assert_eq!(read_boards(&document).unwrap()[0], saved);
+            item.start_id = Some("other".into());
+            let mut invalid = saved;
+            invalid.elements = vec![item];
+            assert!(validate_board(&invalid).is_err());
+        }
+    }
+
+    #[test]
     fn shape_fill_roundtrip_is_independent_from_stroke_and_palette() {
         for kind in [
             "rectangle",
             "ellipse",
+            "triangle",
+            "hexagon",
             "frame",
             "note",
             "question",
@@ -1476,6 +1741,7 @@ mod tests {
                 let saved = save_in_document(
                     &mut document,
                     SaveBoardInput {
+                        scenes: None,
                         locked: None,
                         background: None,
                         color_scheme: None,
@@ -1490,6 +1756,163 @@ mod tests {
                 assert_eq!(read_boards(&document).unwrap()[0], saved);
             }
         }
+    }
+
+    #[test]
+    fn groups_roundtrip_and_invalid_ids_never_mutate_the_document() {
+        let mut document = document();
+        let board = create(&mut document);
+        let mut first = element();
+        first.group_id = Some("group-one".into());
+        let mut second = first.clone();
+        second.id = "group-member-two".into();
+        let saved = save_in_document(
+            &mut document,
+            SaveBoardInput {
+                scenes: None,
+                locked: None,
+                background: None,
+                color_scheme: None,
+                id: board.id,
+                title: board.title,
+                elements: vec![first, second],
+                expected_revision: board.revision,
+            },
+        )
+        .unwrap();
+        assert_eq!(read_boards(&document).unwrap()[0], saved);
+        assert!(saved
+            .elements
+            .iter()
+            .all(|e| e.group_id.as_deref() == Some("group-one")));
+        let before = document.clone();
+        for invalid in ["".to_string(), " ".to_string(), "x".repeat(101)] {
+            let mut elements = saved.elements.clone();
+            elements[0].group_id = Some(invalid);
+            assert!(save_in_document(
+                &mut document,
+                SaveBoardInput {
+                    scenes: None,
+                    locked: None,
+                    background: None,
+                    color_scheme: None,
+                    id: saved.id.clone(),
+                    title: saved.title.clone(),
+                    elements,
+                    expected_revision: saved.revision,
+                }
+            )
+            .is_err());
+            assert_eq!(document, before);
+        }
+        assert!(serde_json::to_value(element())
+            .unwrap()
+            .get("groupId")
+            .is_none());
+    }
+
+    #[test]
+    fn sketch_options_roundtrip_and_validate_without_mutation() {
+        let mut document = document();
+        let board = create(&mut document);
+        let mut item = element();
+        item.kind = "rectangle".into();
+        item.sketch = Some(BoardSketchOptions {
+            stroke_pattern: BoardStrokePattern::Dotted,
+            roughness: 1.5,
+            bowing: 0.5,
+            hachure_angle: 35.0,
+            hachure_gap: 12.0,
+        });
+        let saved = save_in_document(
+            &mut document,
+            SaveBoardInput {
+                scenes: None,
+                locked: None,
+                background: None,
+                color_scheme: None,
+                id: board.id,
+                title: board.title,
+                elements: vec![item.clone()],
+                expected_revision: board.revision,
+            },
+        )
+        .unwrap();
+        assert_eq!(read_boards(&document).unwrap()[0], saved);
+        assert_eq!(saved.elements[0], item);
+        let before = document.clone();
+        for (roughness, bowing, angle, gap) in [
+            (-1.0, 1.0, 0.0, 5.0),
+            (1.0, 3.0, 0.0, 5.0),
+            (1.0, 1.0, 91.0, 5.0),
+            (1.0, 1.0, 0.0, 1.0),
+        ] {
+            let settings = item.sketch.as_mut().unwrap();
+            settings.roughness = roughness;
+            settings.bowing = bowing;
+            settings.hachure_angle = angle;
+            settings.hachure_gap = gap;
+            assert!(save_in_document(
+                &mut document,
+                SaveBoardInput {
+                    scenes: None,
+                    locked: None,
+                    background: None,
+                    color_scheme: None,
+                    id: saved.id.clone(),
+                    title: saved.title.clone(),
+                    elements: vec![item.clone()],
+                    expected_revision: saved.revision,
+                }
+            )
+            .is_err());
+            assert_eq!(document, before);
+        }
+        assert!(serde_json::to_value(element())
+            .unwrap()
+            .get("sketch")
+            .is_none());
+        let mut invalid = serde_json::to_value(saved.elements[0].clone()).unwrap();
+        invalid["sketch"]["strokePattern"] = json!("unknown");
+        assert!(serde_json::from_value::<BoardElement>(invalid).is_err());
+    }
+
+    #[test]
+    fn fill_patterns_roundtrip_and_unknown_values_are_rejected() {
+        for pattern in [
+            BoardFillStyle::Solid,
+            BoardFillStyle::Hachure,
+            BoardFillStyle::CrossHatch,
+            BoardFillStyle::Dots,
+            BoardFillStyle::Zigzag,
+        ] {
+            let mut document = document();
+            let board = create(&mut document);
+            let mut item = element();
+            item.kind = "rectangle".into();
+            item.fill_color = Some("#123456".into());
+            item.fill_style = Some(pattern);
+            let saved = save_in_document(
+                &mut document,
+                SaveBoardInput {
+                    scenes: None,
+                    locked: None,
+                    background: None,
+                    color_scheme: None,
+                    id: board.id,
+                    title: board.title,
+                    elements: vec![item.clone()],
+                    expected_revision: board.revision,
+                },
+            )
+            .unwrap();
+            assert_eq!(saved.elements[0], item);
+            assert_eq!(read_boards(&document).unwrap()[0], saved);
+        }
+        let mut legacy = serde_json::to_value(element()).unwrap();
+        assert!(legacy.get("fillStyle").is_none());
+        legacy["fillStyle"] = json!("unknown-pattern");
+        assert!(serde_json::from_value::<BoardElement>(legacy).is_err());
     }
 
     #[test]
@@ -1515,6 +1938,7 @@ mod tests {
             assert!(save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    scenes: None,
                     locked: None,
                     background: None,
                     color_scheme: None,
@@ -1541,6 +1965,7 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    scenes: None,
                     locked: None,
                     background: None,
                     color_scheme: None,
@@ -1594,6 +2019,7 @@ mod tests {
             assert!(save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    scenes: None,
                     locked: None,
                     background: None,
                     color_scheme: None,
@@ -1637,6 +2063,7 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    scenes: None,
                     locked: None,
                     background: None,
                     color_scheme: None,
@@ -1672,6 +2099,7 @@ mod tests {
             assert!(save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    scenes: None,
                     locked: None,
                     background: None,
                     color_scheme: None,
@@ -2017,6 +2445,7 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    scenes: None,
                     locked: None,
                     background: None,
                     color_scheme: None,
@@ -2084,6 +2513,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                scenes: None,
                 locked: None,
                 background: None,
                 color_scheme: None,
@@ -2202,6 +2632,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                scenes: None,
                 locked: None,
                 background: None,
                 color_scheme: None,
@@ -2271,6 +2702,8 @@ mod tests {
             "note",
             "rectangle",
             "ellipse",
+            "triangle",
+            "hexagon",
             "frame",
             "question",
             "decision",
@@ -2299,6 +2732,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                scenes: None,
                 locked: None,
                 background: None,
                 color_scheme: None,
@@ -2339,6 +2773,7 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    scenes: None,
                     locked: None,
                     background: None,
                     color_scheme: None,
@@ -2396,6 +2831,7 @@ mod tests {
                 let saved = save_in_document(
                     &mut document,
                     SaveBoardInput {
+                        scenes: None,
                         locked: None,
                         background: None,
                         color_scheme: None,
@@ -2478,6 +2914,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                scenes: None,
                 locked: None,
                 background: None,
                 color_scheme: None,
@@ -2501,6 +2938,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                scenes: None,
                 locked: None,
                 background: None,
                 color_scheme: None,
@@ -2516,6 +2954,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                scenes: None,
                 locked: None,
                 background: None,
                 color_scheme: None,
@@ -2530,6 +2969,7 @@ mod tests {
         assert!(save_in_document(
             &mut document,
             SaveBoardInput {
+                scenes: None,
                 locked: None,
                 background: None,
                 color_scheme: None,
@@ -2628,6 +3068,7 @@ mod tests {
         let board = create_in_document(
             &mut document,
             CreateBoardInput {
+                scenes: vec![],
                 background: BoardBackground::Plain,
                 color_scheme: BoardColorScheme::Light,
                 kind: BoardKind::Board,

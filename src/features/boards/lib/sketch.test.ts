@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { BoardElement } from '@/shared/types/board'
 import { arrowHead, sketchPaths, sketchSeed } from './sketch'
+import { elementLabelScheme } from './element-style'
+import { DEFAULT_SKETCH_OPTIONS } from './sketch-options'
 
 const element = (values: Partial<BoardElement> = {}): BoardElement => ({
   id: 'persisted-id',
@@ -23,9 +25,180 @@ const paths = (values: Partial<BoardElement> = {}) =>
   sketchPaths(element(values), '#25354a', 'transparent')
 
 describe('board sketch renderer', () => {
+  it('keeps patterned borders stroked for every material and preserves fill and movement', () => {
+    for (const strokeStyle of ['clean', 'pencil', 'pen'] as const) {
+      for (const strokePattern of ['dashed', 'dotted'] as const) {
+        const shape = element({
+          strokeStyle,
+          fillStyle: 'solid',
+          sketch: { ...DEFAULT_SKETCH_OPTIONS, strokePattern },
+        })
+        const drawing = sketchPaths(shape, '#000000', '#123456')
+        const borders = drawing.filter((path) => path.stroke === '#000000')
+        expect(borders.length).toBeGreaterThan(0)
+        expect(borders.every((path) => path.dash && path.fill === 'none')).toBe(true)
+        expect(drawing.some((path) => path.fill === '#123456')).toBe(true)
+        expect(sketchPaths({ ...shape, x: 900, y: -300 }, '#000000', '#123456')).toEqual(
+          drawing
+        )
+      }
+    }
+  })
+  it('applies sketch intensity and hatch direction and spacing without mutating geometry', () => {
+    const shape = element({
+      strokeStyle: 'pencil',
+      fillStyle: 'hachure',
+      sketch: { ...DEFAULT_SKETCH_OPTIONS },
+    })
+    const before = structuredClone(shape)
+    const original = sketchPaths(shape, '#000000', '#123456')
+    for (const patch of [
+      { roughness: 0 },
+      { bowing: 0 },
+      { hachureAngle: 35 },
+      { hachureGap: 20 },
+    ]) {
+      const changed = sketchPaths(
+        { ...shape, sketch: { ...DEFAULT_SKETCH_OPTIONS, ...patch } },
+        '#000000',
+        '#123456'
+      )
+      expect(changed).not.toEqual(original)
+    }
+    expect(shape).toEqual(before)
+    const sparse = sketchPaths(
+      { ...shape, sketch: { ...DEFAULT_SKETCH_OPTIONS, hachureGap: 24 } },
+      '#000000',
+      '#123456'
+    )
+    expect(sparse[0]!.d.length).toBeLessThan(original[0]!.d.length)
+  })
+  it('renders legacy dot fills as hachure without changing stored elements', () => {
+    for (const kind of ['rectangle', 'ellipse', 'triangle', 'hexagon'] as const) {
+      const legacy = element({ kind, fillStyle: 'dots' })
+      const before = structuredClone(legacy)
+      expect(sketchPaths(legacy, '#000000', '#123456')).toEqual(
+        sketchPaths({ ...legacy, fillStyle: 'hachure' }, '#000000', '#123456')
+      )
+      expect(legacy).toEqual(before)
+    }
+  })
+  it('renders every selected fill pattern distinctly and preserves solid-fill text contrast', () => {
+    const drawings = ['solid', 'hachure', 'cross-hatch', 'zigzag'].map((fillStyle) =>
+      sketchPaths(
+        element({
+          fillStyle: fillStyle as import('@/shared/types/board').BoardFillStyle,
+        }),
+        '#000000',
+        '#123456'
+      )
+    )
+    expect(new Set(drawings.map((drawing) => JSON.stringify(drawing))).size).toBe(4)
+    expect(drawings[0]!.some((path) => path.fill === '#123456')).toBe(true)
+    for (const drawing of drawings.slice(1))
+      expect(
+        drawing.some((path) => path.stroke === '#123456' || path.fill === '#123456')
+      ).toBe(true)
+    expect(
+      elementLabelScheme(element({ fillStyle: 'solid', fillColor: '#123456' }), 'light')
+    ).toBe('dark')
+  })
+  it('hatches colored shapes consistently without filling transparent shapes or changing their text contrast', () => {
+    for (const kind of ['rectangle', 'ellipse', 'triangle', 'hexagon'] as const) {
+      for (const strokeStyle of ['clean', 'pencil', 'pen'] as const) {
+        const shape = element({ kind, strokeStyle, fillColor: '#123456' })
+        const first = sketchPaths(shape, '#000000', '#123456')
+        const hatch = first.filter((path) => path.stroke === '#123456')
+        expect(hatch).toHaveLength(1)
+        expect(hatch[0]).toMatchObject({ fill: 'none', strokeWidth: 0.85, opacity: 1 })
+        expect(hatch[0]!.d).toContain('M')
+        expect(sketchPaths({ ...shape, x: 800, y: -300 }, '#000000', '#123456')).toEqual(
+          first
+        )
+        expect(
+          sketchPaths(shape, '#000000', 'transparent').some(
+            (path) => path.stroke === '#123456'
+          )
+        ).toBe(false)
+        expect(elementLabelScheme(shape, 'light')).toBe('light')
+        expect(elementLabelScheme(shape, 'dark')).toBe('dark')
+      }
+    }
+    expect(
+      elementLabelScheme(element({ kind: 'note', fillColor: '#123456' }), 'light')
+    ).toBe('dark')
+  })
+  it('uses bounded graphite fibers and solid ink outlines directly in native shapes', () => {
+    for (const kind of [
+      'rectangle',
+      'ellipse',
+      'triangle',
+      'hexagon',
+      'line',
+      'arrow',
+    ] as const) {
+      const pencil = paths({ kind, strokeStyle: 'pencil' })
+      expect(pencil).toHaveLength(kind === 'arrow' ? 8 : 4)
+      expect(pencil.some((path) => path.dash && path.stroke === '#25354a')).toBe(true)
+      expect(pencil.some((path) => path.fill === '#25354a' && path.opacity < 1)).toBe(
+        true
+      )
+      const pen = paths({ kind, strokeStyle: 'pen' })
+      expect(
+        pen.every(
+          (path) =>
+            path.stroke === 'none' && path.fill === '#25354a' && path.opacity === 1
+        )
+      ).toBe(true)
+      expect(pen.some((path) => path.d.includes('Q'))).toBe(true)
+      expect(paths({ kind, strokeStyle: 'pencil', strokeWidth: 6 })).not.toEqual(pencil)
+      expect(paths({ kind, strokeStyle: 'pen', strokeWidth: 6 })).not.toEqual(pen)
+    }
+  })
+  it('draws straight lines without arrowheads or fills in either direction', () => {
+    for (const width of [-120, 120]) {
+      const line = sketchPaths(
+        element({ kind: 'line', width, height: 0 }),
+        '#123456',
+        '#ff0000'
+      )
+      expect(line).toHaveLength(1)
+      expect(line[0]!.d).toBe(`M0 0 L${width} 0`)
+      expect(line[0]!.fill).toBe('none')
+    }
+  })
+  it('closes triangles and hexagons and shares fills across sketch styles', () => {
+    expect(paths({ kind: 'triangle' })[0]!.d).toBe('M90 0 L180 120 L0 120 Z')
+    expect(paths({ kind: 'hexagon' })[0]!.d).toBe(
+      'M45 0 L135 0 L180 60 L135 120 L45 120 L0 60 Z'
+    )
+    for (const kind of ['triangle', 'hexagon'] as const) {
+      for (const strokeStyle of ['clean', 'pen', 'pencil'] as const) {
+        const drawing = sketchPaths(element({ kind, strokeStyle }), '#123456', '#ffeedd')
+        expect(
+          drawing.some(
+            (path) =>
+              (path.fill === '#ffeedd' || path.stroke === '#ffeedd') && path.opacity === 1
+          )
+        ).toBe(true)
+        expect(
+          drawing.some((path) => path.stroke === '#123456' || path.fill === '#123456')
+        ).toBe(true)
+      }
+    }
+  })
   it('applies the requested stroke width to clean, pencil and pen outlines and gestures', () => {
     for (const strokeStyle of ['clean', 'pencil', 'pen'] as const) {
-      for (const kind of ['rectangle', 'ellipse', 'arrow', 'draw', 'frame'] as const) {
+      for (const kind of [
+        'rectangle',
+        'ellipse',
+        'triangle',
+        'hexagon',
+        'line',
+        'arrow',
+        'draw',
+        'frame',
+      ] as const) {
         for (const strokeWidth of [0.5, 6, 32]) {
           const drawing = paths({
             strokeStyle,
@@ -40,9 +213,9 @@ describe('board sketch renderer', () => {
           expect(drawing.length).toBeGreaterThan(0)
           expect(
             drawing
-              .filter((path) => path.stroke !== 'none')
+              .filter((path) => path.stroke === '#25354a')
               .every((path) =>
-                kind === 'draw' && strokeStyle === 'pencil'
+                strokeStyle === 'pencil' && kind !== 'frame'
                   ? path.strokeWidth > 0 && path.strokeWidth <= strokeWidth
                   : path.strokeWidth === strokeWidth
               )
@@ -59,8 +232,8 @@ describe('board sketch renderer', () => {
         original
       )
       expect(
-        original.filter((path) => path.stroke !== 'none').map((path) => path.strokeWidth)
-      ).toEqual([strokeStyle === 'pencil' ? 1.5 : 2])
+        paths({ strokeStyle, strokeWidth: strokeStyle === 'pencil' ? 1.5 : 2 })
+      ).toEqual(original)
     }
   })
   it('keeps random seeds positive and deterministic', () => {

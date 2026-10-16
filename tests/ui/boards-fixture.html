@@ -52,6 +52,23 @@ if (notationFixture) {
   const richText = { paragraphs: annotationTypes.map((type, index) => ({ align: 'left', list: 'none', runs: [{ ...richRunDefaults, fontSize: 32, text: names[index], annotation: { ...defaultAnnotation(type), padding: 3, brackets: ['left', 'right'], multiline: false } }, { ...richRunDefaults, fontSize: 32, text: '\n' }] })) }
   boards.push({ id: 'fixture-notation', kind: 'paper', title: 'Ideias com Rough Notation', background: 'plain', colorScheme: 'light', revision: 1, formatVersion: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), elements: [{ id: 'notation-text', kind: 'text', x: 300, y: 120, width: 620, height: 610, text: names.join('\n\n'), richText, color: 'neutral', textAutoWidth: false, textFont: 'handwritten', textBackground: 'none', resolved: false, points: [], startId: null, endId: null, taskId: null, imageData: null }] })
 }
+const presentationFixture = new URLSearchParams(location.search).has('presentation')
+if (presentationFixture) {
+  const base={color:'neutral',strokeStyle:'pencil',textFont:'handwritten',textBackground:'none',resolved:false,points:[],startId:null,endId:null,taskId:null,imageData:null}
+  const elements=[
+    {...base,id:'presentation-title',kind:'text',x:320,y:160,width:1100,height:90,text:'Da ideia à apresentação',strokeColor:'#1739b7'},
+    ...['Explorar possibilidades','Conectar as ideias','Compartilhar o caminho'].map((text,index)=>({...base,id:`presentation-card-${index}`,kind:'rectangle',x:340+index*440,y:350,width:320,height:200,text,textAlign:'center',textVerticalAlign:'middle',strokeWidth:2,fillColor:['#fff0b3','#d8eaff','#d9ead6'][index]})),
+    ...[0,1].map(index=>({...base,id:`presentation-arrow-${index}`,kind:'arrow',x:675+index*440,y:450,width:85,height:0,text:'',strokeWidth:2})),
+  ]
+  const scenes=[{id:'overview',title:'Visão geral',x:250,y:100,width:1600,height:900,aspectRatio:'16:9'},{id:'explore',title:'Explorar uma ideia',x:300,y:290,width:400,height:300,aspectRatio:'4:3'},{id:'share',title:'Compartilhar',x:1180,y:290,width:400,height:300,aspectRatio:'4:3'}]
+  boards.push({id:'fixture-presentation',kind:'paper',title:'Uma história no Paper',background:'plain',colorScheme:'light',revision:1,formatVersion:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),elements,scenes})
+}
+const shapesFixture = new URLSearchParams(location.search).has('shapes')
+if(shapesFixture){
+  const base={color:'neutral',strokeStyle:'pencil',textFont:'handwritten',textBackground:'none',resolved:false,points:[],startId:null,endId:null,taskId:null,imageData:null,textAlign:'center',textVerticalAlign:'middle'}
+  const elements=[{...base,id:'shape-title',kind:'text',x:280,y:120,width:800,height:70,text:'Ideias em novas formas',strokeColor:'#1739b7'}, {...base,id:'shape-triangle',kind:'triangle',x:300,y:280,width:260,height:240,text:'Explorar',fillColor:'#fff0b3'}, {...base,id:'shape-hexagon',kind:'hexagon',x:700,y:280,width:290,height:240,text:'Conectar',fillColor:'#d8eaff'}, {...base,id:'shape-line',kind:'line',x:570,y:400,width:120,height:0,text:'',strokeStyle:'pen',strokeWidth:2}]
+  boards.push({id:'fixture-shapes',kind:'paper',title:'Novas formas no Paper',background:'grid',colorScheme:'light',revision:1,formatVersion:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),elements})
+}
 const tasks = []
 if (new URLSearchParams(location.search).has('contrast')) {
   for (const board of boards) for (const element of board.elements) {
@@ -65,16 +82,26 @@ const paperFixture = new URLSearchParams(location.search).has('papers')
 const now = () => new Date().toISOString()
 if (paperFixture) tasks.push({id:'fixture-task',title:'Organizar ideias do projeto',notes:'Anotações de teste',status:'pending',plannedFor:null,dueAt:null,reminderAt:now(),recurrenceId:null,occurrenceDate:null,completedAt:null,archivedAt:null,createdAt:now(),updatedAt:now(),isOverdue:false,progress:{total:0,completed:0,percentage:0}})
 window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
-  if (command === 'list_boards') return boards.map(({elements,...board}) => ({...board,elementCount:elements.length}))
+  if (command === 'list_boards') return boards.map(({elements,scenes,...board}) => ({...board,elementCount:elements.length}))
   if (command === 'get_board') return structuredClone(boards.find(board => board.id === args.id))
+  if (command === 'get_board_preview') {
+    const board=boards.find(board=>board.id===args.id)
+    const left=Math.min(0,...board.elements.map(element=>Math.min(element.x,element.x+element.width)))
+    const top=Math.min(0,...board.elements.map(element=>Math.min(element.y,element.y+element.height)))
+    const right=Math.max(1,...board.elements.map(element=>Math.max(element.x,element.x+element.width)))
+    const bottom=Math.max(1,...board.elements.map(element=>Math.max(element.y,element.y+element.height)))
+    return structuredClone({id:board.id,revision:board.revision,background:board.background??'plain',colorScheme:board.colorScheme??'light',elements:board.elements,bounds:{x:left,y:top,width:right-left,height:bottom-top}})
+  }
   if (command === 'create_board') {
     const board = {id:crypto.randomUUID(),kind:args.input.kind??'board',background:args.input.background??'plain',colorScheme:args.input.colorScheme??'light',title:args.input.title,elements:args.input.elements,revision:1,formatVersion:1,createdAt:now(),updatedAt:now()}
+    board.scenes=args.input.scenes??[]
     boards.push(board); return structuredClone(board)
   }
   if (command === 'save_board') {
     const board = boards.find(board => board.id === args.input.id)
     if (args.input.expectedRevision !== board.revision) throw Error('Fixture revision conflict')
     Object.assign(board,{locked:args.input.locked??board.locked??false,background:args.input.background??board.background,colorScheme:args.input.colorScheme??board.colorScheme,title:args.input.title,elements:args.input.elements,revision:board.revision+1,updatedAt:now()})
+    board.scenes=args.input.scenes??board.scenes??[]
     return structuredClone(board)
   }
   if (command === 'get_board_tasks') {
@@ -106,6 +133,8 @@ window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
 const router = createRouter({history:createWebHashHistory(),routes:[{path:'/papers',name:'papers',component:BoardsPage},{path:'/:pathMatch(.*)*',name:'boards',redirect:to=>({name:'papers',query:to.query})}]})
 if(paperFixture) await router.push({name:'papers'})
 if(notationFixture) await router.push({name:'papers',query:{boardId:'fixture-notation'}})
+if(presentationFixture) await router.push({name:'papers',query:{boardId:'fixture-presentation'}})
+if(shapesFixture) await router.push({name:'papers',query:{boardId:'fixture-shapes'}})
 if(brushesFixture) await router.push({name:'papers',query:{boardId:'fixture-brushes'}})
 if(usabilityFixture) await router.push({name:'papers',query:{boardId:'fixture-usability'}})
 if(writingFixture) await router.push({name:'papers',query:{boardId:'fixture-writing'}})

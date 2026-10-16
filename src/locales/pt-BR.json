@@ -78,6 +78,34 @@
       "ruled": "Pautado",
       "dots": "Pontilhado",
       "savedPerPaper": "Salvo neste Paper e aplicado à exportação PNG."
+    },
+    "presentation": {
+      "title": "Apresentação",
+      "close": "Fechar apresentação",
+      "present": "Apresentar",
+      "exportPdf": "Exportar PDF",
+      "create": "Criar cena",
+      "free": "Livre",
+      "limit": "Limite de 100 cenas por Paper.",
+      "showFrames": "Mostrar enquadramentos",
+      "empty": "Crie cenas para apresentar regiões do Paper em sequência.",
+      "name": "Nome da cena",
+      "ratio": "Proporção",
+      "adjust": "Ajustar enquadramento",
+      "up": "Mover para cima",
+      "down": "Mover para baixo",
+      "removeHint": "Remove apenas o enquadramento. Seus desenhos permanecem no Paper.",
+      "remove": "Excluir cena",
+      "hint": "Arraste as miniaturas para ordenar. Uma cena enquadra seus desenhos sem movê-los.",
+      "sceneName": "Cena {number}",
+      "drawHint": "Arraste no Paper para enquadrar uma cena. Clique para usar a região atual.",
+      "adjustHint": "Arraste para mover o enquadramento. Use o canto inferior direito para redimensionar. Esc para concluir.",
+      "done": "Concluir",
+      "previous": "Cena anterior",
+      "next": "Próxima cena",
+      "pointer": "Apontador",
+      "smooth": "Transição suave",
+      "exit": "Sair"
     }
   },
   "common": {
@@ -164,12 +192,30 @@
     "subtitle": "Tudo que ainda está aberto.",
     "empty": "Nenhuma tarefa pendente.",
     "groups": {
-      "overdue": ["Vencidas", "Tarefas pendentes cujo vencimento já passou."],
-      "today": ["Hoje", "Tarefas pendentes que vencem ainda hoje."],
-      "tomorrow": ["Amanhã", "Pendências já separadas para amanhã."],
-      "week": ["Esta semana", "Tarefas dos próximos dias."],
-      "later": ["Próximas", "Tarefas com vencimento fora da janela desta semana."],
-      "noDate": ["Sem data", "Tarefas abertas sem vencimento definido."]
+      "overdue": [
+        "Vencidas",
+        "Tarefas pendentes cujo vencimento já passou."
+      ],
+      "today": [
+        "Hoje",
+        "Tarefas pendentes que vencem ainda hoje."
+      ],
+      "tomorrow": [
+        "Amanhã",
+        "Pendências já separadas para amanhã."
+      ],
+      "week": [
+        "Esta semana",
+        "Tarefas dos próximos dias."
+      ],
+      "later": [
+        "Próximas",
+        "Tarefas com vencimento fora da janela desta semana."
+      ],
+      "noDate": [
+        "Sem data",
+        "Tarefas abertas sem vencimento definido."
+      ]
     }
   },
   "overdue": {
@@ -182,11 +228,26 @@
     "subtitle": "Tarefas pendentes com notificação configurada.",
     "empty": "Nenhuma tarefa com lembrete.",
     "groups": {
-      "overdue": ["Atrasados", "Lembretes que já passaram e ainda precisam de atenção."],
-      "today": ["Hoje", "Avisos que ainda vão acontecer hoje."],
-      "tomorrow": ["Amanhã", "Próximos lembretes já separados para amanhã."],
-      "week": ["Esta semana", "Lembretes dos próximos dias."],
-      "later": ["Mais tarde", "Lembretes fora da janela desta semana."]
+      "overdue": [
+        "Atrasados",
+        "Lembretes que já passaram e ainda precisam de atenção."
+      ],
+      "today": [
+        "Hoje",
+        "Avisos que ainda vão acontecer hoje."
+      ],
+      "tomorrow": [
+        "Amanhã",
+        "Próximos lembretes já separados para amanhã."
+      ],
+      "week": [
+        "Esta semana",
+        "Lembretes dos próximos dias."
+      ],
+      "later": [
+        "Mais tarde",
+        "Lembretes fora da janela desta semana."
+      ]
     }
   },
   "completed": {
@@ -281,6 +342,9 @@
     "noResults": "Nenhuma tarefa corresponde a esta busca."
   },
   "boards": {
+    "presentation": {
+      "exportPdf": "Exportar apresentação em PDF"
+    },
     "penColors": "Tintas de caneta",
     "inkColors": {
       "blue": "Azul",
@@ -440,6 +504,14 @@
     "shortcutZoom": "Ctrl+ +/−: zoom · Ctrl+0: 100% · Espaço + arrastar: mover câmera.",
     "colorLabel": "Cor",
     "imageRejected": "Não foi possível importar esta imagem.",
+    "fillStyles": {
+      "title": "Tipo de preenchimento",
+      "solid": "Sólido",
+      "hachure": "Hachuras",
+      "cross-hatch": "Cruzadas",
+      "dots": "Pontos",
+      "zigzag": "Zigue-zague"
+    },
     "exportFailed": "Não foi possível exportar a imagem.",
     "tools": {
       "select": "Selecionar",
@@ -448,6 +520,9 @@
       "note": "Nota",
       "rectangle": "Retângulo",
       "ellipse": "Elipse",
+      "line": "Linha reta",
+      "triangle": "Triângulo",
+      "hexagon": "Hexágono",
       "frame": "Quadro",
       "arrow": "Seta",
       "draw": "Lápis",
@@ -455,7 +530,8 @@
       "question": "Dúvida",
       "decision": "Decisão",
       "task": "Tarefa",
-      "image": "Imagem"
+      "image": "Imagem",
+      "eraser": "Borracha"
     },
     "colors": {
       "neutral": "Neutra",
@@ -567,6 +643,32 @@
         "horizontal": "Distribuir na horizontal",
         "vertical": "Distribuir na vertical"
       }
+    },
+    "sketch": {
+      "title": "Traço e acabamento",
+      "border": "Borda",
+      "solid": "Contínua",
+      "dashed": "Tracejada",
+      "dotted": "Pontilhada",
+      "roughness": "Irregularidade",
+      "bowing": "Curvatura",
+      "hatching": "Ajustar hachuras",
+      "angle": "Inclinação",
+      "spacing": "Espaçamento"
+    },
+    "eraser": {
+      "hint": "Arraste para apagar partes dos traços. Textos e formas são preservados.",
+      "size": "Tamanho da borracha",
+      "shortcut": "Borracha (E)"
+    },
+    "grouping": {
+      "menu": "Ações do Paper",
+      "group": "Agrupar",
+      "ungroup": "Desagrupar",
+      "front": "Trazer para frente",
+      "back": "Enviar para trás",
+      "delete": "Excluir seleção",
+      "label": "Grupo · {count} elementos"
     }
   },
   "settings": {
@@ -803,7 +905,12 @@
       "todayTime": "Hoje às 16:00",
       "reminderTime": "Lembrete às 15:30",
       "tag": "+trabalho",
-      "weekdays": ["Ter", "Qua", "Qui", "Sex"]
+      "weekdays": [
+        "Ter",
+        "Qua",
+        "Qui",
+        "Sex"
+      ]
     }
   },
   "support": {

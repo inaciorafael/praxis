@@ -5,6 +5,7 @@ import type {
   Board,
   BoardDocumentKind,
   BoardElement,
+  BoardScene,
   BoardSummary,
   PaperAppearance,
 } from '@/shared/types/board'
@@ -14,6 +15,7 @@ const content = (board: Board) =>
   JSON.stringify([
     board.title,
     board.elements,
+    board.scenes ?? [],
     board.background ?? 'plain',
     board.colorScheme ?? 'light',
     board.locked ?? false,
@@ -49,7 +51,7 @@ export const useBoardStore = defineStore('boards', () => {
     deadline = undefined
   }
   function summary(board: Board) {
-    const { elements, ...rest } = board
+    const { elements, scenes: _scenes, ...rest } = board
     const item = { ...rest, elementCount: elements.length }
     boards.value = [item, ...boards.value.filter((existing) => existing.id !== board.id)]
   }
@@ -91,6 +93,19 @@ export const useBoardStore = defineStore('boards', () => {
     current.value = copy(board)
     baseline.value = content(board)
     summary(board)
+  }
+  function setContent(elements: BoardElement[], scenes: BoardScene[]) {
+    if (current.value && !current.value.locked && !isLocking.value) {
+      current.value.elements = copy(elements)
+      current.value.scenes = copy(scenes)
+      schedule()
+    }
+  }
+  function setScenes(scenes: BoardScene[]) {
+    if (current.value && !current.value.locked && !isLocking.value) {
+      current.value.scenes = copy(scenes)
+      schedule()
+    }
   }
   async function hydrate() {
     isLoading.value = true
@@ -159,7 +174,8 @@ export const useBoardStore = defineStore('boards', () => {
     title: string,
     elements: BoardElement[] = [],
     kind: BoardDocumentKind = 'board',
-    appearance?: PaperAppearance
+    appearance?: PaperAppearance,
+    scenes?: BoardScene[]
   ) {
     if (!(await flush())) return false
     try {
@@ -167,6 +183,7 @@ export const useBoardStore = defineStore('boards', () => {
         await service.createBoard({
           title,
           elements,
+          ...(scenes !== undefined ? { scenes } : {}),
           ...(kind === 'paper' ? { kind } : {}),
           ...appearance,
         })
@@ -199,6 +216,7 @@ export const useBoardStore = defineStore('boards', () => {
           id: board.id,
           title: board.title,
           elements: board.elements,
+          scenes: board.scenes ?? [],
           expectedRevision: board.revision,
           ...(board.background !== undefined ? { background: board.background } : {}),
           ...(board.colorScheme !== undefined ? { colorScheme: board.colorScheme } : {}),
@@ -322,6 +340,7 @@ export const useBoardStore = defineStore('boards', () => {
             id: board.id,
             title: board.title,
             elements: board.elements,
+            scenes: board.scenes ?? [],
             expectedRevision: board.revision,
             locked,
             ...(board.background !== undefined ? { background: board.background } : {}),
@@ -378,6 +397,8 @@ export const useBoardStore = defineStore('boards', () => {
     setTitle,
     setAppearance,
     setElements,
+    setContent,
+    setScenes,
     setLocked,
     refreshTasks,
     makeTask,

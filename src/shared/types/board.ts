@@ -3,6 +3,9 @@ export type BoardElementKind =
   | 'note'
   | 'rectangle'
   | 'ellipse'
+  | 'triangle'
+  | 'hexagon'
+  | 'line'
   | 'frame'
   | 'arrow'
   | 'draw'
@@ -13,6 +16,14 @@ export type BoardElementKind =
 
 export type BoardColor = 'neutral' | 'amber' | 'sage' | 'blue' | 'rose' | 'purple'
 export type BoardStrokeStyle = 'clean' | 'pencil' | 'pen'
+export type BoardSketchOptions = {
+  strokePattern: 'solid' | 'dashed' | 'dotted'
+  roughness: number
+  bowing: number
+  hachureAngle: number
+  hachureGap: number
+}
+export type BoardFillStyle = 'solid' | 'hachure' | 'cross-hatch' | 'dots' | 'zigzag'
 export type BoardDrawBrush =
   | 'graphite'
   | 'fountain'
@@ -69,6 +80,7 @@ export type BoardRichText = { paragraphs: BoardRichParagraph[] }
 
 export type BoardElement = {
   id: string
+  groupId?: string | null
   kind: BoardElementKind
   x: number
   y: number
@@ -78,6 +90,8 @@ export type BoardElement = {
   strokeWidth?: number | null
   strokeColor?: string | null
   fillColor?: string | null
+  fillStyle?: BoardFillStyle | null
+  sketch?: BoardSketchOptions | null
   opacity?: number
   text: string
   color: BoardColor
@@ -107,6 +121,16 @@ export type PaperAppearance = {
   colorScheme: PaperColorScheme
 }
 
+export type BoardScene = {
+  id: string
+  title: string
+  x: number
+  y: number
+  width: number
+  height: number
+  aspectRatio: '16:9' | '4:3' | 'free'
+}
+
 export type Board = {
   locked?: boolean
   background?: PaperBackground
@@ -117,16 +141,18 @@ export type Board = {
   formatVersion: number
   revision: number
   elements: BoardElement[]
+  scenes?: BoardScene[]
   createdAt: string
   updatedAt: string
 }
 
-export type BoardSummary = Omit<Board, 'elements'> & { elementCount: number }
+export type BoardSummary = Omit<Board, 'elements' | 'scenes'> & { elementCount: number }
 export type CreateBoardInput = {
   background?: PaperBackground
   colorScheme?: PaperColorScheme
   title: string
   elements: BoardElement[]
+  scenes?: BoardScene[]
   kind?: BoardDocumentKind
 }
 export type SaveBoardInput = Omit<CreateBoardInput, 'kind'> & {

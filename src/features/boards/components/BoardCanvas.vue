@@ -14,9 +14,13 @@ import {
   Hand,
   RectangleHorizontal,
   Circle,
+  Minus,
+  Triangle,
+  Hexagon,
   MoveUpRight,
   Pencil,
   PenTool,
+  Eraser,
   RotateCcw,
   RotateCw,
   Type,
@@ -51,8 +55,12 @@ import type {
   PaperColorScheme,
   BoardTextAnnotation,
   BoardDrawBrush,
+  BoardScene,
+  BoardFillStyle,
+  BoardSketchOptions,
 } from '@/shared/types/board'
 import BoardSketch from './BoardSketch.vue'
+import PaperPresentationLaser from './PaperPresentationLaser.vue'
 import BoardArtisticBrush from './BoardArtisticBrush.vue'
 import PaperBrushLibrary from '@/features/papers/components/PaperBrushLibrary.vue'
 import {
@@ -67,6 +75,9 @@ import BoardRichLabel from './BoardRichLabel.vue'
 import BoardRichTextEditor from './BoardRichTextEditor.vue'
 import BoardAnnotationControls from './BoardAnnotationControls.vue'
 import PaperElementControls from './PaperElementControls.vue'
+import { DEFAULT_SKETCH_OPTIONS } from '../lib/sketch-options'
+import PaperFillStylePicker from './PaperFillStylePicker.vue'
+import { elementFillStyle } from '../lib/element-style'
 import { arrangeElements, type Arrangement } from '../lib/arrange'
 import { finishNotationExport, safeAnnotation } from '../lib/notation'
 import {
@@ -89,18 +100,37 @@ import {
   worldPoint,
   zoomAt,
   pointInElement,
+  polygonVertices,
+  linePoints,
   resizeElement,
   normalizeAngle,
   type ResizeOptions,
   type Camera,
 } from '../lib/geometry'
 import { boardImage } from '../lib/image'
-import { copyElements, createHistory, sameElements } from '../model/history'
+import { copyElements, sameElements, sameValue } from '../model/history'
+import { createPaperHistory } from '../model/paper-history'
+import {
+  copyScenes,
+  sceneBox,
+  sceneCamera,
+  sceneAtCamera,
+  MAX_SCENES,
+  type SceneRatio,
+} from '../lib/scenes'
+import PaperScenesPanel from './PaperScenesPanel.vue'
+import { buildPresentationPdf } from '../lib/presentation-pdf'
+import { saveBoardPdf } from '@/shared/lib/boards/board-export.service'
 import { isWritingBrush } from '../lib/writing'
 import { resizeTextElement } from '../lib/resize-text'
+import { elementFill, elementLabelScheme } from '../lib/element-style'
+import { eraseStrokes } from '../lib/eraser'
+import { expandGroups, groupBox, transformGroup } from '../lib/groups'
 
 const props = defineProps<{
   elements: BoardElement[]
+  scenes?: BoardScene[]
+  title?: string
   taskTitles?: Record<string, { title: string; status: string }>
   distractionFree?: boolean
   background?: PaperBackground
@@ -109,6 +139,8 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   change: [elements: BoardElement[]]
+  contentChange: [content: { elements: BoardElement[]; scenes: BoardScene[] }]
+  presentation: [active: boolean]
   select: [id: string | null]
   lockPaper: []
   interact: []
@@ -119,8 +151,62 @@ const svg = ref<SVGSVGElement>()
 const imageInput = ref<HTMLInputElement>()
 const textInput = ref<HTMLTextAreaElement>()
 const local = ref(copyElements(props.elements))
+const localScenes = ref(copyScenes(props.scenes ?? []))
+const editorRoot = ref<HTMLDivElement>()
+const contentId = `paper-content-${crypto.randomUUID()}`
+const scenesOpen = ref(false)
+const showScenes = ref(true)
+const activeSceneId = ref<string | null>(null)
+const sceneMode = ref<'create' | 'adjust' | null>(null)
+const sceneRatio = ref<SceneRatio>('16:9')
+const presenting = ref(false)
+const smoothTransition = ref(true)
+const laserEnabled = ref(true)
+const exportingPresentation = ref(false)
+const interactionLocked = computed(
+  () => props.readOnly || presenting.value || exportingPresentation.value
+)
+const hideTools = computed(() => props.distractionFree || presenting.value)
+const activeScene = computed(() =>
+  localScenes.value.find((scene) => scene.id === activeSceneId.value)
+)
+const presentationIndex = ref(0)
+const presentationScene = computed(() => localScenes.value[presentationIndex.value])
+let savedCamera: Camera | null = null
+let cameraFrame = 0
+let ownsFullscreen = false
+type SceneGesture = {
+  pointer: number
+  start: BoardPoint
+  end: BoardPoint
+  original?: BoardScene
+  resize?: boolean
+}
+const sceneGesture = ref<SceneGesture | null>(null)
+const sceneDraft = computed(() => {
+  const g = sceneGesture.value
+  if (!g) return null
+  if (!g.original) return sceneBox(g.start, g.end, sceneRatio.value)
+  if (g.resize)
+    return sceneBox({ x: g.original.x, y: g.original.y }, g.end, g.original.aspectRatio)
+  return {
+    ...g.original,
+    x: g.original.x + g.end.x - g.start.x,
+    y: g.original.y + g.end.y - g.start.y,
+  }
+})
+const sceneViewport = computed(() => {
+  const scene = presentationScene.value
+  if (!scene) return {}
+  return {
+    left: `${scene.x * camera.value.zoom + camera.value.x}px`,
+    top: `${scene.y * camera.value.zoom + camera.value.y}px`,
+    width: `${scene.width * camera.value.zoom}px`,
+    height: `${scene.height * camera.value.zoom}px`,
+  }
+})
 const camera = ref<Camera>({ x: 40, y: 40, zoom: 1 })
-const tool = ref<BoardElementKind | 'select' | 'pan'>(
+const tool = ref<BoardElementKind | 'select' | 'pan' | 'eraser'>(
   props.elements.length ? 'select' : 'draw'
 )
 const tools = [
@@ -128,9 +214,13 @@ const tools = [
   { id: 'pan', icon: Hand, shortcut: 'H' },
   { id: 'rectangle', icon: RectangleHorizontal, shortcut: 'R' },
   { id: 'ellipse', icon: Circle, shortcut: 'O' },
+  { id: 'line', icon: Minus, shortcut: 'L' },
+  { id: 'triangle', icon: Triangle, shortcut: '' },
+  { id: 'hexagon', icon: Hexagon, shortcut: '' },
   { id: 'arrow', icon: MoveUpRight, shortcut: 'A' },
   { id: 'draw', icon: Pencil, shortcut: 'P' },
   { id: 'pen', icon: PenTool, shortcut: 'B' },
+  { id: 'eraser', icon: Eraser, shortcut: 'E' },
   { id: 'text', icon: Type, shortcut: 'T' },
   { id: 'note', icon: StickyNote, shortcut: 'N' },
   { id: 'image', icon: ImagePlus, shortcut: '' },
@@ -148,9 +238,13 @@ const brushFallback = ref(false)
 const strokeStyles: BoardStrokeStyle[] = ['pencil', 'pen', 'clean']
 const settingsOpen = ref(false)
 const brushWidth = ref(1.5)
+const eraserSize = ref(24)
+const eraserPosition = ref<BoardPoint | null>(null)
 const brushOpacity = ref(1)
 const customColor = ref<string | null>(null)
 const shapeFill = ref<string | null>(null)
+const shapeFillStyle = ref<BoardFillStyle>()
+const shapeSketch = ref<BoardSketchOptions>()
 const selectionPropertiesOpen = ref(true)
 const activeWheelTool = computed(() =>
   tool.value === 'draw' && strokeStyle.value === 'pen' ? 'pen' : tool.value
@@ -231,7 +325,7 @@ const textVerticalAlignments: BoardTextVerticalAlign[] = ['top', 'middle', 'bott
 const fontReady = ref(0)
 const textFonts: BoardTextFont[] = ['handwritten', 'sans']
 const canHaveText = (element: BoardElement) =>
-  !['arrow', 'draw', 'image'].includes(element.kind)
+  !['arrow', 'line', 'draw', 'image'].includes(element.kind)
 const canHaveFill = (element: BoardElement) =>
   canHaveText(element) &&
   (element.kind !== 'text' || (element.textBackground ?? 'none') !== 'none')
@@ -240,9 +334,17 @@ const fillAvailable = computed(() =>
     ? local.value.some(
         (element) => selected.value.includes(element.id) && canHaveFill(element)
       )
-    : ['rectangle', 'ellipse', 'frame', 'note', 'question', 'decision', 'task'].includes(
-        tool.value
-      ) ||
+    : [
+        'rectangle',
+        'ellipse',
+        'triangle',
+        'hexagon',
+        'frame',
+        'note',
+        'question',
+        'decision',
+        'task',
+      ].includes(tool.value) ||
       (tool.value === 'text' && textBackground.value !== 'none')
 )
 const selectedFill = computed(() => {
@@ -256,6 +358,21 @@ const selectedFill = computed(() => {
       ? [...fills][0]
       : undefined
     : shapeFill.value
+})
+const selectedFillStyle = computed(() => {
+  if (!selected.value.length)
+    return (
+      shapeFillStyle.value ??
+      (['rectangle', 'ellipse', 'triangle', 'hexagon', 'text'].includes(tool.value)
+        ? 'hachure'
+        : 'solid')
+    )
+  const values = new Set(
+    local.value
+      .filter((element) => selected.value.includes(element.id) && canHaveFill(element))
+      .map(elementFillStyle)
+  )
+  return values.size === 1 ? [...values][0] : undefined
 })
 const selectedFontSize = computed(() =>
   currentTextStyle(
@@ -291,7 +408,9 @@ const showTextStyle = computed(() =>
     ? local.value.some(
         (element) => selected.value.includes(element.id) && canHaveText(element)
       )
-    : ['text', 'note', 'rectangle', 'ellipse', 'frame'].includes(tool.value)
+    : ['text', 'note', 'rectangle', 'ellipse', 'triangle', 'hexagon', 'frame'].includes(
+        tool.value
+      )
 )
 function currentTextStyle<T>(
   value: (element: BoardElement) => T,
@@ -373,7 +492,7 @@ const draft = ref('')
 const richDraft = ref<BoardRichText | null>(null)
 const richEditor = ref<InstanceType<typeof BoardRichTextEditor>>()
 const error = ref('')
-const history = createHistory()
+const history = createPaperHistory()
 let textCreationBefore: BoardElement[] | null = null
 const historyVersion = ref(0)
 const canUndo = computed(() => {
@@ -387,7 +506,7 @@ const canRedo = computed(() => {
 let disposed = false
 type ResizeHandle = ResizeOptions['handle']
 type Gesture = {
-  mode: 'pan' | 'move' | 'create' | 'marquee' | 'resize' | 'rotate'
+  mode: 'pan' | 'move' | 'create' | 'marquee' | 'resize' | 'rotate' | 'erase'
   pointer: number
   start: BoardPoint
   before: BoardElement[]
@@ -403,8 +522,18 @@ const selectedElement = computed(() =>
     ? local.value.find((element) => element.id === selected.value[0])
     : undefined
 )
-const rotatableElement = computed(() =>
-  selectedElement.value?.kind !== 'arrow' ? selectedElement.value : undefined
+const selectedGroup = computed(() => groupBox(local.value, selected.value))
+const contextMenu = ref<{ x: number; y: number } | null>(null)
+const canGroup = computed(() => selected.value.length > 1 && !selectedGroup.value)
+const canUngroup = computed(() =>
+  local.value.some((e) => selected.value.includes(e.id) && e.groupId)
+)
+const rotatableElement = computed(
+  () =>
+    selectedGroup.value ??
+    (selectedElement.value && !['arrow', 'line'].includes(selectedElement.value.kind)
+      ? selectedElement.value
+      : undefined)
 )
 function rotationTransform(element?: BoardElement) {
   return element && element.kind !== 'arrow' && element.angle
@@ -428,8 +557,17 @@ const selectionBox = computed(() =>
 )
 const selectedArrow = computed(() =>
   selected.value.length === 1
-    ? local.value.find((e) => e.id === selected.value[0] && e.kind === 'arrow')
+    ? local.value.find(
+        (e) => e.id === selected.value[0] && ['arrow', 'line'].includes(e.kind)
+      )
     : undefined
+)
+const selectedLinePoints = computed(() =>
+  selectedArrow.value
+    ? selectedArrow.value.kind === 'line'
+      ? linePoints(selectedArrow.value)
+      : connectorPoints(selectedArrow.value, local.value)
+    : null
 )
 const resizeHandles = computed(() => {
   const box = selectionBox.value
@@ -500,12 +638,14 @@ const gridStyle = computed(() =>
   paperBackgroundStyle(props.background, props.colorScheme, camera.value)
 )
 function chooseTool(id: (typeof tools)[number]['id']) {
+  sceneMode.value = null
   const sameBrush =
     !drawBrush.value &&
     tool.value === 'draw' &&
     strokeStyle.value === (id === 'pen' ? 'pen' : 'pencil')
   finishEditing()
   tool.value = id === 'pen' ? 'draw' : id
+  if (id === 'eraser') select([])
   if (id === 'pen' || id === 'draw') {
     drawBrush.value = null
     strokeStyle.value = id === 'pen' ? 'pen' : 'pencil'
@@ -523,6 +663,8 @@ function closeSettings() {
   brushLibraryOpen.value = false
 }
 function dismissOutside(event: PointerEvent) {
+  if (!(event.target as Element).closest?.('.paper-context-menu'))
+    contextMenu.value = null
   if (event.target instanceof Node && !viewport.value?.contains(event.target)) {
     closeSettings()
     selectionPropertiesOpen.value = false
@@ -577,6 +719,7 @@ function toggleBrushLibrary() {
   selectionPropertiesOpen.value = false
 }
 function toggleBrushSettings() {
+  if (tool.value === 'eraser') return
   const open = !settingsOpen.value || brushLibraryOpen.value
   brushLibraryOpen.value = false
   settingsOpen.value = open
@@ -635,12 +778,17 @@ const sceneTransform = computed(
   () => `translate(${camera.value.x} ${camera.value.y}) scale(${camera.value.zoom})`
 )
 watch(
-  () => props.elements,
-  (elements) => {
+  () => [props.elements, props.scenes] as const,
+  ([elements, scenes]) => {
     if (gesture.value) return
+    if (sceneGesture.value) return
     if (textCreationBefore && sameElements(elements, textCreationBefore)) return
-    if (!sameElements(elements, local.value)) {
+    if (
+      !sameElements(elements, local.value) ||
+      !sameValue(scenes ?? [], localScenes.value)
+    ) {
       local.value = copyElements(elements)
+      localScenes.value = copyScenes(scenes ?? [])
       editing.value = null
       richDraft.value = null
       textCreationBefore = null
@@ -652,9 +800,11 @@ watch(
   { deep: true }
 )
 watch(
-  () => props.readOnly,
+  () => interactionLocked.value,
   (locked) => {
     if (!locked) return
+    sceneGesture.value = null
+    sceneMode.value = null
     if (gesture.value) local.value = copyElements(gesture.value.before)
     if (textCreationBefore) local.value = copyElements(textCreationBefore)
     textCreationBefore = null
@@ -668,6 +818,7 @@ watch(
   { immediate: true }
 )
 function select(ids: string[]) {
+  ids = expandGroups(local.value, ids)
   if (ids.join(',') !== selected.value.join(',')) selectionPropertiesOpen.value = true
   selected.value = ids
   if (ids.length === 1) {
@@ -679,6 +830,9 @@ function select(ids: string[]) {
       brushOpacity.value = element.opacity ?? 1
       customColor.value = element.strokeColor ?? null
       shapeFill.value = element.fillColor ?? null
+      shapeFillStyle.value = elementFillStyle(element)
+      if (element.kind !== 'draw' && element.kind !== 'image')
+        shapeSketch.value = element.sketch ? { ...element.sketch } : undefined
       if (element.kind === 'draw') drawBrush.value = element.drawBrush ?? null
     }
     if (element && canHaveText(element)) {
@@ -705,12 +859,20 @@ function point(event: { clientX: number; clientY: number }) {
     ? { ...position, pressure: Math.max(0, Math.min(1, pointer.pressure)) }
     : position
 }
-function commit(before: BoardElement[]) {
-  if (props.readOnly) return
-  if (sameElements(before, local.value)) return
-  history.push(before)
-  historyVersion.value++
+function publishContent() {
   emit('change', copyElements(local.value))
+  emit('contentChange', {
+    elements: copyElements(local.value),
+    scenes: copyScenes(localScenes.value),
+  })
+}
+function commit(before: BoardElement[], beforeScenes = localScenes.value) {
+  if (interactionLocked.value) return
+  if (sameElements(before, local.value) && sameValue(beforeScenes, localScenes.value))
+    return
+  history.push({ elements: before, scenes: beforeScenes })
+  historyVersion.value++
+  publishContent()
 }
 function newElement(kind: BoardElementKind, position: BoardPoint): BoardElement {
   return {
@@ -723,10 +885,21 @@ function newElement(kind: BoardElementKind, position: BoardPoint): BoardElement 
     text: '',
     color: color.value,
     strokeStyle: strokeStyle.value,
+    ...(shapeSketch.value &&
+    kind !== 'draw' &&
+    kind !== 'image' &&
+    (kind !== 'text' || textBackground.value !== 'none')
+      ? { sketch: { ...shapeSketch.value } }
+      : {}),
     ...(kind === 'draw' && drawBrush.value ? { drawBrush: drawBrush.value } : {}),
     strokeWidth: brushWidth.value,
     strokeColor: customColor.value,
-    ...(!['image', 'draw', 'arrow'].includes(kind) &&
+    ...(shapeFillStyle.value &&
+    !['image', 'draw', 'arrow', 'line'].includes(kind) &&
+    (kind !== 'text' || textBackground.value !== 'none')
+      ? { fillStyle: shapeFillStyle.value }
+      : {}),
+    ...(!['image', 'draw', 'arrow', 'line'].includes(kind) &&
     (kind !== 'text' || textBackground.value !== 'none') &&
     shapeFill.value
       ? { fillColor: shapeFill.value }
@@ -756,11 +929,33 @@ function hit(position: BoardPoint, exclude?: string): BoardElement | undefined {
       (e) =>
         e.id !== exclude &&
         e.kind !== 'arrow' &&
+        e.kind !== 'line' &&
         e.kind !== 'draw' &&
         pointInElement(e, position)
     )
 }
 function pointerDown(event: PointerEvent) {
+  contextMenu.value = null
+  if (presenting.value) {
+    event.preventDefault()
+    return
+  }
+  if (sceneMode.value && !interactionLocked.value && event.button === 0 && !space.value) {
+    event.preventDefault()
+    viewport.value?.focus()
+    finishEditing()
+    const original = sceneMode.value === 'adjust' ? activeScene.value : undefined
+    if (sceneMode.value === 'adjust' && !original) return
+    sceneGesture.value = {
+      pointer: event.pointerId,
+      start: point(event),
+      end: point(event),
+      original: original ? { ...original } : undefined,
+      resize: !!(event.target as Element).closest('[data-scene-resize]'),
+    }
+    viewport.value?.setPointerCapture?.(event.pointerId)
+    return
+  }
   if (event.button !== 0 && event.button !== 1) return
   closeSettings()
   emit('interact')
@@ -772,7 +967,7 @@ function pointerDown(event: PointerEvent) {
   event.preventDefault()
   const p = point(event)
   const before = copyElements(local.value)
-  if (props.readOnly) {
+  if (interactionLocked.value) {
     gesture.value = {
       mode: 'pan',
       pointer: event.pointerId,
@@ -796,6 +991,15 @@ function pointerDown(event: PointerEvent) {
   const base = { pointer: event.pointerId, start: p, before, camera: { ...camera.value } }
   if (event.button === 1 || space.value || tool.value === 'pan') {
     gesture.value = { ...base, mode: 'pan', start: screen(event) }
+  } else if (tool.value === 'eraser') {
+    eraserPosition.value = screen(event)
+    local.value = eraseStrokes(
+      local.value,
+      p,
+      p,
+      eraserSize.value / camera.value.zoom / 2
+    )
+    gesture.value = { ...base, mode: 'erase', end: p }
   } else if (
     tool.value === 'select' &&
     (event.target as Element).getAttribute('data-rotate') &&
@@ -805,24 +1009,25 @@ function pointerDown(event: PointerEvent) {
   } else if (
     tool.value === 'select' &&
     (event.target as Element).getAttribute('data-resize') &&
-    selected.value.length === 1
+    (selected.value.length === 1 || selectedGroup.value)
   ) {
     gesture.value = {
       ...base,
       mode: 'resize',
-      id: selected.value[0],
+      id: selectedGroup.value?.id ?? selected.value[0],
       handle: ((event.target as Element).getAttribute('data-resize-handle') ??
         'se') as ResizeHandle,
     }
   } else if (tool.value === 'select') {
     if (target) {
-      if (event.shiftKey)
+      if (event.shiftKey) {
+        const targetIds = expandGroups(local.value, [target])
         select(
           selected.value.includes(target)
-            ? selected.value.filter((id) => id !== target)
-            : [...selected.value, target]
+            ? selected.value.filter((id) => !targetIds.includes(id))
+            : [...selected.value, ...targetIds]
         )
-      else if (!selected.value.includes(target)) select([target])
+      } else if (!selected.value.includes(target)) select([target])
       gesture.value = { ...base, mode: 'move' }
     } else {
       if (!event.shiftKey) select([])
@@ -833,8 +1038,8 @@ function pointerDown(event: PointerEvent) {
     return
   } else {
     const element = newElement(tool.value, p)
-    if (element.kind === 'arrow') {
-      element.startId = hit(p)?.id ?? null
+    if (element.kind === 'arrow' || element.kind === 'line') {
+      element.startId = element.kind === 'arrow' ? (hit(p)?.id ?? null) : null
       element.width = 0
       element.height = 0
     }
@@ -844,11 +1049,101 @@ function pointerDown(event: PointerEvent) {
   }
   viewport.value?.setPointerCapture?.(event.pointerId)
 }
+function groupSelection() {
+  contextMenu.value = null
+  if (interactionLocked.value || !canGroup.value) return
+  finishEditing()
+  const before = copyElements(local.value)
+  const id = crypto.randomUUID()
+  for (const element of local.value)
+    if (selected.value.includes(element.id)) element.groupId = id
+  commit(before)
+}
+function ungroupSelection() {
+  contextMenu.value = null
+  if (interactionLocked.value || !canUngroup.value) return
+  finishEditing()
+  const before = copyElements(local.value)
+  for (const element of local.value)
+    if (selected.value.includes(element.id)) element.groupId = null
+  commit(before)
+}
+function openContextMenu(event: MouseEvent) {
+  if ((event.target as Element).closest('input,textarea,[contenteditable="true"]')) return
+  event.preventDefault()
+  if (interactionLocked.value) return
+  finishEditing()
+  cancelGesture()
+  closeSettings()
+  tool.value = 'select'
+  const target = (event.target as Element)
+    .closest('[data-element-id]')
+    ?.getAttribute('data-element-id')
+  if (target && !selected.value.includes(target)) select([target])
+  if (!target) select([])
+  selectionPropertiesOpen.value = false
+  const position = screen(event)
+  contextMenu.value = {
+    x: Math.max(8, Math.min(position.x, (viewport.value?.clientWidth || 640) - 240)),
+    y: Math.max(8, Math.min(position.y, (viewport.value?.clientHeight || 480) - 360)),
+  }
+  nextTick(() =>
+    viewport.value
+      ?.querySelector<HTMLButtonElement>('.paper-context-menu button:not(:disabled)')
+      ?.focus()
+  )
+}
+function contextAction(action: () => void) {
+  contextMenu.value = null
+  if (interactionLocked.value) return
+  action()
+  nextTick(() => viewport.value?.focus())
+}
+function contextKeyboard(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    contextMenu.value = null
+    viewport.value?.focus()
+  } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+    event.preventDefault()
+    const buttons = [
+      ...viewport.value!.querySelectorAll<HTMLButtonElement>(
+        '.paper-context-menu button:not(:disabled)'
+      ),
+    ]
+    const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? buttons.length - 1
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) %
+            buttons.length
+    buttons[next]?.focus()
+  }
+}
 function pointerMove(event: PointerEvent) {
+  if (tool.value === 'eraser' && !interactionLocked.value)
+    eraserPosition.value = screen(event)
+  if (presenting.value) {
+    return
+  }
+  if (sceneGesture.value?.pointer === event.pointerId) {
+    sceneGesture.value.end = point(event)
+    return
+  }
   const g = gesture.value
   if (!g || g.pointer !== event.pointerId) return
   const p = point(event)
-  if (g.mode === 'pan') {
+  if (g.mode === 'erase') {
+    local.value = eraseStrokes(
+      local.value,
+      g.end ?? g.start,
+      p,
+      eraserSize.value / camera.value.zoom / 2
+    )
+    g.end = p
+  } else if (g.mode === 'pan') {
     const s = screen(event)
     camera.value = {
       ...g.camera,
@@ -869,6 +1164,28 @@ function pointerMove(event: PointerEvent) {
     )
   } else if (g.mode === 'marquee') g.end = p
   else {
+    const group = groupBox(g.before, selected.value)
+    if (group && (g.mode === 'rotate' || g.mode === 'resize')) {
+      if (g.mode === 'rotate') {
+        const center = { x: group.x + group.width / 2, y: group.y + group.height / 2 }
+        let angle =
+          Math.atan2(p.y - center.y, p.x - center.x) -
+          Math.atan2(g.start.y - center.y, g.start.x - center.x)
+        if (event.shiftKey) angle = (Math.round(angle / (Math.PI / 12)) * Math.PI) / 12
+        local.value = transformGroup(g.before, selected.value, group, group, angle)
+      } else {
+        const resized = resizeElement(group, p, {
+          handle: g.handle ?? 'se',
+          proportional: true,
+          fromCenter: event.altKey,
+        })
+        local.value = transformGroup(g.before, selected.value, group, {
+          ...group,
+          ...resized,
+        })
+      }
+      return
+    }
     const element = local.value.find((e) => e.id === g.id)
     if (!element) return
     if (g.mode === 'rotate') {
@@ -884,6 +1201,25 @@ function pointerMove(event: PointerEvent) {
       if (event.shiftKey) angle = (Math.round(angle / (Math.PI / 12)) * Math.PI) / 12
       element.angle = normalizeAngle(angle)
     } else if (g.mode === 'resize') {
+      if (element.kind === 'line') {
+        const original = g.before.find((item) => item.id === element.id)!
+        const [a, b] = linePoints(original)
+        if (g.handle === 'nw') {
+          let delta = { width: b.x - p.x, height: b.y - p.y }
+          if (event.shiftKey) delta = constrainedArrow(delta.width, delta.height)
+          Object.assign(element, {
+            x: b.x - delta.width,
+            y: b.y - delta.height,
+            ...delta,
+            angle: 0,
+          })
+        } else {
+          let delta = { width: p.x - a.x, height: p.y - a.y }
+          if (event.shiftKey) delta = constrainedArrow(delta.width, delta.height)
+          Object.assign(element, { x: a.x, y: a.y, ...delta, angle: 0 })
+        }
+        return
+      }
       if (element.kind === 'arrow') {
         element.width = p.x - element.x
         element.height = p.y - element.y
@@ -939,18 +1275,21 @@ function pointerMove(event: PointerEvent) {
           g.stroke!.push(next)
       }
       Object.assign(element, normalizedStroke(g.stroke!))
-    } else if (element.kind === 'arrow') {
+    } else if (element.kind === 'arrow' || element.kind === 'line') {
       element.width = p.x - g.start.x
       element.height = p.y - g.start.y
       if (event.shiftKey)
         Object.assign(element, constrainedArrow(element.width, element.height))
-      element.endId = hit(p, element.id)?.id ?? null
+      element.endId = element.kind === 'arrow' ? (hit(p, element.id)?.id ?? null) : null
     } else {
       element.x = Math.min(g.start.x, p.x)
       element.y = Math.min(g.start.y, p.y)
       element.width = Math.max(24, Math.abs(p.x - g.start.x))
       element.height = Math.max(24, Math.abs(p.y - g.start.y))
-      if (event.shiftKey && ['rectangle', 'ellipse', 'frame'].includes(element.kind)) {
+      if (
+        event.shiftKey &&
+        ['rectangle', 'ellipse', 'triangle', 'hexagon', 'frame'].includes(element.kind)
+      ) {
         const size = Math.max(element.width, element.height)
         element.width = size
         element.height = size
@@ -963,8 +1302,48 @@ function pointerMove(event: PointerEvent) {
   }
 }
 function pointerUp(event: PointerEvent) {
+  if (sceneGesture.value?.pointer === event.pointerId) {
+    const g = sceneGesture.value
+    g.end = point(event)
+    const box =
+      !g.original && Math.hypot(g.end.x - g.start.x, g.end.y - g.start.y) < 4
+        ? sceneAtCamera(camera.value, viewportSize.value, sceneRatio.value)
+        : sceneDraft.value
+    const before = copyScenes(localScenes.value)
+    sceneGesture.value = null
+    viewport.value?.releasePointerCapture?.(event.pointerId)
+    if (!box || interactionLocked.value) return
+    if (g.original)
+      localScenes.value = localScenes.value.map((scene) =>
+        scene.id === g.original!.id ? { ...scene, ...box } : scene
+      )
+    else if (localScenes.value.length < MAX_SCENES) {
+      const scene: BoardScene = {
+        id: crypto.randomUUID(),
+        title: t('papers.presentation.sceneName', {
+          number: localScenes.value.length + 1,
+        }),
+        ...box,
+        aspectRatio: sceneRatio.value,
+      }
+      localScenes.value.push(scene)
+      activeSceneId.value = scene.id
+      sceneMode.value = 'adjust'
+    }
+    commit(copyElements(local.value), before)
+    return
+  }
   const g = gesture.value
   if (!g || g.pointer !== event.pointerId) return
+  if (g.mode === 'erase') {
+    const end = point(event)
+    local.value = eraseStrokes(
+      local.value,
+      g.end ?? g.start,
+      end,
+      eraserSize.value / camera.value.zoom / 2
+    )
+  }
   const box = marquee.value
   if (box)
     select([
@@ -1022,6 +1401,7 @@ function constrainedArrow(width: number, height: number) {
   return { width: length * Math.cos(angle), height: length * Math.sin(angle) }
 }
 function cancelGesture() {
+  sceneGesture.value = null
   finishEditing()
   if (gesture.value) local.value = copyElements(gesture.value.before)
   gesture.value = null
@@ -1049,11 +1429,17 @@ onMounted(() => {
   if (viewport.value && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect
-      if (rect) viewportSize.value = { width: rect.width, height: rect.height }
+      if (rect) {
+        viewportSize.value = { width: rect.width, height: rect.height }
+        if (presenting.value) movePresentation(presentationIndex.value, false)
+      }
     })
     resizeObserver.observe(viewport.value)
   }
-  if (local.value.length) nextTick(fitContent)
+  if (local.value.length)
+    nextTick(() => {
+      if (!presenting.value) fitContent()
+    })
 })
 onBeforeUnmount(releaseArtisticBrushes)
 onUnmounted(() => {
@@ -1063,6 +1449,7 @@ onUnmounted(() => {
   document.removeEventListener('pointerdown', dismissOutside, true)
 })
 function wheel(event: WheelEvent) {
+  if (presenting.value) return
   camera.value = zoomAt(
     camera.value,
     screen(event),
@@ -1080,9 +1467,27 @@ function zoom(factor: number) {
   )
 }
 function fitContent() {
-  const box = bounds(local.value)
+  let box = bounds(local.value)
+  if (showScenes.value && localScenes.value.length) {
+    const regions = [...(local.value.length ? [box] : []), ...localScenes.value]
+    const x = Math.min(...regions.map((region) => region.x)),
+      y = Math.min(...regions.map((region) => region.y))
+    box = {
+      x,
+      y,
+      width: Math.max(...regions.map((region) => region.x + region.width)) - x,
+      height: Math.max(...regions.map((region) => region.y + region.height)) - y,
+    }
+  }
   const width = viewport.value?.clientWidth || 640
   const height = viewport.value?.clientHeight || 480
+  if (showScenes.value && localScenes.value.length) {
+    const left = hideTools.value ? 0 : Math.min(220, width / 3)
+    camera.value = sceneCamera(box, { width: width - left, height: height - 70 }, 40)
+    camera.value.x += left
+    camera.value.y += 70
+    return
+  }
   const zoom = Math.max(
     0.1,
     Math.min(2, (width - 80) / box.width, (height - 80) / box.height)
@@ -1121,9 +1526,13 @@ function duplicateSelection() {
   const before = copyElements(local.value)
   const originals = local.value.filter((e) => selected.value.includes(e.id))
   const ids = new Map(originals.map((e) => [e.id, crypto.randomUUID()]))
+  const groups = new Map(
+    originals.filter((e) => e.groupId).map((e) => [e.groupId!, crypto.randomUUID()])
+  )
   const copies = copyElements(originals).map((e) => ({
     ...e,
     id: ids.get(e.id)!,
+    ...(e.groupId ? { groupId: groups.get(e.groupId)! } : {}),
     x: e.x + 24,
     y: e.y + 24,
     startId: ids.get(e.startId ?? '') ?? e.startId,
@@ -1143,6 +1552,17 @@ function orderSelection(front: boolean) {
 function rotateSelection(delta: number) {
   finishEditing()
   const before = copyElements(local.value)
+  if (selectedGroup.value) {
+    local.value = transformGroup(
+      before,
+      selected.value,
+      selectedGroup.value,
+      selectedGroup.value,
+      delta
+    )
+    commit(before)
+    return
+  }
   for (const element of local.value) {
     if (selected.value.includes(element.id) && element.kind !== 'arrow')
       element.angle = normalizeAngle((element.angle ?? 0) + delta)
@@ -1163,26 +1583,36 @@ function moveSelection(dx: number, dy: number) {
   commit(before)
 }
 function undo() {
-  if (props.readOnly) return
+  if (interactionLocked.value) return
   cancelGesture()
-  const elements = history.undo(local.value)
+  const snapshot = history.undo({ elements: local.value, scenes: localScenes.value })
   historyVersion.value++
-  if (elements) {
-    local.value = elements
+  if (snapshot) {
+    local.value = snapshot.elements
+    localScenes.value = snapshot.scenes
+    if (!activeScene.value) {
+      activeSceneId.value = null
+      sceneMode.value = null
+    }
     select([])
-    emit('change', copyElements(elements))
+    publishContent()
     nextTick(() => viewport.value?.focus())
   }
 }
 function redo() {
-  if (props.readOnly) return
+  if (interactionLocked.value) return
   cancelGesture()
-  const elements = history.redo(local.value)
+  const snapshot = history.redo({ elements: local.value, scenes: localScenes.value })
   historyVersion.value++
-  if (elements) {
-    local.value = elements
+  if (snapshot) {
+    local.value = snapshot.elements
+    localScenes.value = snapshot.scenes
+    if (!activeScene.value) {
+      activeSceneId.value = null
+      sceneMode.value = null
+    }
     select([])
-    emit('change', copyElements(elements))
+    publishContent()
     nextTick(() => viewport.value?.focus())
   }
 }
@@ -1199,16 +1629,27 @@ function historyKeyboard(event: KeyboardEvent) {
   key === 'y' || event.shiftKey ? redo() : undo()
 }
 function keyboard(event: KeyboardEvent) {
+  if (event.key === 'Escape') contextMenu.value = null
+  if (presenting.value) return
+  if (sceneMode.value && event.key === 'Escape') {
+    event.preventDefault()
+    sceneMode.value = null
+    sceneGesture.value = null
+    return
+  }
   if ((event.target as Element).closest('input,textarea,select,[contenteditable="true"]'))
     return
   if (
-    props.readOnly &&
+    interactionLocked.value &&
     event.code !== 'Space' &&
     event.key !== 'Escape' &&
     !((event.ctrlKey || event.metaKey) && ['+', '=', '-', '0'].includes(event.key))
   )
     return
-  if (event.code === 'Space') {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'g') {
+    event.preventDefault()
+    event.shiftKey ? ungroupSelection() : groupSelection()
+  } else if (event.code === 'Space') {
     event.preventDefault()
     space.value = true
   } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
@@ -1279,7 +1720,9 @@ function keyboard(event: KeyboardEvent) {
   }
 }
 function startEditing(id: string) {
-  if (props.readOnly) return
+  if (interactionLocked.value) return
+  scenesOpen.value = false
+  sceneMode.value = null
   closeSettings()
   if (editing.value && editing.value !== id) finishEditing()
   const element = local.value.find((e) => e.id === id)
@@ -1307,7 +1750,13 @@ function editAtPointer(event: MouseEvent) {
     )
   )
     return
-  if (event.button !== 0 || space.value || tool.value === 'pan') return
+  if (
+    event.button !== 0 ||
+    space.value ||
+    tool.value === 'pan' ||
+    tool.value === 'eraser'
+  )
+    return
   const target = hit(point(event))
   if (!target || !canEditText(target)) return
   if (gesture.value) {
@@ -1329,7 +1778,7 @@ function updateRichDraft(document: BoardRichText) {
   draft.value = richTextPlain(document)
 }
 function finishEditing() {
-  if (props.readOnly) {
+  if (interactionLocked.value) {
     editing.value = null
     richDraft.value = null
     return
@@ -1492,6 +1941,42 @@ function setFillColor(next: string | null) {
       element.fillColor = next
   commit(before)
 }
+function setSketchOptions(patch: Partial<BoardSketchOptions>) {
+  if (interactionLocked.value) return
+  finishEditing()
+  const before = copyElements(local.value)
+  for (const element of local.value) {
+    if (
+      !selected.value.includes(element.id) ||
+      element.kind === 'draw' ||
+      element.kind === 'image' ||
+      (element.kind === 'text' && (element.textBackground ?? 'none') === 'none')
+    )
+      continue
+    element.sketch = {
+      ...DEFAULT_SKETCH_OPTIONS,
+      strokePattern: element.kind === 'frame' ? 'dashed' : 'solid',
+      ...element.sketch,
+      ...patch,
+    }
+  }
+  shapeSketch.value = { ...DEFAULT_SKETCH_OPTIONS, ...shapeSketch.value, ...patch }
+  commit(before)
+}
+function setFillStyle(next: BoardFillStyle) {
+  if (interactionLocked.value) return
+  finishEditing()
+  shapeFillStyle.value = next
+  const before = copyElements(local.value)
+  for (const element of local.value) {
+    if (!selected.value.includes(element.id) || !canHaveFill(element)) continue
+    element.fillStyle = next
+    if (fill(element) === 'transparent') element.fillColor = '#7f91ad'
+  }
+  if (shapeFill.value === null || shapeFill.value === 'transparent')
+    shapeFill.value = '#7f91ad'
+  commit(before)
+}
 function setElementText(patch: { fontSize?: number; color?: string }) {
   finishEditing()
   const before = copyElements(local.value)
@@ -1521,7 +2006,11 @@ function setTextBackground(next: BoardTextBackground) {
   for (const element of local.value) {
     if (!selected.value.includes(element.id) || element.kind !== 'text') continue
     element.textBackground = next
-    if (next === 'none') element.fillColor = null
+    if (next === 'none') {
+      element.fillColor = null
+      element.fillStyle = null
+      element.sketch = null
+    }
     if (next !== 'none') {
       element.textAutoWidth = false
       element.width = Math.max(120, element.width)
@@ -1549,36 +2038,43 @@ function setTextAlignment(patch: {
   commit(before)
 }
 async function addImage(file: File, position?: BoardPoint) {
-  if (props.readOnly) return
+  if (interactionLocked.value) return
   try {
     const image = await boardImage(file)
-    if (disposed || props.readOnly) return
-    const p =
-      position ??
-      worldPoint(
-        {
-          x: (viewport.value?.clientWidth || 640) / 2,
-          y: (viewport.value?.clientHeight || 480) / 2,
-        },
-        camera.value
-      )
-    const element = newElement('image', p)
-    const scale = Math.min(1, 500 / Math.max(image.width, image.height))
-    Object.assign(element, {
-      imageData: image.data,
-      width: image.width * scale,
-      height: image.height * scale,
-      text: file.name,
-    })
-    const before = copyElements(local.value)
-    local.value.push(element)
-    select([element.id])
-    commit(before)
-    error.value = ''
-    tool.value = 'select'
+    if (disposed || interactionLocked.value) return
+    insertImage(image, file.name, position)
   } catch {
     error.value = t('boards.imageRejected')
   }
+}
+function insertImage(
+  image: { data: string; width: number; height: number },
+  name: string,
+  position?: BoardPoint
+) {
+  const p =
+    position ??
+    worldPoint(
+      {
+        x: (viewport.value?.clientWidth || 640) / 2,
+        y: (viewport.value?.clientHeight || 480) / 2,
+      },
+      camera.value
+    )
+  const element = newElement('image', p)
+  const scale = Math.min(1, 500 / Math.max(image.width, image.height))
+  Object.assign(element, {
+    imageData: image.data,
+    width: image.width * scale,
+    height: image.height * scale,
+    text: name,
+  })
+  const before = copyElements(local.value)
+  local.value.push(element)
+  select([element.id])
+  commit(before)
+  error.value = ''
+  tool.value = 'select'
 }
 function fileSelected(event: Event) {
   const input = event.target as HTMLInputElement
@@ -1586,12 +2082,12 @@ function fileSelected(event: Event) {
   input.value = ''
 }
 function drop(event: DragEvent) {
-  if (props.readOnly) return
+  if (interactionLocked.value) return
   if (event.dataTransfer?.files[0])
     void addImage(event.dataTransfer.files[0], point(event))
 }
 function paste(event: ClipboardEvent) {
-  if (props.readOnly) return
+  if (interactionLocked.value) return
   if ((event.target as Element).closest('input,textarea,[contenteditable="true"]')) return
   const file = [...(event.clipboardData?.items ?? [])]
     .find((item) => item.type.startsWith('image/'))
@@ -1605,37 +2101,10 @@ function stroke(element: BoardElement) {
   return boardInkColor(element, props.colorScheme)
 }
 function labelScheme(element: BoardElement): PaperColorScheme {
-  if (element.fillColor?.startsWith('#')) {
-    const color = element.fillColor
-    const luminance =
-      0.2126 * parseInt(color.slice(1, 3), 16) +
-      0.7152 * parseInt(color.slice(3, 5), 16) +
-      0.0722 * parseInt(color.slice(5, 7), 16)
-    return luminance < 128 ? 'dark' : 'light'
-  }
-  if (element.fillColor === 'transparent') return props.colorScheme ?? 'light'
-  if (
-    ['note', 'question', 'decision', 'task'].includes(element.kind) ||
-    (element.kind === 'text' &&
-      element.textBackground &&
-      element.textBackground !== 'none') ||
-    (element.textHighlight && element.textHighlight !== 'none') ||
-    element.textAnnotation?.type === 'highlight'
-  )
-    return 'light'
-  return props.colorScheme ?? 'light'
+  return elementLabelScheme(element, props.colorScheme)
 }
 function fill(element: BoardElement) {
-  if (canHaveFill(element) && element.fillColor) return element.fillColor
-  if (element.kind === 'text' && (element.textBackground ?? 'none') !== 'none')
-    return element.color === 'neutral'
-      ? '#ffffff'
-      : `color-mix(in srgb, var(--board-${element.color}) 14%, white)`
-  return ['text', 'frame', 'arrow', 'draw', 'rectangle', 'ellipse'].includes(element.kind)
-    ? 'transparent'
-    : element.color === 'neutral'
-      ? 'var(--board-note)'
-      : `color-mix(in srgb, var(--board-${element.color}) 14%, white)`
+  return elementFill(element)
 }
 function label(element: BoardElement) {
   return element.kind === 'task'
@@ -1652,12 +2121,15 @@ function drawPath(element: BoardElement) {
     .map((p, i) => `${i ? 'L' : 'M'}${element.x + p.x},${element.y + p.y}`)
     .join(' ')
 }
-async function exportPng(title: string) {
+async function renderPaperImage(
+  region?: { x: number; y: number; width: number; height: number },
+  format = 'image/png'
+) {
   finishEditing()
   await loadBoardFont()
   fontReady.value++
   await nextTick()
-  if (!svg.value) return
+  if (!svg.value) throw new Error('canvas')
   const clone = svg.value.cloneNode(true) as SVGSVGElement
   await embedBoardFont(clone)
   clone.querySelectorAll('[data-editor-only]').forEach((node) => node.remove())
@@ -1682,11 +2154,18 @@ async function exportPng(title: string) {
       .filter((element) => element.drawBrush)
       .map((element) => (element.strokeWidth ?? 2) * 3 + 4)
   )
-  const left = Math.min(box.x, ...endpoints.map((p) => p.x)) - margin
-  const top = Math.min(box.y, ...endpoints.map((p) => p.y)) - margin
-  const right = Math.max(box.x + box.width, ...endpoints.map((p) => p.x)) + margin
-  const bottom = Math.max(box.y + box.height, ...endpoints.map((p) => p.y)) + margin
-  const size = exportSize(right - left, bottom - top)
+  const left = region?.x ?? Math.min(box.x, ...endpoints.map((p) => p.x)) - margin
+  const top = region?.y ?? Math.min(box.y, ...endpoints.map((p) => p.y)) - margin
+  const right = region
+    ? region.x + region.width
+    : Math.max(box.x + box.width, ...endpoints.map((p) => p.x)) + margin
+  const bottom = region
+    ? region.y + region.height
+    : Math.max(box.y + box.height, ...endpoints.map((p) => p.y)) + margin
+  const qualityScale = region
+    ? Math.max(1, 1920 / Math.max(region.width, region.height))
+    : 1
+  const size = exportSize((right - left) * qualityScale, (bottom - top) * qualityScale)
   clone.setAttribute('width', String(size.width))
   clone.setAttribute('height', String(size.height))
   clone.setAttribute('viewBox', `${left} ${top} ${right - left} ${bottom - top}`)
@@ -1732,11 +2211,11 @@ async function exportPng(title: string) {
     const blob = await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob(
         (value) => (value ? resolve(value) : reject(new Error('png'))),
-        'image/png'
+        format,
+        0.94
       )
     )
-    await saveBoardPng(blob, title)
-    error.value = ''
+    return { blob, width: size.width, height: size.height }
   } catch {
     error.value = t('boards.exportFailed')
     throw new Error(error.value)
@@ -1744,7 +2223,265 @@ async function exportPng(title: string) {
     URL.revokeObjectURL(url)
   }
 }
+
+async function exportPng(title: string) {
+  const result = await renderPaperImage()
+  await saveBoardPng(result.blob, title)
+  error.value = ''
+}
+
+async function exportPresentation() {
+  if (!localScenes.value.length || exportingPresentation.value) return
+  commitPendingEdit()
+  exportingPresentation.value = true
+  try {
+    const scenes = copyScenes(localScenes.value)
+    const pages = []
+    let exportedBytes = 0
+    for (const scene of scenes) {
+      if (disposed) return
+      const { blob, width, height } = await renderPaperImage(scene, 'image/jpeg')
+      exportedBytes += blob.size
+      if (exportedBytes > 64 * 1024 * 1024) throw new Error('PDF exceeds 64 MiB')
+      pages.push({ jpeg: new Uint8Array(await blob.arrayBuffer()), width, height })
+    }
+    if (!disposed)
+      await saveBoardPdf(buildPresentationPdf(pages), props.title ?? 'Praxis')
+    error.value = ''
+  } catch {
+    error.value = t('boards.exportFailed')
+  } finally {
+    exportingPresentation.value = false
+  }
+}
+
+function toggleScenes() {
+  commitPendingEdit()
+  closeSettings()
+  select([])
+  scenesOpen.value = !scenesOpen.value
+  if (!scenesOpen.value) sceneMode.value = null
+}
+function finishSceneMode() {
+  sceneMode.value = null
+  sceneGesture.value = null
+  nextTick(() => viewport.value?.focus())
+}
+function closeScenes() {
+  scenesOpen.value = false
+  finishSceneMode()
+}
+function createScene(ratio: SceneRatio) {
+  if (interactionLocked.value || localScenes.value.length >= MAX_SCENES) return
+  commitPendingEdit()
+  select([])
+  sceneRatio.value = ratio
+  sceneMode.value = 'create'
+  showScenes.value = true
+  nextTick(() => viewport.value?.focus())
+}
+function focusScene(id: string) {
+  const scene = localScenes.value.find((scene) => scene.id === id)
+  if (!scene || presenting.value) return
+  commitPendingEdit()
+  activeSceneId.value = id
+  sceneMode.value = null
+  const left = hideTools.value ? 0 : Math.min(210, viewportSize.value.width / 3)
+  const available = {
+    ...viewportSize.value,
+    width: Math.max(200, viewportSize.value.width - (scenesOpen.value ? 310 : 0) - left),
+  }
+  camera.value = sceneCamera(scene, available, 48)
+  camera.value.x += left
+}
+function adjustScene(id: string) {
+  if (interactionLocked.value) return
+  focusScene(id)
+  sceneMode.value = 'adjust'
+  showScenes.value = true
+  select([])
+  nextTick(() => viewport.value?.focus())
+}
+function updateScene(scene: BoardScene) {
+  if (
+    interactionLocked.value ||
+    ![scene.x, scene.y, scene.width, scene.height].every(Number.isFinite) ||
+    scene.width < 24 ||
+    scene.height < 24
+  )
+    return
+  commitPendingEdit()
+  const before = copyScenes(localScenes.value)
+  localScenes.value = localScenes.value.map((item) =>
+    item.id === scene.id ? { ...scene, title: scene.title.slice(0, 200) } : item
+  )
+  commit(copyElements(local.value), before)
+}
+function removeScene(id: string) {
+  if (interactionLocked.value) return
+  commitPendingEdit()
+  const before = copyScenes(localScenes.value)
+  localScenes.value = localScenes.value.filter((scene) => scene.id !== id)
+  if (activeSceneId.value === id) {
+    activeSceneId.value = null
+    sceneMode.value = null
+  }
+  commit(copyElements(local.value), before)
+}
+function reorderScenes(ids: string[]) {
+  if (
+    interactionLocked.value ||
+    ids.length !== localScenes.value.length ||
+    new Set(ids).size !== ids.length
+  )
+    return
+  const ordered = ids.map((id) => localScenes.value.find((scene) => scene.id === id))
+  if (ordered.some((scene) => !scene)) return
+  commitPendingEdit()
+  const before = copyScenes(localScenes.value)
+  localScenes.value = ordered as BoardScene[]
+  commit(copyElements(local.value), before)
+}
+function movePresentation(index: number, animate = true) {
+  const scene = localScenes.value[index]
+  if (!scene) return
+  presentationIndex.value = index
+  cancelAnimationFrame(cameraFrame)
+  const target = sceneCamera(scene, viewportSize.value)
+  const previous = { ...camera.value }
+  const distant =
+    Math.hypot(target.x - previous.x, target.y - previous.y) >
+    Math.max(viewportSize.value.width, viewportSize.value.height) * 2
+  if (
+    !animate ||
+    !smoothTransition.value ||
+    distant ||
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  ) {
+    camera.value = target
+    return
+  }
+  const started = performance.now()
+  function step(now: number) {
+    const progress = Math.min(1, (now - started) / 260)
+    const eased = progress * progress * (3 - 2 * progress)
+    camera.value = {
+      x: previous.x + (target.x - previous.x) * eased,
+      y: previous.y + (target.y - previous.y) * eased,
+      zoom: previous.zoom + (target.zoom - previous.zoom) * eased,
+    }
+    if (progress < 1) cameraFrame = requestAnimationFrame(step)
+  }
+  cameraFrame = requestAnimationFrame(step)
+}
+async function startPresentation() {
+  if (!localScenes.value.length || presenting.value) return
+  commitPendingEdit()
+  closeSettings()
+  select([])
+  sceneMode.value = null
+  savedCamera = { ...camera.value }
+  presentationIndex.value = Math.max(
+    0,
+    localScenes.value.findIndex((scene) => scene.id === activeSceneId.value)
+  )
+  presenting.value = true
+  emit('presentation', true)
+  try {
+    if (editorRoot.value?.requestFullscreen && !document.fullscreenElement) {
+      await editorRoot.value.requestFullscreen()
+      ownsFullscreen = true
+    }
+  } catch {
+    /* Fixed overlay remains available when fullscreen is denied. */
+  }
+  await nextTick()
+  if (!presenting.value) return
+  measurePresentation()
+  viewport.value?.focus()
+}
+function measurePresentation() {
+  if (!presenting.value) return
+  const box = viewport.value?.getBoundingClientRect()
+  if (box?.width && box.height)
+    viewportSize.value = { width: box.width, height: box.height }
+  movePresentation(presentationIndex.value, false)
+}
+function stopPresentation() {
+  if (!presenting.value) return
+  cancelAnimationFrame(cameraFrame)
+  presenting.value = false
+  if (savedCamera) camera.value = savedCamera
+  savedCamera = null
+  emit('presentation', false)
+  if (ownsFullscreen && document.fullscreenElement === editorRoot.value)
+    void document.exitFullscreen().catch(() => {})
+  ownsFullscreen = false
+  nextTick(() => viewport.value?.focus())
+}
+function presentationKeyboard(event: KeyboardEvent) {
+  if (
+    !presenting.value ||
+    event.isComposing ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey
+  )
+    return
+  if (
+    ![
+      'Escape',
+      'ArrowRight',
+      'ArrowLeft',
+      'ArrowDown',
+      'ArrowUp',
+      'PageDown',
+      'PageUp',
+      ' ',
+      'Home',
+      'End',
+    ].includes(event.key)
+  )
+    return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  if (event.key === 'Escape') stopPresentation()
+  else if (event.key === 'Home') movePresentation(0)
+  else if (event.key === 'End') movePresentation(localScenes.value.length - 1)
+  else
+    movePresentation(
+      presentationIndex.value +
+        (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(event.key) ||
+        (event.key === ' ' && event.shiftKey)
+          ? -1
+          : 1)
+    )
+}
+function fullscreenChanged() {
+  if (
+    presenting.value &&
+    ownsFullscreen &&
+    document.fullscreenElement !== editorRoot.value
+  )
+    stopPresentation()
+}
+onMounted(() => {
+  window.addEventListener('keydown', presentationKeyboard, true)
+  window.addEventListener('resize', measurePresentation)
+  document.addEventListener('fullscreenchange', fullscreenChanged)
+})
+onBeforeUnmount(() => {
+  stopPresentation()
+  cancelAnimationFrame(cameraFrame)
+  window.removeEventListener('keydown', presentationKeyboard, true)
+  window.removeEventListener('resize', measurePresentation)
+  document.removeEventListener('fullscreenchange', fullscreenChanged)
+})
 defineExpose({
+  toggleScenes,
+  startPresentation,
+  stopPresentation,
+  exportPresentation,
   fitContent,
   exportPng,
   focusElement,
@@ -1758,8 +2495,9 @@ defineExpose({
 
 <template>
   <div
+    ref="editorRoot"
     class="board-editor"
-    :class="{ 'board-distraction-free': distractionFree }"
+    :class="{ 'board-distraction-free': hideTools, 'paper-presenting': presenting }"
   >
     <input
       ref="imageInput"
@@ -1771,16 +2509,18 @@ defineExpose({
     <div
       ref="viewport"
       class="board-viewport"
-      :class="{ 'board-panning': readOnly || space || tool === 'pan' }"
+      :class="{ 'board-panning': interactionLocked || space || tool === 'pan' }"
       :style="gridStyle"
       tabindex="0"
       :aria-label="t('boards.canvasLabel')"
       @pointerdown="pointerDown"
+      @contextmenu="openContextMenu"
       @pointermove="pointerMove"
+      @pointerleave="eraserPosition = null"
       @pointerup="pointerUp"
       @dblclick="editAtPointer"
       @pointercancel="cancelGesture"
-      @lostpointercapture="gesture && cancelGesture()"
+      @lostpointercapture="(gesture || sceneGesture) && cancelGesture()"
       @wheel.prevent="wheel"
       @keydown="keyboard"
       @keydown.capture="historyKeyboard"
@@ -1791,18 +2531,128 @@ defineExpose({
       @paste="paste"
     >
       <div
-        v-if="readOnly"
+        v-if="readOnly && !presenting"
         class="board-lock-hint board-floating"
         role="status"
       >
         <LockKeyhole :size="16" />{{ t('boards.lockedHint') }}
       </div>
+      <div
+        v-if="tool === 'eraser' && eraserPosition && !interactionLocked && !space"
+        class="paper-eraser-cursor"
+        :style="{
+          left: `${eraserPosition.x}px`,
+          top: `${eraserPosition.y}px`,
+          width: `${eraserSize}px`,
+          height: `${eraserSize}px`,
+        }"
+        aria-hidden="true"
+      />
+      <div
+        v-if="tool === 'eraser' && !interactionLocked && !hideTools"
+        class="paper-eraser-options board-floating"
+        @pointerdown.stop
+        @wheel.stop
+      >
+        <strong>{{ t('boards.tools.eraser') }}</strong>
+        <span>{{ t('boards.eraser.hint') }}</span>
+        <div
+          role="group"
+          :aria-label="t('boards.eraser.size')"
+        >
+          <button
+            v-for="size in [12, 24, 48]"
+            :key="size"
+            :data-eraser-size="size"
+            :aria-pressed="eraserSize === size"
+            @click="eraserSize = size"
+          >
+            {{ size }} px
+          </button>
+        </div>
+      </div>
+      <div
+        v-if="contextMenu && !interactionLocked"
+        class="paper-context-menu board-floating"
+        role="menu"
+        :aria-label="t('boards.grouping.menu')"
+        :style="{
+          left: `${contextMenu.x}px`,
+          top: `${contextMenu.y}px`,
+          maxHeight: `calc(100% - ${contextMenu.y + 8}px)`,
+        }"
+        @pointerdown.stop
+        @wheel.stop
+        @keydown.stop="contextKeyboard"
+      >
+        <button
+          role="menuitem"
+          data-context-group
+          :disabled="!canGroup"
+          @click="contextAction(groupSelection)"
+        >
+          {{ t('boards.grouping.group') }} <kbd>Ctrl+G</kbd>
+        </button>
+        <button
+          role="menuitem"
+          data-context-ungroup
+          :disabled="!canUngroup"
+          @click="contextAction(ungroupSelection)"
+        >
+          {{ t('boards.grouping.ungroup') }} <kbd>Ctrl+Shift+G</kbd>
+        </button>
+        <hr />
+        <button
+          role="menuitem"
+          :disabled="!selected.length"
+          @click="contextAction(duplicateSelection)"
+        >
+          {{ t('boards.duplicate') }} <kbd>Ctrl+D</kbd>
+        </button>
+        <button
+          role="menuitem"
+          :disabled="!selected.length"
+          @click="contextAction(() => orderSelection(true))"
+        >
+          {{ t('boards.grouping.front') }}
+        </button>
+        <button
+          role="menuitem"
+          :disabled="!selected.length"
+          @click="contextAction(() => orderSelection(false))"
+        >
+          {{ t('boards.grouping.back') }}
+        </button>
+        <button
+          role="menuitem"
+          data-context-delete
+          :disabled="!selected.length"
+          @click="contextAction(removeSelection)"
+        >
+          {{ t('boards.grouping.delete') }} <kbd>Delete</kbd>
+        </button>
+        <hr />
+        <button
+          role="menuitem"
+          :disabled="!canUndo"
+          @click="contextAction(undo)"
+        >
+          {{ t('boards.undo') }} <kbd>Ctrl+Z</kbd>
+        </button>
+        <button
+          role="menuitem"
+          :disabled="!canRedo"
+          @click="contextAction(redo)"
+        >
+          {{ t('boards.redo') }} <kbd>Ctrl+Shift+Z</kbd>
+        </button>
+      </div>
       <PaperToolWheel
-        v-if="!distractionFree && !readOnly"
+        v-if="!hideTools && !interactionLocked"
         :tools="[...tools]"
         :active-tool="activeWheelTool"
         :color="wheelColor"
-        :width="wheelWidth"
+        :width="tool === 'eraser' ? eraserSize : wheelWidth"
         :opacity="wheelOpacity"
         :settings-open="settingsOpen"
         :active-brush="tool === 'draw' ? drawBrush : undefined"
@@ -1814,8 +2664,47 @@ defineExpose({
         @toggle-brush-library="toggleBrushLibrary"
         @lock-paper="emit('lockPaper')"
       />
+      <PaperScenesPanel
+        v-if="scenesOpen && !presenting"
+        :scenes="localScenes"
+        :active-id="activeSceneId"
+        :read-only="interactionLocked"
+        :content-id="contentId"
+        :exporting="exportingPresentation"
+        :frames-visible="showScenes"
+        @close="closeScenes"
+        @create="createScene"
+        @focus="focusScene"
+        @edit="adjustScene"
+        @update="updateScene"
+        @remove="removeScene"
+        @reorder="reorderScenes"
+        @present="startPresentation"
+        @export-pdf="exportPresentation"
+        @visibility="showScenes = $event"
+      />
       <div
-        v-if="showStyle && !distractionFree && !readOnly"
+        v-if="sceneMode && !presenting"
+        class="paper-scene-hint board-floating"
+        role="status"
+        @pointerdown.stop
+      >
+        <span>{{
+          t(
+            sceneMode === 'create'
+              ? 'papers.presentation.drawHint'
+              : 'papers.presentation.adjustHint'
+          )
+        }}</span>
+        <button
+          type="button"
+          @click="finishSceneMode"
+        >
+          {{ t('papers.presentation.done') }}
+        </button>
+      </div>
+      <div
+        v-if="showStyle && !hideTools && !interactionLocked"
         v-show="settingsOpen"
         class="board-style-panel board-floating"
         :class="{ 'board-instruments-panel': brushLibraryOpen }"
@@ -1916,7 +2805,7 @@ defineExpose({
               "
           /></label>
           <div
-            v-if="rotatableElement"
+            v-if="rotatableElement && !selectedGroup"
             class="board-rotation-controls"
           >
             <span class="board-style-label"
@@ -1998,6 +2887,11 @@ defineExpose({
               {{ t('boards.usability.transparent') }}
             </button>
           </div>
+          <PaperFillStylePicker
+            v-if="fillAvailable"
+            :model-value="selectedFillStyle"
+            @update:model-value="setFillStyle"
+          />
           <div
             v-if="showStrokeStyle && tool !== 'draw' && selectedElement?.kind !== 'draw'"
             class="board-stroke-styles"
@@ -2204,11 +3098,31 @@ defineExpose({
           tool === 'select' &&
           selected.length &&
           selectionPropertiesOpen &&
+          !scenesOpen &&
           !editing &&
-          !distractionFree &&
-          !readOnly
+          !hideTools &&
+          !interactionLocked
         "
         :count="selected.length"
+        :group="!!selectedGroup"
+        :sketch="
+          selectedElement?.sketch ?? {
+            ...DEFAULT_SKETCH_OPTIONS,
+            strokePattern: selectedElement?.kind === 'frame' ? 'dashed' : 'solid',
+          }
+        "
+        :stroke-style="selectedElement?.strokeStyle"
+        :sketch-available="
+          local.some(
+            (element) =>
+              selected.includes(element.id) &&
+              element.kind !== 'image' &&
+              element.kind !== 'draw' &&
+              (element.kind !== 'text' || (element.textBackground ?? 'none') !== 'none')
+          )
+        "
+        @sketch="setSketchOptions"
+        @stroke-style="setStrokeStyle"
         :text="
           local.some((element) => selected.includes(element.id) && canEditText(element))
         "
@@ -2216,6 +3130,7 @@ defineExpose({
         :font-size="selectedFontSize"
         :text-color="selectedTextColor"
         :fill-color="selectedFill"
+        :fill-style="selectedFillStyle"
         :align="selectedTextAlign"
         :vertical-align="selectedTextVerticalAlign"
         :movable-count="movableCount"
@@ -2236,6 +3151,7 @@ defineExpose({
         @font-size="setElementText({ fontSize: $event })"
         @text-color="setElementText({ color: $event })"
         @fill-color="setFillColor"
+        @fill-style="setFillStyle"
         @alignment="
           (textAlign, textVerticalAlign) =>
             setTextAlignment({ textAlign, textVerticalAlign })
@@ -2246,7 +3162,7 @@ defineExpose({
         @auto-width="setTextAutoWidth"
       />
       <div
-        v-if="!distractionFree && !readOnly && !editing"
+        v-if="!hideTools && !interactionLocked && !editing"
         class="board-history board-floating"
         @pointerdown.stop
         @wheel.stop
@@ -2291,9 +3207,9 @@ defineExpose({
         v-if="
           tool === 'select' &&
           selected.length &&
-          !distractionFree &&
+          !hideTools &&
           !editing &&
-          !readOnly
+          !interactionLocked
         "
         class="paper-selection-bar board-floating"
         @pointerdown.stop
@@ -2332,7 +3248,7 @@ defineExpose({
         </button>
       </div>
       <details
-        v-if="!distractionFree && !selected.length && !editing"
+        v-if="!hideTools && !selected.length && !editing && tool !== 'eraser'"
         class="board-shortcuts board-floating"
         @pointerdown.stop
         @wheel.stop
@@ -2350,7 +3266,7 @@ defineExpose({
         </ul>
       </details>
       <div
-        v-if="!distractionFree"
+        v-if="!hideTools"
         class="board-zoom board-floating"
         @pointerdown.stop
         @wheel.stop
@@ -2404,119 +3320,220 @@ defineExpose({
           data-scene
           :transform="sceneTransform"
         >
-          <g
-            v-for="element in local"
-            :key="element.id"
-            :data-element-id="element.id"
-            :transform="rotationTransform(element)"
-            :opacity="element.opacity ?? 1"
-            @dblclick.stop="startEditing(element.id)"
-          >
-            <image
-              v-if="element.kind === 'image'"
-              :x="element.x"
-              :y="element.y"
-              :width="element.width"
-              :height="element.height"
-              :href="element.imageData ?? undefined"
-              preserveAspectRatio="xMidYMid meet"
+          <g :id="contentId">
+            <g
+              v-for="element in local"
+              :key="element.id"
+              :data-element-id="element.id"
+              :transform="rotationTransform(element)"
+              :opacity="element.opacity ?? 1"
+              @dblclick.stop="tool !== 'eraser' && startEditing(element.id)"
             >
-              <title>{{ element.text }}</title>
-            </image>
-            <BoardArtisticBrush
-              v-else-if="element.kind === 'draw' && element.drawBrush"
-              :element="element"
-              :stroke="stroke(element)"
-              :preview="gesture?.mode === 'create' && gesture.id === element.id"
-              :visible="artisticVisible(element)"
-              @fallback="brushFallback = true"
-            />
-            <BoardSketch
-              v-else
-              :element="element"
-              :endpoints="connectorEndpoints.get(element.id)"
-              :stroke="stroke(element)"
-              :fill="fill(element)"
-            />
-            <rect
-              v-if="!['arrow', 'draw', 'image', 'ellipse'].includes(element.kind)"
-              data-editor-only
-              :x="element.x"
-              :y="element.y"
-              :width="element.width"
-              :height="element.height"
-              fill="transparent"
-              stroke="transparent"
-              :stroke-width="12 / camera.zoom"
-              :pointer-events="element.kind === 'frame' ? 'stroke' : 'all'"
-            />
-            <ellipse
-              v-if="element.kind === 'ellipse'"
-              data-editor-only
-              :cx="element.x + element.width / 2"
-              :cy="element.y + element.height / 2"
-              :rx="element.width / 2"
-              :ry="element.height / 2"
-              fill="transparent"
-              pointer-events="all"
-            />
-            <path
-              v-if="element.kind === 'arrow' || element.kind === 'draw'"
-              data-editor-only
-              :d="element.kind === 'arrow' ? arrow(element) : drawPath(element)"
-              fill="none"
-              stroke="transparent"
-              :stroke-width="12 / camera.zoom"
-            />
-            <BoardRichLabel
-              v-if="
-                canHaveText(element) &&
-                element.richText &&
-                editing !== element.id &&
-                !(element.kind === 'task' && element.taskId)
-              "
-              :element="element"
-              :color-scheme="labelScheme(element)"
-              :font-ready="fontReady"
-              :replay="notationReplay"
-              :group-delay="notationGroupDelays[element.id]"
-            />
-            <BoardLabel
-              v-else-if="
-                !['arrow', 'draw', 'image'].includes(element.kind) &&
-                label(element) &&
-                editing !== element.id
-              "
-              :element="element"
-              :color-scheme="labelScheme(element)"
-              :label="label(element)"
-              :font-ready="fontReady"
-              :replay="notationReplay"
-              :group-delay="notationGroupDelays[element.id]"
-            />
-            <text
-              v-if="element.taskId && taskTitles?.[element.taskId]"
-              :x="element.x + 12"
-              :y="element.y + element.height - 10"
-              fill="var(--board-ink)"
-              font-size="11"
-              font-family="sans-serif"
-              pointer-events="none"
-            >
-              {{ t(`boards.taskStatus.${taskTitles[element.taskId]?.status}`) }}
-            </text>
-            <text
-              v-if="element.resolved && ['question', 'decision'].includes(element.kind)"
-              :x="element.x + element.width - 18"
-              :y="element.y + 20"
-              fill="var(--board-sage)"
-              font-size="14"
-            >
-              ✓
-            </text>
+              <image
+                v-if="element.kind === 'image'"
+                :x="element.x"
+                :y="element.y"
+                :width="element.width"
+                :height="element.height"
+                :href="element.imageData ?? undefined"
+                preserveAspectRatio="xMidYMid meet"
+              >
+                <title>{{ element.text }}</title>
+              </image>
+              <BoardArtisticBrush
+                v-else-if="element.kind === 'draw' && element.drawBrush"
+                :element="element"
+                :stroke="stroke(element)"
+                :preview="gesture?.mode === 'create' && gesture.id === element.id"
+                :visible="artisticVisible(element)"
+                @fallback="brushFallback = true"
+              />
+              <BoardSketch
+                v-else
+                :element="element"
+                :endpoints="connectorEndpoints.get(element.id)"
+                :stroke="stroke(element)"
+                :fill="fill(element)"
+              />
+              <rect
+                v-if="
+                  ![
+                    'arrow',
+                    'line',
+                    'draw',
+                    'image',
+                    'ellipse',
+                    'triangle',
+                    'hexagon',
+                  ].includes(element.kind)
+                "
+                data-editor-only
+                :x="element.x"
+                :y="element.y"
+                :width="element.width"
+                :height="element.height"
+                fill="transparent"
+                stroke="transparent"
+                :stroke-width="12 / camera.zoom"
+                :pointer-events="element.kind === 'frame' ? 'stroke' : 'all'"
+              />
+              <polygon
+                v-if="polygonVertices(element)"
+                data-editor-only
+                :points="
+                  polygonVertices(element)!
+                    .map((point) => `${element.x + point.x},${element.y + point.y}`)
+                    .join(' ')
+                "
+                fill="transparent"
+                pointer-events="all"
+              />
+              <ellipse
+                v-if="element.kind === 'ellipse'"
+                data-editor-only
+                :cx="element.x + element.width / 2"
+                :cy="element.y + element.height / 2"
+                :rx="element.width / 2"
+                :ry="element.height / 2"
+                fill="transparent"
+                pointer-events="all"
+              />
+              <path
+                v-if="
+                  element.kind === 'arrow' ||
+                  element.kind === 'line' ||
+                  element.kind === 'draw'
+                "
+                data-editor-only
+                :d="
+                  element.kind === 'arrow'
+                    ? arrow(element)
+                    : element.kind === 'line'
+                      ? `M${element.x} ${element.y} L${element.x + element.width} ${element.y + element.height}`
+                      : drawPath(element)
+                "
+                fill="none"
+                stroke="transparent"
+                :stroke-width="12 / camera.zoom"
+              />
+              <BoardRichLabel
+                v-if="
+                  canHaveText(element) &&
+                  element.richText &&
+                  editing !== element.id &&
+                  !(element.kind === 'task' && element.taskId)
+                "
+                :element="element"
+                :color-scheme="labelScheme(element)"
+                :font-ready="fontReady"
+                :replay="notationReplay"
+                :group-delay="notationGroupDelays[element.id]"
+              />
+              <BoardLabel
+                v-else-if="
+                  !['arrow', 'line', 'draw', 'image'].includes(element.kind) &&
+                  label(element) &&
+                  editing !== element.id
+                "
+                :element="element"
+                :color-scheme="labelScheme(element)"
+                :label="label(element)"
+                :font-ready="fontReady"
+                :replay="notationReplay"
+                :group-delay="notationGroupDelays[element.id]"
+              />
+              <text
+                v-if="element.taskId && taskTitles?.[element.taskId]"
+                :x="element.x + 12"
+                :y="element.y + element.height - 10"
+                fill="var(--board-ink)"
+                font-size="11"
+                font-family="sans-serif"
+                pointer-events="none"
+              >
+                {{ t(`boards.taskStatus.${taskTitles[element.taskId]?.status}`) }}
+              </text>
+              <text
+                v-if="element.resolved && ['question', 'decision'].includes(element.kind)"
+                :x="element.x + element.width - 18"
+                :y="element.y + 20"
+                fill="var(--board-sage)"
+                font-size="14"
+              >
+                ✓
+              </text>
+            </g>
           </g>
           <g
-            v-if="tool === 'select' && selectionBox && !isEditingFreeText && !readOnly"
+            v-if="showScenes && !presenting"
+            data-editor-only
+            class="paper-scene-frames"
+          >
+            <g
+              v-for="(scene, index) in localScenes"
+              :key="scene.id"
+              :data-paper-scene="scene.id"
+            >
+              <rect
+                :x="scene.x"
+                :y="scene.y"
+                :width="scene.width"
+                :height="scene.height"
+                fill="none"
+                :stroke="
+                  activeSceneId === scene.id ? 'var(--paper-canvas-ink)' : '#8b9198'
+                "
+                :stroke-width="(activeSceneId === scene.id ? 2 : 1) / camera.zoom"
+                :stroke-dasharray="`${8 / camera.zoom} ${5 / camera.zoom}`"
+                pointer-events="none"
+              />
+              <text
+                :x="scene.x"
+                :y="scene.y - 8 / camera.zoom"
+                :font-size="12 / camera.zoom"
+                fill="var(--paper-canvas-ink)"
+                font-family="Arial,sans-serif"
+                pointer-events="all"
+                @pointerdown.stop
+                @click.stop="focusScene(scene.id)"
+              >
+                {{ index + 1 }} · {{ scene.title }}
+              </text>
+              <rect
+                v-if="sceneMode === 'adjust' && activeSceneId === scene.id"
+                data-scene-resize
+                :x="scene.x + scene.width - 6 / camera.zoom"
+                :y="scene.y + scene.height - 6 / camera.zoom"
+                :width="12 / camera.zoom"
+                :height="12 / camera.zoom"
+                fill="white"
+                stroke="#263238"
+                :stroke-width="1 / camera.zoom"
+                pointer-events="all"
+                style="cursor: nwse-resize"
+              />
+            </g>
+          </g>
+          <rect
+            v-if="sceneDraft"
+            data-editor-only
+            :x="sceneDraft.x"
+            :y="sceneDraft.y"
+            :width="sceneDraft.width"
+            :height="sceneDraft.height"
+            fill="none"
+            stroke="#64748b"
+            :stroke-width="2 / camera.zoom"
+            :stroke-dasharray="`${6 / camera.zoom} ${3 / camera.zoom}`"
+            pointer-events="none"
+          />
+          <g
+            v-if="
+              tool === 'select' &&
+              selectionBox &&
+              !isEditingFreeText &&
+              !interactionLocked
+            "
             data-editor-only
             :transform="rotationTransform(rotatableElement)"
           >
@@ -2533,8 +3550,20 @@ defineExpose({
             <circle
               v-if="selectedArrow"
               data-resize="true"
-              :cx="connectorPoints(selectedArrow, local)[1].x"
-              :cy="connectorPoints(selectedArrow, local)[1].y"
+              :cx="selectedLinePoints![1].x"
+              :cy="selectedLinePoints![1].y"
+              :r="6 / camera.zoom"
+              fill="white"
+              stroke="var(--accent)"
+              :stroke-width="2 / camera.zoom"
+              style="cursor: crosshair"
+            />
+            <circle
+              v-if="selectedArrow?.kind === 'line' && selectedLinePoints"
+              data-resize="true"
+              data-resize-handle="nw"
+              :cx="selectedLinePoints[0].x"
+              :cy="selectedLinePoints[0].y"
               :r="6 / camera.zoom"
               fill="white"
               stroke="var(--accent)"
@@ -2593,8 +3622,65 @@ defineExpose({
           />
         </g>
       </svg>
+      <template v-if="presenting">
+        <div
+          class="paper-presentation-matte"
+          :style="sceneViewport"
+          aria-hidden="true"
+        />
+        <PaperPresentationLaser
+          v-if="laserEnabled"
+          :key="presentationScene?.id ?? 'presentation'"
+          :surface="viewport"
+        />
+        <nav
+          class="paper-presentation-controls"
+          :aria-label="t('papers.presentation.title')"
+          @pointerdown.stop
+          @wheel.stop
+        >
+          <button
+            type="button"
+            :disabled="presentationIndex === 0"
+            :aria-label="t('papers.presentation.previous')"
+            @click="movePresentation(presentationIndex - 1)"
+          >
+            ←
+          </button>
+          <span aria-live="polite"
+            >{{ presentationIndex + 1 }} / {{ localScenes.length }} ·
+            {{ presentationScene?.title }}</span
+          >
+          <button
+            type="button"
+            :disabled="presentationIndex === localScenes.length - 1"
+            :aria-label="t('papers.presentation.next')"
+            @click="movePresentation(presentationIndex + 1)"
+          >
+            →
+          </button>
+          <label
+            ><input
+              v-model="laserEnabled"
+              type="checkbox"
+            />{{ t('papers.presentation.pointer') }}</label
+          >
+          <label
+            ><input
+              v-model="smoothTransition"
+              type="checkbox"
+            />{{ t('papers.presentation.smooth') }}</label
+          >
+          <button
+            type="button"
+            @click="stopPresentation"
+          >
+            {{ t('papers.presentation.exit') }} (Esc)
+          </button>
+        </nav>
+      </template>
       <div
-        v-if="!local.length && !distractionFree"
+        v-if="!local.length && !hideTools"
         class="board-empty"
       >
         <Pencil
@@ -2671,6 +3757,193 @@ defineExpose({
 </template>
 
 <style scoped>
+.paper-context-menu.board-floating {
+  position: absolute;
+  z-index: 20;
+  width: 232px;
+  padding: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px var(--shadow-color);
+  max-height: calc(100% - 16px);
+  overflow: auto;
+}
+.paper-context-menu.board-floating button {
+  display: flex;
+  width: 100%;
+  height: auto;
+  min-height: 34px;
+  white-space: nowrap;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  border: 0;
+  border-radius: 5px;
+  padding: 9px 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.paper-context-menu button:hover:not(:disabled),
+.paper-context-menu button:focus-visible {
+  background: var(--hover);
+  outline: 1px solid var(--border);
+}
+.paper-context-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.paper-context-menu.board-floating kbd {
+  min-height: 0;
+  height: auto;
+  min-width: 0;
+  width: auto;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  line-height: 1.3;
+  font-size: 10px;
+  opacity: 0.7;
+}
+.paper-context-menu hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 5px 0;
+}
+.paper-eraser-cursor {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  border: 1.5px solid var(--ink);
+  box-shadow: 0 0 0 1px var(--paper);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--paper) 25%, transparent);
+  pointer-events: none;
+}
+.paper-eraser-options {
+  position: absolute;
+  z-index: 3;
+  right: 12px;
+  top: 76px;
+  display: grid;
+  gap: 10px;
+  width: 240px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+}
+.paper-eraser-options div {
+  display: flex;
+  gap: 6px;
+}
+.paper-eraser-options button {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.paper-eraser-options button[aria-pressed='true'] {
+  border-color: var(--ink);
+  background: var(--hover);
+}
+.board-editor.paper-presenting {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+  border-radius: 0;
+  background: #111;
+}
+.paper-presenting .board-viewport {
+  min-height: 0;
+}
+.paper-presentation-matte {
+  position: absolute;
+  box-shadow: 0 0 0 200vmax #111;
+  pointer-events: none;
+  z-index: 10;
+}
+.paper-presentation-controls {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  background: #fffffff0;
+  color: #252a34;
+  border: 1px solid #d3d5d8;
+  border-radius: 8px;
+  z-index: 40;
+  font:
+    12px Arial,
+    sans-serif;
+  box-shadow: 0 2px 12px #0002;
+}
+.paper-presentation-controls button,
+.paper-scene-hint button {
+  padding: 6px 10px;
+  border: 1px solid #d3d5d8;
+  border-radius: 4px;
+  background: white;
+  color: #252a34;
+  white-space: nowrap;
+}
+.paper-presentation-controls button:disabled {
+  opacity: 0.35;
+}
+.paper-presentation-controls span {
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.paper-presentation-controls label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.paper-scene-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 10px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  max-width: calc(100% - 32px);
+  z-index: 15;
+  font:
+    12px/1.4 Arial,
+    sans-serif;
+}
+@media (max-width: 720px) {
+  .paper-presentation-controls label {
+    display: none;
+  }
+  .paper-presentation-controls span {
+    max-width: 140px;
+  }
+}
 .board-brush-notice {
   position: absolute;
   bottom: 74px;

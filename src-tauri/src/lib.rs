@@ -1,6 +1,8 @@
 mod app_config;
 mod app_navigation;
 mod badge;
+mod board_pdf;
+mod board_preview;
 mod boards;
 mod checklist;
 mod jump_list;
@@ -129,6 +131,7 @@ pub fn run() {
             tray::finish_quit,
             boards::list_boards,
             boards::get_board,
+            board_preview::get_board_preview,
             boards::create_board,
             boards::save_board,
             boards::delete_board,
@@ -142,6 +145,7 @@ pub fn run() {
             boards::attach_task_paper,
             boards::detach_task_paper,
             boards::export_board_png,
+            board_pdf::export_board_pdf,
             app_navigation::take_app_navigation_request,
             lifecycle::list_task_timeline,
             badge::get_badge_count,

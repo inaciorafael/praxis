@@ -5,15 +5,25 @@ import type {
   BoardTextAlign,
   BoardTextVerticalAlign,
   BoardTextBackground,
+  BoardFillStyle,
+  BoardSketchOptions,
+  BoardStrokeStyle,
 } from '@/shared/types/board'
 import type { Arrangement } from '../lib/arrange'
 import { BOARD_FONT_SIZE_PRESETS } from '../lib/text'
+import PaperFillStylePicker from './PaperFillStylePicker.vue'
+import PaperSketchControls from './PaperSketchControls.vue'
 const props = defineProps<{
   count: number
+  group?: boolean
+  sketch?: BoardSketchOptions | null
+  strokeStyle?: BoardStrokeStyle
+  sketchAvailable?: boolean
   text: boolean
   fill: boolean
   fontSize?: number
   fillColor?: string | null
+  fillStyle?: BoardFillStyle
   textColor?: string
   align?: BoardTextAlign
   verticalAlign?: BoardTextVerticalAlign
@@ -28,10 +38,13 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   close: []
+  sketch: [patch: Partial<BoardSketchOptions>]
+  strokeStyle: [style: BoardStrokeStyle]
   advanced: []
   edit: []
   fontSize: [size: number]
   fillColor: [color: string | null]
+  fillStyle: [style: BoardFillStyle]
   textColor: [color: string]
   alignment: [horizontal: BoardTextAlign, vertical: BoardTextVerticalAlign]
   arrange: [action: Arrangement]
@@ -82,7 +95,11 @@ function sizeChanged(event: Event) {
     @keydown.esc.prevent="emit('close')"
   >
     <header>
-      <strong>{{ t('boards.usability.selection', count) }}</strong
+      <strong>{{
+        group
+          ? t('boards.grouping.label', { count })
+          : t('boards.usability.selection', count)
+      }}</strong
       ><button
         :aria-label="t('common.close')"
         @click="emit('close')"
@@ -90,6 +107,14 @@ function sizeChanged(event: Event) {
         <X :size="16" />
       </button>
     </header>
+    <PaperSketchControls
+      v-if="sketchAvailable"
+      :model-value="sketch"
+      :stroke-style="strokeStyle"
+      :fill="fill && fillStyle !== 'solid'"
+      @change="emit('sketch', $event)"
+      @style="emit('strokeStyle', $event)"
+    />
     <section
       v-if="text"
       class="property-section"
@@ -214,6 +239,10 @@ function sizeChanged(event: Event) {
       class="property-section"
     >
       <strong>{{ t('boards.usability.fill') }}</strong>
+      <PaperFillStylePicker
+        :model-value="fillStyle"
+        @update:model-value="emit('fillStyle', $event)"
+      />
       <div
         class="fill-palette"
         role="group"

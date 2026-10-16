@@ -9,7 +9,6 @@ import {
   Minimize,
   Ellipsis,
   X,
-  FilePenLine,
   ArrowUpRight,
   ArrowLeft,
   Sun,
@@ -19,6 +18,7 @@ import {
 } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import BoardCanvas from '@/features/boards/components/BoardCanvas.vue'
+import PaperThumbnail from '@/features/boards/components/PaperThumbnail.vue'
 import PaperBackgroundControls from '@/features/papers/components/PaperBackgroundControls.vue'
 import { useBoardStore } from '@/stores/board.store'
 import { useTaskStore } from '@/stores/task.store'
@@ -305,10 +305,16 @@ async function duplicate() {
       endId: item.endId ? (ids.get(item.endId) ?? null) : null,
     }))
     if (
-      await board.create(`${source.title} ${t('boards.copySuffix')}`, elements, 'paper', {
-        background: source.background ?? 'plain',
-        colorScheme: source.colorScheme ?? 'light',
-      })
+      await board.create(
+        `${source.title} ${t('boards.copySuffix')}`,
+        elements,
+        'paper',
+        {
+          background: source.background ?? 'plain',
+          colorScheme: source.colorScheme ?? 'light',
+        },
+        source.scenes ?? []
+      )
     ) {
       selectedId.value = null
       await refreshPaperContexts()
@@ -588,6 +594,15 @@ async function exportPng() {
         @click="create()"
       >
         <Plus :size="16" />
+      </button>
+      <button
+        v-if="currentDocument"
+        class="board-button"
+        :aria-label="t('papers.presentation.title')"
+        :title="t('papers.presentation.title')"
+        @click="canvas?.toggleScenes()"
+      >
+        <LayoutGrid :size="16" /><span>{{ t('papers.presentation.title') }}</span>
       </button>
       <button
         class="board-button"
@@ -931,10 +946,7 @@ async function exportPng() {
                 class="paper-card-sheet"
                 :data-background="item.background ?? 'plain'"
               >
-                <FilePenLine
-                  :size="24"
-                  :stroke-width="1.3"
-                />
+                <PaperThumbnail :paper="item" />
                 <LockKeyhole
                   v-if="item.locked"
                   class="paper-card-lock"
@@ -992,12 +1004,14 @@ async function exportPng() {
             ref="canvas"
             :key="currentDocument.id"
             :elements="currentDocument.elements"
+            :scenes="currentDocument.scenes ?? []"
+            :title="currentDocument.title"
             :background="currentDocument.background"
             :color-scheme="currentDocument.colorScheme"
             :read-only="locked || board.isLocking"
             :task-titles="taskTitles"
             :distraction-free="isFocus && !focusControls"
-            @change="!locked && board.setElements($event)"
+            @content-change="!locked && board.setContent($event.elements, $event.scenes)"
             @select="selectedId = $event"
             @lock-paper="togglePaperLock"
             @interact="closePaperMenus"

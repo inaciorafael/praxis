@@ -23,6 +23,35 @@ export function rotatePoint(
 function elementCenter(element: BoardElement): BoardPoint {
   return { x: element.x + element.width / 2, y: element.y + element.height / 2 }
 }
+/** Polygon vertices in local coordinates, shared by drawing and hit testing. */
+export function polygonVertices(element: BoardElement): BoardPoint[] | undefined {
+  const w = element.width,
+    h = element.height
+  if (element.kind === 'triangle')
+    return [
+      { x: w / 2, y: 0 },
+      { x: w, y: h },
+      { x: 0, y: h },
+    ]
+  if (element.kind === 'hexagon')
+    return [
+      { x: w / 4, y: 0 },
+      { x: (3 * w) / 4, y: 0 },
+      { x: w, y: h / 2 },
+      { x: (3 * w) / 4, y: h },
+      { x: w / 4, y: h },
+      { x: 0, y: h / 2 },
+    ]
+}
+export function linePoints(element: BoardElement): [BoardPoint, BoardPoint] {
+  return [
+    { x: element.x, y: element.y },
+    { x: element.x + element.width, y: element.y + element.height },
+  ].map((point) => rotatePoint(point, elementCenter(element), element.angle ?? 0)) as [
+    BoardPoint,
+    BoardPoint,
+  ]
+}
 /** Clockwise corners: north-west, north-east, south-east, south-west. */
 export function elementCorners(element: BoardElement): BoardPoint[] {
   const center = elementCenter(element)
@@ -35,6 +64,15 @@ export function elementCorners(element: BoardElement): BoardPoint[] {
 }
 export function pointInElement(element: BoardElement, point: BoardPoint): boolean {
   const local = rotatePoint(point, elementCenter(element), -(element.angle ?? 0))
+  const polygon = polygonVertices(element)
+  if (polygon) {
+    const x = local.x - element.x,
+      y = local.y - element.y
+    return polygon.every((a, index) => {
+      const b = polygon[(index + 1) % polygon.length]!
+      return (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x) >= -0.000001
+    })
+  }
   return (
     local.x >= Math.min(element.x, element.x + element.width) &&
     local.x <= Math.max(element.x, element.x + element.width) &&
@@ -102,7 +140,11 @@ export function zoomAt(camera: Camera, point: BoardPoint, zoom: number): Camera 
 export function bounds(elements: BoardElement[], scene: BoardElement[] = elements) {
   if (!elements.length) return { x: 0, y: 0, width: 640, height: 480 }
   const points = elements.flatMap((element) =>
-    element.kind === 'arrow' ? connectorPoints(element, scene) : elementCorners(element)
+    element.kind === 'arrow'
+      ? connectorPoints(element, scene)
+      : element.kind === 'line'
+        ? linePoints(element)
+        : elementCorners(element)
   )
   const x = Math.min(...points.map((point) => point.x))
   const y = Math.min(...points.map((point) => point.y))
@@ -117,8 +159,12 @@ export function connectorPoints(
   element: BoardElement,
   elements: BoardElement[]
 ): [BoardPoint, BoardPoint] {
-  const start = elements.find((e) => e.id === element.startId && e.kind !== 'arrow')
-  const end = elements.find((e) => e.id === element.endId && e.kind !== 'arrow')
+  const start = elements.find(
+    (e) => e.id === element.startId && e.kind !== 'arrow' && e.kind !== 'line'
+  )
+  const end = elements.find(
+    (e) => e.id === element.endId && e.kind !== 'arrow' && e.kind !== 'line'
+  )
   const center = (target: BoardElement | undefined, fallback: BoardPoint) =>
     target
       ? { x: target.x + target.width / 2, y: target.y + target.height / 2 }
@@ -131,6 +177,29 @@ export function connectorPoints(
     const dx = localToward.x - from.x,
       dy = localToward.y - from.y
     if (!dx && !dy) return from
+    const polygon = polygonVertices(target)
+    if (polygon) {
+      let nearest = Infinity
+      for (let index = 0; index < polygon.length; index++) {
+        const a = polygon[index]!,
+          b = polygon[(index + 1) % polygon.length]!
+        const ax = target.x + a.x - from.x,
+          ay = target.y + a.y - from.y
+        const ex = b.x - a.x,
+          ey = b.y - a.y
+        const denominator = dx * ey - dy * ex
+        if (Math.abs(denominator) < 1e-9) continue
+        const t = (ax * ey - ay * ex) / denominator
+        const u = (ax * dy - ay * dx) / denominator
+        if (t >= 0 && u >= -1e-9 && u <= 1 + 1e-9) nearest = Math.min(nearest, t)
+      }
+      if (Number.isFinite(nearest))
+        return rotatePoint(
+          { x: from.x + dx * nearest, y: from.y + dy * nearest },
+          from,
+          target.angle ?? 0
+        )
+    }
     const rx = Math.max(0.5, Math.abs(target.width) / 2)
     const ry = Math.max(0.5, Math.abs(target.height) / 2)
     const scale =

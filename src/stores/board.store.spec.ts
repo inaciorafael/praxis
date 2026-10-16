@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useBoardStore } from './board.store'
 import * as service from '@/shared/lib/boards/board.service'
-import type { Board, BoardElement } from '@/shared/types/board'
+import type { Board, BoardElement, BoardScene } from '@/shared/types/board'
 
 vi.mock('@/shared/lib/boards/board.service', () => ({
   listBoards: vi.fn(),
@@ -32,6 +32,90 @@ beforeEach(() => {
 })
 
 describe('board autosave', () => {
+  it('autosaves scenes atomically with content and preserves them when locking', async () => {
+    vi.mocked(service.saveBoard).mockImplementation(async (input) => ({
+      ...initial,
+      ...input,
+      revision: input.expectedRevision + 1,
+    }))
+    const store = useBoardStore()
+    await store.open('board')
+    const scenes: BoardScene[] = [
+      {
+        id: 'scene',
+        title: 'Overview',
+        x: 0,
+        y: 0,
+        width: 1600,
+        height: 900,
+        aspectRatio: '16:9',
+      },
+    ]
+    store.setContent([], scenes)
+    scenes[0]!.title = 'Caller mutation'
+    expect(store.current?.scenes?.[0]?.title).toBe('Overview')
+    expect(store.dirty).toBe(true)
+    expect(await store.setLocked(true)).toBe(true)
+    expect(service.saveBoard).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        scenes: [expect.objectContaining({ title: 'Overview' })],
+        expectedRevision: 1,
+      })
+    )
+    expect(service.saveBoard).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        scenes: [expect.objectContaining({ title: 'Overview' })],
+        locked: true,
+        expectedRevision: 2,
+      })
+    )
+    expect(store.boards[0]).not.toHaveProperty('scenes')
+    store.setScenes([])
+    expect(store.current?.scenes).toHaveLength(1)
+    expect(store.dirty).toBe(false)
+    store.reset()
+  })
+  it('keeps scene edits made while saving and retries them at the new revision', async () => {
+    const store = useBoardStore()
+    await store.open('board')
+    let finish!: (board: Board) => void
+    vi.mocked(service.saveBoard).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    vi.mocked(service.saveBoard).mockImplementation(async (input) => ({
+      ...initial,
+      ...input,
+      revision: input.expectedRevision + 1,
+    }))
+    const scene: BoardScene = {
+      id: 'scene',
+      title: 'First',
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 300,
+      aspectRatio: '4:3',
+    }
+    store.setScenes([scene])
+    const pending = store.flush()
+    store.setScenes([{ ...scene, title: 'Updated during save' }])
+    finish({ ...initial, scenes: [scene], revision: 2 })
+    expect(await pending).toBe(true)
+    expect(service.saveBoard).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        expectedRevision: 2,
+        scenes: [expect.objectContaining({ title: 'Updated during save' })],
+      })
+    )
+    expect(store.current?.scenes?.[0]?.title).toBe('Updated during save')
+    expect(store.dirty).toBe(false)
+    store.reset()
+  })
   it('saves the current draft before persisting lock and keeps it after reopening', async () => {
     vi.mocked(service.saveBoard).mockImplementation(async (input) => ({
       ...initial,
@@ -203,6 +287,7 @@ describe('board autosave', () => {
       id: 'board',
       title: 'New ideas',
       elements: [],
+      scenes: [],
       expectedRevision: 1,
     })
     expect(store.current?.kind).toBe('paper')

@@ -4,6 +4,7 @@ import { nextTick } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import BoardCanvas from './BoardCanvas.vue'
 import BoardRichTextEditor from './BoardRichTextEditor.vue'
+import PaperScenesPanel from './PaperScenesPanel.vue'
 import { plainToRich } from '../lib/rich-text'
 import { defaultAnnotation } from '../lib/notation'
 import type { BoardElement } from '@/shared/types/board'
@@ -70,6 +71,367 @@ const note: BoardElement = {
   imageData: null,
 }
 describe('board canvas interactions', () => {
+  it('groups from the context menu, selects and moves the whole group, duplicates independently and ungroups', async () => {
+    const elements = [
+      { ...note, id: 'a', kind: 'rectangle' as const },
+      { ...note, id: 'b', kind: 'rectangle' as const, x: 250 },
+      {
+        ...note,
+        id: 'ink',
+        kind: 'draw' as const,
+        x: 100,
+        points: [
+          { x: 0, y: 0 },
+          { x: 20, y: 20 },
+        ],
+      },
+    ]
+    const wrapper = mountCanvas()
+    await wrapper.setProps({ elements })
+    const viewport = wrapper.get('.board-viewport')
+    await viewport.trigger('keydown', { key: 'v' })
+    await viewport.trigger('keydown', { key: 'a', ctrlKey: true })
+    await wrapper
+      .get('[data-element-id="a"]')
+      .trigger('contextmenu', { clientX: 100, clientY: 100 })
+    expect(wrapper.get('[data-context-group]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-context-group]').trigger('click')
+    let saved = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    const group = saved[0]!.groupId
+    expect(group).toBeTruthy()
+    expect(saved.every((e) => e.groupId === group)).toBe(true)
+    await wrapper.setProps({ elements: JSON.parse(JSON.stringify(saved)) })
+    await pointer(viewport.element, 'pointerdown', 1, 600, 400)
+    await pointer(viewport.element, 'pointerup', 1, 600, 400)
+    await pointer(wrapper.get('[data-element-id="a"]').element, 'pointerdown', 2, 70, 70)
+    expect(wrapper.findAll('[data-resize]').length).toBeGreaterThan(0)
+    await pointer(viewport.element, 'pointermove', 2, 90, 80)
+    await pointer(viewport.element, 'pointerup', 2, 90, 80)
+    saved = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    expect(saved.map((e) => [e.x, e.y])).toEqual(
+      elements.map((e) => [e.x + 20, e.y + 10])
+    )
+    await viewport.trigger('keydown', { key: 'd', ctrlKey: true })
+    const duplicated = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    expect(duplicated).toHaveLength(6)
+    expect(new Set(duplicated.slice(3).map((e) => e.groupId)).size).toBe(1)
+    expect(duplicated[3]!.groupId).not.toBe(group)
+    await viewport.trigger('keydown', { key: 'g', ctrlKey: true, shiftKey: true })
+    const ungrouped = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    expect(ungrouped.slice(3).every((e) => !e.groupId)).toBe(true)
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(wrapper.emitted('change')!.slice(-1)[0]![0]).toEqual(duplicated)
+    wrapper.unmount()
+  })
+  it('resizes and rotates grouped elements using one set of handles with undo', async () => {
+    const elements = [
+      { ...note, id: 'a', kind: 'rectangle' as const, groupId: 'g' },
+      { ...note, id: 'b', kind: 'rectangle' as const, x: 250, groupId: 'g' },
+    ]
+    const wrapper = mountCanvas()
+    await wrapper.setProps({ elements })
+    const viewport = wrapper.get('.board-viewport')
+    await viewport.trigger('keydown', { key: 'v' })
+    await pointer(wrapper.get('[data-element-id="a"]').element, 'pointerdown', 1, 70, 70)
+    await pointer(viewport.element, 'pointerup', 1, 70, 70)
+    await pointer(
+      wrapper.get('[data-resize-handle="se"]').element,
+      'pointerdown',
+      2,
+      470,
+      170
+    )
+    await pointer(viewport.element, 'pointermove', 2, 680, 230)
+    await pointer(viewport.element, 'pointerup', 2, 680, 230)
+    const resized = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    expect(resized[0]!.width).toBeCloseTo(270)
+    expect(resized[1]!.x - resized[0]!.x).toBeCloseTo(360)
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(wrapper.emitted('change')!.slice(-1)[0]![0]).toEqual(elements)
+    await pointer(wrapper.get('[data-element-id="a"]').element, 'pointerdown', 3, 70, 70)
+    await pointer(viewport.element, 'pointerup', 3, 70, 70)
+    await pointer(wrapper.get('[data-rotate]').element, 'pointerdown', 4, 260, 24)
+    await pointer(viewport.element, 'pointermove', 4, 360, 110)
+    await pointer(viewport.element, 'pointerup', 4, 360, 110)
+    const rotated = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    expect(rotated[0]!.angle).toBeCloseTo(Math.PI / 2)
+    expect(rotated[1]!.y - rotated[0]!.y).toBeCloseTo(240)
+    wrapper.unmount()
+  })
+  it('closes the context menu with Escape and does not offer edits on a locked Paper', async () => {
+    const wrapper = mountCanvas([note])
+    await wrapper
+      .get('[data-element-id]')
+      .trigger('contextmenu', { clientX: 100, clientY: 100 })
+    expect(wrapper.find('[role="menu"]').exists()).toBe(true)
+    await wrapper.get('[role="menu"]').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false)
+    await wrapper.setProps({ readOnly: true })
+    await wrapper.get('[data-element-id]').trigger('contextmenu')
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false)
+    expect(wrapper.emitted('change')).toBeUndefined()
+    wrapper.unmount()
+  })
+  it('erases partial strokes live, commits once per pass and restores them with undo and redo', async () => {
+    const drawing: BoardElement = {
+      ...note,
+      id: 'ink',
+      kind: 'draw',
+      text: '',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 1,
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+      ],
+    }
+    const wrapper = mountCanvas()
+    await wrapper.setProps({ elements: [drawing, note] })
+    const viewport = wrapper.get('.board-viewport')
+    await viewport.trigger('keydown', { key: 'e' })
+    expect(wrapper.get('[data-tool="eraser"]').attributes('aria-pressed')).toBe('true')
+    await pointer(viewport.element, 'pointerdown', 1, 90, 40)
+    expect(wrapper.findAll('[data-element-id]')).toHaveLength(3)
+    expect(wrapper.emitted('change')).toBeUndefined()
+    await pointer(viewport.element, 'pointermove', 1, 95, 40)
+    await pointer(viewport.element, 'pointerup', 1, 95, 40)
+    expect(wrapper.emitted('change')).toHaveLength(1)
+    const saved = wrapper.emitted('change')![0]![0] as BoardElement[]
+    expect(saved.filter((e) => e.kind === 'draw')).toHaveLength(2)
+    expect(saved.find((e) => e.id === note.id)).toEqual(note)
+    await wrapper.setProps({ elements: JSON.parse(JSON.stringify(saved)) })
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(wrapper.emitted('change')!.slice(-1)[0]![0]).toEqual([drawing, note])
+    await wrapper.get('[data-board-redo]').trigger('click')
+    expect(wrapper.emitted('change')!.slice(-1)[0]![0]).toEqual(saved)
+    wrapper.unmount()
+  })
+  it('cancels an eraser pass and protects a locked Paper', async () => {
+    const drawing: BoardElement = {
+      ...note,
+      kind: 'draw',
+      text: '',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 1,
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+      ],
+    }
+    const wrapper = mountCanvas()
+    await wrapper.setProps({ elements: [drawing] })
+    const viewport = wrapper.get('.board-viewport')
+    await viewport.trigger('keydown', { key: 'e' })
+    await pointer(viewport.element, 'pointerdown', 1, 90, 40)
+    await pointer(viewport.element, 'pointercancel', 1, 90, 40)
+    expect(wrapper.findAll('[data-element-id]')).toHaveLength(1)
+    expect(wrapper.emitted('change')).toBeUndefined()
+    await wrapper.setProps({ readOnly: true })
+    await pointer(viewport.element, 'pointerdown', 2, 90, 40)
+    await pointer(viewport.element, 'pointerup', 2, 90, 40)
+    expect(wrapper.findAll('[data-element-id]')).toHaveLength(1)
+    expect(wrapper.emitted('change')).toBeUndefined()
+    wrapper.unmount()
+  })
+  it('edits native border and hatch settings with save echo, undo and redo', async () => {
+    const wrapper = mountCanvas([{ ...note, kind: 'rectangle', strokeStyle: 'pencil' }])
+    await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 70, 70)
+    await pointer(wrapper.get('.board-viewport').element, 'pointerup', 1, 70, 70)
+    await wrapper.get('[data-stroke-pattern="dashed"]').trigger('click')
+    const saved = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    expect(saved[0]!.sketch).toMatchObject({ strokePattern: 'dashed', roughness: 1 })
+    await wrapper.setProps({ elements: JSON.parse(JSON.stringify(saved)) })
+    await wrapper.get('[data-hatch-angle]').setValue('35')
+    expect(
+      (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!.sketch
+    ).toMatchObject({ strokePattern: 'dashed', hachureAngle: 35 })
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(
+      (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!.sketch!
+        .hachureAngle
+    ).toBe(-41)
+    await wrapper.get('[data-board-redo]').trigger('click')
+    expect(
+      (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!.sketch!
+        .hachureAngle
+    ).toBe(35)
+    wrapper.unmount()
+  })
+  it('exposes all fill patterns beside color and keeps their choice through save, undo and redo', async () => {
+    const wrapper = mountCanvas([{ ...note, kind: 'rectangle' }])
+    const viewport = wrapper.get('.board-viewport')
+    await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 70, 70)
+    await pointer(viewport.element, 'pointerup', 1, 70, 70)
+    for (const style of ['solid', 'hachure', 'cross-hatch', 'zigzag'])
+      expect(wrapper.find(`[data-fill-style="${style}"]`).exists()).toBe(true)
+    expect(wrapper.find('[data-fill-style="dots"]').exists()).toBe(false)
+    await wrapper.get('[data-fill-style="cross-hatch"]').trigger('click')
+    const saved = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    expect(saved[0]).toMatchObject({ fillStyle: 'cross-hatch', fillColor: '#7f91ad' })
+    await wrapper.setProps({ elements: JSON.parse(JSON.stringify(saved)) })
+    expect(
+      wrapper.get('[data-fill-style="cross-hatch"]').attributes('aria-pressed')
+    ).toBe('true')
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(
+      (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!.fillStyle
+    ).toBeUndefined()
+    await wrapper.get('[data-board-redo]').trigger('click')
+    expect(
+      (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!.fillStyle
+    ).toBe('cross-hatch')
+    wrapper.unmount()
+  })
+  it('creates triangles and hexagons with shape fill, text editing and undo', async () => {
+    for (const kind of ['triangle', 'hexagon'] as const) {
+      const wrapper = mountCanvas()
+      await wrapper.get(`[data-tool="${kind}"]`).trigger('click')
+      const viewport = wrapper.get('.board-viewport')
+      await pointer(viewport.element, 'pointerdown', 1, 250, 200)
+      await pointer(viewport.element, 'pointermove', 1, 430, 310, { shiftKey: true })
+      await pointer(viewport.element, 'pointerup', 1, 430, 310)
+      const created = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+      expect(created[0]).toMatchObject({ kind, width: 180, height: 180 })
+      expect(wrapper.find('[data-element-id] polygon').exists()).toBe(true)
+      await wrapper.get('[data-element-id]').trigger('dblclick')
+      expect(wrapper.findComponent(BoardRichTextEditor).exists()).toBe(true)
+      wrapper
+        .getComponent(BoardRichTextEditor)
+        .vm.$emit('update:modelValue', plainToRich('Idea', created[0]!))
+      wrapper.getComponent(BoardRichTextEditor).vm.$emit('finish')
+      await nextTick()
+      await wrapper.get('[data-board-undo]').trigger('click')
+      expect(
+        (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!.text
+      ).toBe('')
+      wrapper.unmount()
+    }
+  })
+  it('draws a straight line without anchors and resizes either endpoint with undo', async () => {
+    const wrapper = mountCanvas([note])
+    await wrapper.get('[data-tool="line"]').trigger('click')
+    const viewport = wrapper.get('.board-viewport')
+    await pointer(viewport.element, 'pointerdown', 1, 400, 350)
+    await pointer(viewport.element, 'pointermove', 1, 250, 200, { shiftKey: true })
+    await pointer(viewport.element, 'pointerup', 1, 250, 200)
+    const created = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    const line = created.find((element) => element.kind === 'line')!
+    expect(line.width).toBeLessThan(0)
+    expect(line.height).toBeLessThan(0)
+    expect(Math.abs(line.width)).toBeCloseTo(Math.abs(line.height))
+    expect(line.startId).toBeNull()
+    expect(line.endId).toBeNull()
+    const handles = wrapper.findAll('circle[data-resize]')
+    expect(handles).toHaveLength(2)
+    await pointer(handles[1]!.element, 'pointerdown', 2, 400, 350)
+    await pointer(viewport.element, 'pointermove', 2, 450, 350)
+    await pointer(viewport.element, 'pointerup', 2, 450, 350)
+    const resized = (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]).find(
+      (element) => element.kind === 'line'
+    )!
+    expect(resized.x).not.toBe(line.x)
+    expect(resized.x + resized.width).toBeCloseTo(line.x + line.width)
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(
+      (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]).find(
+        (element) => element.kind === 'line'
+      )
+    ).toEqual(line)
+    wrapper.unmount()
+  })
+  it('creates and removes scene frames without changing drawings, including undo after autosave', async () => {
+    const wrapper = mountCanvas([note])
+    document.body.appendChild(wrapper.element)
+    wrapper.vm.toggleScenes()
+    await nextTick()
+    await wrapper.get('[data-create="16:9"]').trigger('click')
+    const viewport = wrapper.get('.board-viewport')
+    await pointer(viewport.element, 'pointerdown', 4, 200, 200)
+    await pointer(viewport.element, 'pointermove', 4, 520, 380)
+    await pointer(viewport.element, 'pointerup', 4, 520, 380)
+    const content = wrapper.emitted('contentChange')!.slice(-1)[0]![0] as {
+      elements: BoardElement[]
+      scenes: import('@/shared/types/board').BoardScene[]
+    }
+    expect(content.elements).toEqual([note])
+    expect(content.scenes).toHaveLength(1)
+    expect(content.scenes[0]!.width / content.scenes[0]!.height).toBeCloseTo(16 / 9)
+    await wrapper.get('.paper-scene-hint button').trigger('click')
+    expect(document.activeElement).toBe(viewport.element)
+    await wrapper.setProps({ elements: content.elements, scenes: content.scenes })
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(wrapper.findAll('[data-paper-scene]')).toHaveLength(0)
+    await wrapper.get('[data-board-redo]').trigger('click')
+    expect(wrapper.findAll('[data-paper-scene]')).toHaveLength(1)
+    wrapper.getComponent(PaperScenesPanel).vm.$emit('remove', content.scenes[0]!.id)
+    await nextTick()
+    expect(wrapper.findAll('[data-paper-scene]')).toHaveLength(0)
+    expect(wrapper.findAll('[data-element-id]')).toHaveLength(1)
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(wrapper.findAll('[data-paper-scene]')).toHaveLength(1)
+    wrapper.unmount()
+  })
+  it('presents scenes without editing and restores the camera when leaving', async () => {
+    const wrapper = mountCanvas([note])
+    const scenes = [
+      {
+        id: 'one',
+        title: 'Overview',
+        x: 0,
+        y: 0,
+        width: 320,
+        height: 180,
+        aspectRatio: '16:9' as const,
+      },
+      {
+        id: 'two',
+        title: 'Detail',
+        x: 400,
+        y: 200,
+        width: 160,
+        height: 120,
+        aspectRatio: '4:3' as const,
+      },
+    ]
+    await wrapper.setProps({ scenes })
+    await nextTick()
+    const initial = wrapper.get('[data-scene]').attributes('transform')
+    await wrapper.vm.startPresentation()
+    await nextTick()
+    expect(wrapper.classes()).toContain('paper-presenting')
+    expect(wrapper.find('.paper-tool-wheel').exists()).toBe(false)
+    const laserViewport = wrapper.get('.board-viewport').element
+    await pointer(laserViewport, 'pointerdown', 8, 100, 100)
+    await pointer(laserViewport, 'pointermove', 8, 200, 150)
+    await pointer(laserViewport, 'pointerup', 8, 200, 150)
+    expect(wrapper.find('[data-laser-segment]').exists()).toBe(true)
+    expect(wrapper.emitted('contentChange')).toBeUndefined()
+    await wrapper.get('.paper-presentation-controls input').setValue(false)
+    expect(wrapper.find('.paper-presentation-laser').exists()).toBe(false)
+    await wrapper.get('.paper-presentation-controls input').setValue(true)
+    await pointer(laserViewport, 'pointerdown', 9, 120, 120)
+    await pointer(laserViewport, 'pointerup', 9, 120, 120)
+    const viewport = wrapper.get('.board-viewport')
+    await pointer(viewport.element, 'pointerdown', 5, 100, 100)
+    await pointer(viewport.element, 'pointerup', 5, 300, 200)
+    expect(wrapper.emitted('change')).toBeUndefined()
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+    )
+    await nextTick()
+    expect(wrapper.get('.paper-presentation-controls').text()).toContain('2 / 2')
+    expect(wrapper.find('[data-laser-segment]').exists()).toBe(false)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(wrapper.classes()).not.toContain('paper-presenting')
+    expect(wrapper.get('[data-scene]').attributes('transform')).toBe(initial)
+    expect(wrapper.emitted('change')).toBeUndefined()
+    wrapper.unmount()
+  })
   it('undoes and redoes a completed text edit from a reopened editor', async () => {
     const wrapper = mountCanvas([note])
     document.body.appendChild(wrapper.element)

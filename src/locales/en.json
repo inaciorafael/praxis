@@ -78,6 +78,34 @@
       "ruled": "Ruled",
       "dots": "Dotted",
       "savedPerPaper": "Saved for this Paper and included in PNG exports."
+    },
+    "presentation": {
+      "title": "Presentation",
+      "close": "Close presentation",
+      "present": "Present",
+      "exportPdf": "Export PDF",
+      "create": "Create scene",
+      "free": "Free",
+      "limit": "Maximum 100 scenes per Paper.",
+      "showFrames": "Show frames",
+      "empty": "Create scenes to present regions of your Paper in sequence.",
+      "name": "Scene name",
+      "ratio": "Aspect ratio",
+      "adjust": "Adjust framing",
+      "up": "Move up",
+      "down": "Move down",
+      "removeHint": "Removes only the frame. Your drawings stay in the Paper.",
+      "remove": "Delete scene",
+      "hint": "Drag thumbnails to reorder. A scene frames your drawings without moving them.",
+      "sceneName": "Scene {number}",
+      "drawHint": "Drag on the Paper to frame a scene. Click to use the current view.",
+      "adjustHint": "Drag to move the frame. Use the bottom-right corner to resize. Esc to finish.",
+      "done": "Done",
+      "previous": "Previous scene",
+      "next": "Next scene",
+      "pointer": "Pointer",
+      "smooth": "Smooth transition",
+      "exit": "Exit"
     }
   },
   "common": {
@@ -164,12 +192,30 @@
     "subtitle": "Everything that is still open.",
     "empty": "No pending tasks.",
     "groups": {
-      "overdue": ["Overdue", "Pending tasks whose due time has passed."],
-      "today": ["Today", "Pending tasks due later today."],
-      "tomorrow": ["Tomorrow", "Tasks already planned for tomorrow."],
-      "week": ["This week", "Tasks due in the next few days."],
-      "later": ["Upcoming", "Tasks due beyond this week."],
-      "noDate": ["No due date", "Open tasks without a due date."]
+      "overdue": [
+        "Overdue",
+        "Pending tasks whose due time has passed."
+      ],
+      "today": [
+        "Today",
+        "Pending tasks due later today."
+      ],
+      "tomorrow": [
+        "Tomorrow",
+        "Tasks already planned for tomorrow."
+      ],
+      "week": [
+        "This week",
+        "Tasks due in the next few days."
+      ],
+      "later": [
+        "Upcoming",
+        "Tasks due beyond this week."
+      ],
+      "noDate": [
+        "No due date",
+        "Open tasks without a due date."
+      ]
     }
   },
   "overdue": {
@@ -182,11 +228,26 @@
     "subtitle": "Pending tasks with a notification configured.",
     "empty": "No tasks with reminders.",
     "groups": {
-      "overdue": ["Missed", "Reminders that have passed and still need attention."],
-      "today": ["Today", "Notifications scheduled for later today."],
-      "tomorrow": ["Tomorrow", "Upcoming reminders scheduled for tomorrow."],
-      "week": ["This week", "Reminders scheduled for the next few days."],
-      "later": ["Later", "Reminders scheduled beyond this week."]
+      "overdue": [
+        "Missed",
+        "Reminders that have passed and still need attention."
+      ],
+      "today": [
+        "Today",
+        "Notifications scheduled for later today."
+      ],
+      "tomorrow": [
+        "Tomorrow",
+        "Upcoming reminders scheduled for tomorrow."
+      ],
+      "week": [
+        "This week",
+        "Reminders scheduled for the next few days."
+      ],
+      "later": [
+        "Later",
+        "Reminders scheduled beyond this week."
+      ]
     }
   },
   "completed": {
@@ -281,6 +342,9 @@
     "noResults": "No tasks match this search."
   },
   "boards": {
+    "presentation": {
+      "exportPdf": "Export presentation as PDF"
+    },
     "penColors": "Pen inks",
     "inkColors": {
       "blue": "Blue",
@@ -440,6 +504,14 @@
     "shortcutZoom": "Ctrl+ +/−: zoom · Ctrl+0: 100% · Space + drag: pan.",
     "colorLabel": "Color",
     "imageRejected": "Unable to import this image.",
+    "fillStyles": {
+      "title": "Fill pattern",
+      "solid": "Solid",
+      "hachure": "Hachure",
+      "cross-hatch": "Cross-hatch",
+      "dots": "Dots",
+      "zigzag": "Zigzag"
+    },
     "exportFailed": "Unable to export the image.",
     "tools": {
       "select": "Select",
@@ -448,6 +520,9 @@
       "note": "Note",
       "rectangle": "Rectangle",
       "ellipse": "Ellipse",
+      "line": "Straight line",
+      "triangle": "Triangle",
+      "hexagon": "Hexagon",
       "frame": "Frame",
       "arrow": "Arrow",
       "draw": "Pencil",
@@ -455,7 +530,8 @@
       "question": "Question",
       "decision": "Decision",
       "task": "Task",
-      "image": "Image"
+      "image": "Image",
+      "eraser": "Eraser"
     },
     "colors": {
       "neutral": "Neutral",
@@ -567,6 +643,32 @@
         "horizontal": "Distribute horizontally",
         "vertical": "Distribute vertically"
       }
+    },
+    "sketch": {
+      "title": "Stroke and finish",
+      "border": "Border",
+      "solid": "Solid",
+      "dashed": "Dashed",
+      "dotted": "Dotted",
+      "roughness": "Roughness",
+      "bowing": "Bowing",
+      "hatching": "Adjust hatching",
+      "angle": "Angle",
+      "spacing": "Spacing"
+    },
+    "eraser": {
+      "hint": "Drag to erase parts of freehand strokes. Text and shapes are preserved.",
+      "size": "Eraser size",
+      "shortcut": "Eraser (E)"
+    },
+    "grouping": {
+      "menu": "Paper actions",
+      "group": "Group",
+      "ungroup": "Ungroup",
+      "front": "Bring to front",
+      "back": "Send to back",
+      "delete": "Delete selection",
+      "label": "Group · {count} elements"
     }
   },
   "settings": {
@@ -803,7 +905,12 @@
       "todayTime": "Today at 4:00 PM",
       "reminderTime": "Reminder at 3:30 PM",
       "tag": "+work",
-      "weekdays": ["Tue", "Wed", "Thu", "Fri"]
+      "weekdays": [
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri"
+      ]
     }
   },
   "support": {

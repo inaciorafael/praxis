@@ -177,3 +177,49 @@ Os snapshots isolam geometria, texto rico e opções das anotações. Respostas 
 ### Consistência do marca-texto
 
 Rough Notation é a única opção de marcação de texto no minimenu e no painel lateral. O seletor antigo de marca-texto foi retirado. Documentos com `textHighlight` ou `run.highlight` continuam legíveis: o adaptador de compatibilidade desenha as cores salvas pelo mesmo renderizador Rough Notation, sem alterar o documento durante a leitura. A edição HTML e o SVG exportado compartilham esses caminhos. Aplicar uma anotação nova limpa a marcação legada correspondente, evitando sobreposição de estilos. Os sete tipos de anotação e suas opções de cor, traço e animação continuam disponíveis.
+
+### Miniaturas e novas formas
+
+O preenchimento Pontos foi retirado por custo durante a movimentação. Documentos antigos com `fillStyle: dots` continuam aceitos pelo backend e são desenhados como hachuras, sem migração ou escrita durante a leitura.
+
+O controle de preenchimento oferece amostras clicáveis de Sólido, Hachuras, Cruzadas e Zigue-zague junto à paleta de cores, nas propriedades da seleção e nos ajustes da ferramenta. Cada elemento salva `fillStyle`; multisseleções com valores diferentes não indicam um padrão único. Escolher um padrão em uma forma sem preenchimento ativa uma cor inicial visível, que pode ser trocada na paleta. As alterações compartilham salvamento, histórico e exportação. Sólido recupera o contraste com a cor de fundo; padrões usam o contraste do papel.
+
+O preenchimento de retângulos, elipses, triângulos, hexágonos e fundos de texto usa hachuras diagonais na cor escolhida. Transparente continua sem preenchimento. As linhas têm espessura independente do contorno e espaçamento que limita sua quantidade em formas grandes. A semente mantém a textura estável; canvas, miniaturas e exportações compartilham o resultado. Como o papel aparece entre as hachuras, o texto automático usa o contraste do papel. Notas e cartões conservam seus fundos sólidos.
+
+Os contornos nativos de lápis usam a geometria irregular do RoughJS com o mesmo depósito vetorial de grafite da escrita livre: corpo leve, fibras e pequenas falhas. A caneta usa contorno de tinta com variação sutil de espessura. Isso se aplica a formas, linhas, setas e fundos opcionais de texto; os preenchimentos e a geometria de interação são preservados. O estilo limpo e os enquadramentos tracejados continuam disponíveis. A caneta livre mantém seu gesto suavizado com irregularidade discreta.
+
+A amostragem dos contornos é limitada a 24 passos por curva e as fibras equivalentes são agrupadas em quatro caminhos por contorno de lápis. A semente do elemento mantém o desenho estável ao mover ou reabrir. Canvas, miniaturas e exportação compartilham o mesmo renderizador, sem conversão posterior ao soltar o ponteiro e sem dependências adicionais. A importação experimental com svg2roughjs foi removida.
+
+A biblioteca mostra uma prévia do conteúdo salvo sobre o fundo do Paper. O carregamento acontece conforme os cartões entram na área visível, com duas solicitações simultâneas e cache temporário de até 12 revisões. O comando autenticado `get_board_preview` lê o documento pelo caminho existente do cofre e retorna uma representação compacta; nenhuma miniatura descriptografada é gravada em disco. Ao sair da biblioteca, o cache é liberado.
+
+Para limitar memória e renderização, a prévia amostra até 128 elementos, 128 pontos por traço e 256 caracteres por texto. Imagens compartilham um orçamento de 1 MiB; imagens maiores aparecem como um indicador. Esses limites afetam somente a miniatura. Rough Notation aparece no estado final, sem animação.
+
+O grupo Formas inclui linha reta (atalho L), triângulo e hexágono. Shift restringe a direção da linha e mantém proporções iguais durante a criação das formas. Linhas têm ajustes nas duas extremidades e não se vinculam automaticamente a outros elementos. Triângulos e hexágonos aceitam preenchimento e texto rico, usam a geometria real para seleção e conexões e compartilham exportação e histórico com as demais formas.
+
+### Cenas de apresentação
+
+Na apresentação, o apontador usa um ponto vermelho luminoso. Segurar o botão principal e arrastar deixa um rastro que desaparece progressivamente em 1,1 segundo por trecho, inclusive enquanto o gesto continua. Soltar encerra o gesto; novos gestos não se conectam ao anterior. Trocar de cena, desativar o apontador ou sair limpa a sobreposição. Controles não geram riscos. O rastro não integra o documento, histórico, salvamento ou exportação. O componente anima somente a sobreposição enquanto existem trechos visíveis, com limite de 256 segmentos e sem temporizador ocioso. Referências de comportamento: [Goodnotes — Trail](https://support.goodnotes.com/hc/en-us/articles/7353727934223-Present-Goodnotes-on-an-external-screen) e [PowerPoint Live — manter pressionado para desenhar](https://support.microsoft.com/en-us/teams/meetings/laser-point-or-draw-on-powerpoint-slides-in-microsoft-teams-meetings).
+
+O botão Apresentação abre a sequência de cenas do Paper. Cada cena é um enquadramento independente dos elementos, com nome, posição, dimensões e proporção 16:9, 4:3 ou livre. Arrastar no canvas cria um enquadramento; clicar usa uma região central da câmera atual. Ajustar enquadramento permite movê-lo e redimensioná-lo pelo canto inferior direito. Concluir ou Escape volta ao desenho. As miniaturas usam o mesmo conteúdo SVG do canvas, sem duplicar os desenhos. Excluir uma cena mantém todo o conteúdo do Paper. Miniaturas podem ser reordenadas por arraste ou botões de subir/descer.
+
+Elementos e cenas compartilham o histórico de desfazer/refazer e são publicados atomicamente para o salvamento. Mudanças de câmera e navegação pela apresentação não geram histórico. Documentos antigos têm sequência vazia; respostas equivalentes do salvamento preservam o histórico. O limite é de 100 cenas, e o orçamento de histórico considera os enquadramentos.
+
+Apresentar usa tela cheia quando disponível e uma sobreposição sem distrações como alternativa. A cena é enquadrada inteira, com faixas fora de sua proporção; as ferramentas de edição ficam bloqueadas. Setas, Espaço, Page Up/Down e Home/End navegam; Escape encerra e restaura a câmera anterior. O apontador é temporário e não altera o documento. Transições suaves podem ser desativadas, respeitam movimento reduzido e viram cortes para deslocamentos longos. Papers bloqueados continuam podendo ser apresentados e exportados.
+
+Exportar PDF cria uma página por cena, na ordem definida. O recorte reutiliza o renderizador SVG/PNG, incluindo fontes, fundo, desenhos e estado final de Rough Notation. Cada página incorpora uma imagem JPEG RGB, com resolução mínima alvo de 1920 pixels no maior lado e os limites existentes de 8192 pixels por lado/64 MP. A exportação bloqueia alterações durante a captura, processa as páginas em sequência e limita o PDF a 64 MiB. O texto no PDF é rasterizado; não é selecionável. O comando nativo aceita somente destino absoluto `.pdf` e conteúdo PDF validado. Nenhuma dependência de geração de slides foi adicionada.
+
+## Acabamento das formas
+
+O painel de propriedades oferece material (linha limpa, caneta ou lapis), borda continua/tracejada/pontilhada, irregularidade e curvatura. As hachuras possuem inclinacao (-90 a 90 graus) e espacamento (5 a 24 px), mantendo o limite proporcional de linhas para formas grandes. O preenchimento de pontos continua desativado.
+
+Os ajustes opcionais de sketch sao persistidos por elemento, participam do historico e usam a mesma renderizacao nas miniaturas e exportacoes. O seed continua baseado no id: mover a forma nao redesenha seu acabamento. Bordas com padrao usam paths com stroke, pois contornos de tinta preenchidos nao aceitam dash. Desenho livre mantem seus materiais atuais. O acabamento foi inspirado nos parametros roughConfig de svg2roughjs/RoughJS, sem adicionar dependencia ou importar SVG.
+## Borracha de desenho livre
+
+Borracha (E), junto dos instrumentos: apaga parcialmente os tracos de desenho livre sem alterar textos, formas e imagens. Tamanhos de 12, 24 e 48 px de tela, com cursor circular e alcance compensado pelo zoom. O recorte usa a capsula continua percorrida pelo ponteiro, sem saltar trechos em movimentos rapidos. Fragmentos preservam estilos e interpolam pressao; tracos girados sao recortados em coordenadas do Paper. Cada passada produz uma unica entrada de undo/redo; cancelar ou perder captura restaura o estado anterior. Paper bloqueado e apresentacao impedem apagar. Os fragmentos usam o contrato existente de draw e nao exigem migracao.
+
+## Grupos e menu contextual
+
+Selecione elementos com Shift ou selecao por area e use clique direito > Agrupar (Ctrl+G). Clicar em um membro seleciona o grupo inteiro. O conjunto move, redimensiona proporcionalmente e gira pelo mesmo contorno de selecao. Desagrupar (Ctrl+Shift+G) recupera os elementos sem rasterizar ou perder estilos. Grupos sao planos: agrupar conjuntos existentes cria um novo grupo comum.
+
+O menu contextual oferece agrupar/desagrupar, duplicar, trazer para frente, enviar para tras, excluir e undo/redo. Clique direito preserva a multisselecao quando o alvo ja faz parte dela. Escape, clique fora ou executar uma acao fecham o menu; setas, Home e End navegam nas opcoes. Papers bloqueados e apresentacao nao permitem acoes de edicao. Duplicar remapeia os ids de grupos e conectores, mantendo a copia independente. Apagar desenhos com borracha preserva o grupo dos fragmentos restantes.
+
