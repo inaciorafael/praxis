@@ -11,8 +11,55 @@ import BoardsPage from '/src/pages/boards/BoardsPage.vue'
 import TaskPapers from '/src/features/papers/components/TaskPapers.vue'
 import { i18n } from '/src/shared/lib/i18n/i18n.ts'
 import '/src/app/styles/main.css'
+import { annotationTypes, defaultAnnotation } from '/src/features/boards/lib/notation.ts'
+import { richRunDefaults } from '/src/features/boards/lib/rich-editor.ts'
 const boards = []
+const writingFixture = new URLSearchParams(location.search).has('writing')
+if (writingFixture) {
+  const base = {color:'neutral',resolved:false,startId:null,endId:null,taskId:null,imageData:null,opacity:1}
+  const names=['Caneta — um traço simples','Lápis — leve sobre o papel','Grafite — textura delicada','Tinteiro — tinta que acompanha a mão']
+  const elements = names.flatMap((text,index)=>[
+    {...base,id:`writing-title-${index}`,kind:'text',x:300,y:90+index*135,width:620,height:40,text,textFont:'handwritten',textBackground:'none',points:[]},
+    {...base,id:`writing-ink-${index}`,kind:'draw',x:320,y:150+index*135,width:430,height:30,text:'',strokeStyle:index===1?'pencil':'pen',drawBrush:index===2?'graphite':index===3?'fountain':undefined,strokeWidth:[1.6,1.2,1.8,2.4][index],points:Array.from({length:100},(_,i)=>({x:i*430/99,y:15+Math.sin(i/99*Math.PI*6)*14,pressure:.3+.6*Math.sin(i/99*Math.PI)}))}
+  ])
+  boards.push({id:'fixture-writing',kind:'paper',title:'Escrita sobre o Paper',background:'ruled',colorScheme:'light',revision:1,formatVersion:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),elements})
+}
+const usabilityFixture = new URLSearchParams(location.search).has('usability')
+if (usabilityFixture) {
+  const base = { color:'neutral', strokeStyle:'pencil', textFont:'handwritten', resolved:false, points:[], startId:null, endId:null, taskId:null, imageData:null }
+  const cards = [
+    { id:'idea-one',kind:'rectangle',x:320,y:180,width:250,height:150,text:'Explorar uma ideia',fillColor:'#fff0b3' },
+    { id:'idea-two',kind:'ellipse',x:650,y:260,width:250,height:150,text:'Conectar possibilidades',fillColor:'#d8eaff' },
+    { id:'idea-three',kind:'rectangle',x:400,y:480,width:250,height:150,text:'Escolher um caminho',fillColor:'#d3f2dc' }
+  ].map(card => ({ ...base, ...card, textAlign:'center',textVerticalAlign:'middle',richText:{paragraphs:[{align:'center',list:'none',runs:[{...richRunDefaults,text:card.text,fontSize:28}]}]} }))
+  boards.push({id:'fixture-usability',kind:'paper',title:'Organizar ideias no Paper',background:'grid',colorScheme:'light',revision:1,formatVersion:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),elements:[{...base,id:'idea-title',kind:'text',x:320,y:70,width:600,height:65,text:'Um espaço para pensar visualmente',richText:{paragraphs:[{align:'left',list:'none',runs:[{...richRunDefaults,text:'Um espaço para pensar visualmente',fontSize:38}]}]},textBackground:'none'},...cards]})
+}
+const brushesFixture = new URLSearchParams(location.search).has('brushes')
+if (brushesFixture) {
+  const types = ['graphite', 'charcoal', 'marker', 'watercolor', 'spray']
+  const names = ['Grafite — rascunhe uma ideia', 'Carvão — explore volume e sombra', 'Marcador — destaque um caminho', 'Aquarela — pinte uma descoberta', 'Spray — crie texturas e atmosferas']
+  const colors = ['#48515f','#8a5142','#ce8825','#477ebd','#839f70']
+  const widths = [2,6,12,24,20]
+  const elements = types.flatMap((drawBrush, index) => [
+    { id: `brush-label-${index}`, kind: 'text', x: 300, y: 65 + index * 115, width: 600, height: 38, text: names[index], color: 'neutral', textFont: 'handwritten', textBackground: 'none', resolved: false, points: [], startId: null, endId: null, taskId: null, imageData: null },
+    { id: `brush-stroke-${index}`, kind: 'draw', x: 320, y: 117 + index * 115, width: 440, height: 42, text: '', color: 'neutral', strokeStyle: 'pen', drawBrush, strokeWidth: widths[index], strokeColor: colors[index], opacity: 1, resolved: false, points: Array.from({length:60},(_,i)=>({x:i*440/59,y:21+Math.sin(i/59*Math.PI*4)*20,pressure:.35+i/59*.65})), startId:null,endId:null,taskId:null,imageData:null }
+  ])
+  boards.push({id:'fixture-brushes',kind:'paper',title:'Materiais para um papel digital',background:'plain',colorScheme:'light',revision:1,formatVersion:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),elements})
+}
+const notationFixture = new URLSearchParams(location.search).has('notation')
+if (notationFixture) {
+  const names = ['Sublinhar uma ideia', 'Enquadrar um conceito', 'Circular o que importa', 'Destacar uma descoberta', 'Riscar uma alternativa', 'Descartar uma hipótese', 'Agrupar com colchetes']
+  const richText = { paragraphs: annotationTypes.map((type, index) => ({ align: 'left', list: 'none', runs: [{ ...richRunDefaults, fontSize: 32, text: names[index], annotation: { ...defaultAnnotation(type), padding: 3, brackets: ['left', 'right'], multiline: false } }, { ...richRunDefaults, fontSize: 32, text: '\n' }] })) }
+  boards.push({ id: 'fixture-notation', kind: 'paper', title: 'Ideias com Rough Notation', background: 'plain', colorScheme: 'light', revision: 1, formatVersion: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), elements: [{ id: 'notation-text', kind: 'text', x: 300, y: 120, width: 620, height: 610, text: names.join('\n\n'), richText, color: 'neutral', textAutoWidth: false, textFont: 'handwritten', textBackground: 'none', resolved: false, points: [], startId: null, endId: null, taskId: null, imageData: null }] })
+}
 const tasks = []
+if (new URLSearchParams(location.search).has('contrast')) {
+  for (const board of boards) for (const element of board.elements) {
+    if (element.kind === 'text' && element.richText)
+      for (const paragraph of element.richText.paragraphs)
+        for (const run of paragraph.runs) run.color = '#000000'
+  }
+}
 const paperLinks = []
 const paperFixture = new URLSearchParams(location.search).has('papers')
 const now = () => new Date().toISOString()
@@ -21,13 +68,13 @@ window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
   if (command === 'list_boards') return boards.map(({elements,...board}) => ({...board,elementCount:elements.length}))
   if (command === 'get_board') return structuredClone(boards.find(board => board.id === args.id))
   if (command === 'create_board') {
-    const board = {id:crypto.randomUUID(),kind:args.input.kind??'board',title:args.input.title,elements:args.input.elements,revision:1,formatVersion:1,createdAt:now(),updatedAt:now()}
+    const board = {id:crypto.randomUUID(),kind:args.input.kind??'board',background:args.input.background??'plain',colorScheme:args.input.colorScheme??'light',title:args.input.title,elements:args.input.elements,revision:1,formatVersion:1,createdAt:now(),updatedAt:now()}
     boards.push(board); return structuredClone(board)
   }
   if (command === 'save_board') {
     const board = boards.find(board => board.id === args.input.id)
     if (args.input.expectedRevision !== board.revision) throw Error('Fixture revision conflict')
-    Object.assign(board,{title:args.input.title,elements:args.input.elements,revision:board.revision+1,updatedAt:now()})
+    Object.assign(board,{locked:args.input.locked??board.locked??false,background:args.input.background??board.background,colorScheme:args.input.colorScheme??board.colorScheme,title:args.input.title,elements:args.input.elements,revision:board.revision+1,updatedAt:now()})
     return structuredClone(board)
   }
   if (command === 'get_board_tasks') {
@@ -47,7 +94,7 @@ window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
   if (command === 'list_task_papers') return boards.filter(board=>paperLinks.some(link=>link.taskId===args.taskId&&link.paperId===board.id)).map(({elements,...board})=>({...board,elementCount:elements.length}))
   if (command === 'list_paper_task_contexts') return structuredClone(tasks.filter(task=>paperLinks.some(link=>link.paperId===args.paperId&&link.taskId===task.id)))
   if (command === 'create_task_paper') {
-    const board={id:crypto.randomUUID(),kind:'paper',title:args.title,elements:[],revision:1,formatVersion:1,createdAt:now(),updatedAt:now()}
+    const board={id:crypto.randomUUID(),kind:'paper',background:'plain',colorScheme:'light',title:args.title,elements:[],revision:1,formatVersion:1,createdAt:now(),updatedAt:now()}
     boards.push(board);paperLinks.push({taskId:args.taskId,paperId:board.id});return structuredClone(board)
   }
   if (command === 'attach_task_paper') {if(!paperLinks.some(link=>link.taskId===args.taskId&&link.paperId===args.paperId))paperLinks.push({taskId:args.taskId,paperId:args.paperId});return}
@@ -58,6 +105,10 @@ window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
 }}
 const router = createRouter({history:createWebHashHistory(),routes:[{path:'/papers',name:'papers',component:BoardsPage},{path:'/:pathMatch(.*)*',name:'boards',redirect:to=>({name:'papers',query:to.query})}]})
 if(paperFixture) await router.push({name:'papers'})
+if(notationFixture) await router.push({name:'papers',query:{boardId:'fixture-notation'}})
+if(brushesFixture) await router.push({name:'papers',query:{boardId:'fixture-brushes'}})
+if(usabilityFixture) await router.push({name:'papers',query:{boardId:'fixture-usability'}})
+if(writingFixture) await router.push({name:'papers',query:{boardId:'fixture-writing'}})
 i18n.global.locale.value='pt-BR'
 createApp({render:()=>h('main',{style:`height:100vh;${paperFixture?'display:grid;grid-template-columns:280px minmax(0,1fr)':''}`},paperFixture?[h('aside',{style:'padding:16px;border-right:1px solid var(--color-border);overflow:auto'},[h('h2','Lembrete: organizar ideias'),h(TaskPapers,{taskId:'fixture-task',taskTitle:tasks[0].title,onOpen:paperId=>router.push({name:'papers',query:{boardId:paperId,fromTaskId:'fixture-task'}})})]),h(RouterView)]:h(RouterView))}).use(createPinia()).use(i18n).use(router).mount('#app')
 </script></body></html>

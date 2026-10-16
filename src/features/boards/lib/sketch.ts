@@ -1,6 +1,7 @@
 import { RoughGenerator } from 'roughjs/bin/generator'
 import type { Options } from 'roughjs/bin/core'
 import type { BoardElement, BoardPoint } from '@/shared/types/board'
+import { writingPaths } from './writing'
 
 export type SketchPath = {
   d: string
@@ -65,10 +66,22 @@ export function sketchPaths(
     fill: fill === 'transparent' ? undefined : fill,
     fillStyle: 'solid',
     strokeWidth,
-    roughness: pencil ? 1.35 : 0.55,
-    bowing: pencil ? 1.1 : 0.45,
+    roughness: pencil ? 1.85 : 0.55,
+    bowing: pencil ? 1.6 : 0.45,
     disableMultiStroke: !pencil,
-    preserveVertices: true,
+    // Shapes can have imperfect corners; linked arrow tips keep exact anchors.
+    preserveVertices: !pencil || element.kind === 'arrow',
+    ...(pencil
+      ? {
+          maxRandomnessOffset: Math.min(
+            2,
+            Math.max(
+              0.5,
+              Math.min(Math.abs(element.width), Math.abs(element.height)) / 24
+            )
+          ),
+        }
+      : {}),
     fixedDecimalPlaceDigits: 3,
   }
   const path = (d: string, pathFill = 'none'): SketchPath => ({
@@ -118,6 +131,7 @@ export function sketchPaths(
     ]
   }
   if (element.kind === 'draw') {
+    if (pencil && !element.drawBrush) return writingPaths(element, stroke, true)
     const points = element.points.map((point) => [point.x, point.y] as [number, number])
     if (!points.length) return []
     if (points.length === 1) points.push([points[0]![0] + 0.1, points[0]![1] + 0.1])

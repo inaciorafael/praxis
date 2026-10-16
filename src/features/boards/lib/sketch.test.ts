@@ -31,10 +31,22 @@ describe('board sketch renderer', () => {
             strokeStyle,
             kind,
             strokeWidth,
-            points: [{ x: 0, y: 0 }, { x: 12, y: 8 }, { x: 24, y: 4 }],
+            points: [
+              { x: 0, y: 0 },
+              { x: 12, y: 8 },
+              { x: 24, y: 4 },
+            ],
           })
           expect(drawing.length).toBeGreaterThan(0)
-          expect(drawing.filter(path => path.stroke !== 'none').every(path => path.strokeWidth === strokeWidth)).toBe(true)
+          expect(
+            drawing
+              .filter((path) => path.stroke !== 'none')
+              .every((path) =>
+                kind === 'draw' && strokeStyle === 'pencil'
+                  ? path.strokeWidth > 0 && path.strokeWidth <= strokeWidth
+                  : path.strokeWidth === strokeWidth
+              )
+          ).toBe(true)
         }
       }
     }
@@ -43,8 +55,12 @@ describe('board sketch renderer', () => {
     for (const strokeStyle of ['clean', 'pencil', 'pen'] as const) {
       const original = paths({ strokeStyle })
       expect(paths({ strokeStyle, strokeWidth: undefined })).toEqual(original)
-      expect(paths({ strokeStyle, strokeWidth: null as unknown as number })).toEqual(original)
-      expect(original.filter(path => path.stroke !== 'none').map(path => path.strokeWidth)).toEqual([strokeStyle === 'pencil' ? 1.5 : 2])
+      expect(paths({ strokeStyle, strokeWidth: null as unknown as number })).toEqual(
+        original
+      )
+      expect(
+        original.filter((path) => path.stroke !== 'none').map((path) => path.strokeWidth)
+      ).toEqual([strokeStyle === 'pencil' ? 1.5 : 2])
     }
   })
   it('keeps random seeds positive and deterministic', () => {
@@ -63,6 +79,36 @@ describe('board sketch renderer', () => {
     expect(paths({ strokeStyle: 'pencil' })[0]!.opacity).toBeLessThan(1)
     expect(paths({ strokeStyle: 'pen' })[0]!.opacity).toBe(1)
     expect(paths({ strokeStyle: 'pen' })).not.toEqual(paths({ strokeStyle: 'pencil' }))
+  })
+  it('gives pencil rectangles imperfect doubled corners without changing logical bounds', () => {
+    const shape = element({ strokeStyle: 'pencil' })
+    const before = structuredClone(shape)
+    const drawing = sketchPaths(shape, '#25354a', 'transparent')
+    const outline = drawing.find((path) => path.stroke !== 'none')!.d
+    const moves = [...outline.matchAll(/M\s*(-?[\d.]+)[ ,]+(-?[\d.]+)/g)]
+    expect(moves).toHaveLength(8)
+    expect(
+      moves.some((match) => {
+        const x = Number(match[1]),
+          y = Number(match[2])
+        return ![0, shape.width].includes(x) || ![0, shape.height].includes(y)
+      })
+    ).toBe(true)
+    // Organic marks remain close to the real rectangle, rather than wandering
+    // far enough to undermine precise selection and connection geometry.
+    const coordinates = [...outline.matchAll(/-?\d+(?:\.\d+)?/g)].map((match) =>
+      Number(match[0])
+    )
+    coordinates.forEach((coordinate, index) => {
+      expect(coordinate).toBeGreaterThanOrEqual(-12)
+      expect(coordinate).toBeLessThanOrEqual(
+        (index % 2 ? shape.height : shape.width) + 12
+      )
+    })
+    expect(shape).toEqual(before)
+    expect(sketchPaths({ ...shape, x: -300, y: 900 }, '#25354a', 'transparent')).toEqual(
+      drawing
+    )
   })
   it('uses actual connector endpoints in local coordinates', () => {
     const arrow = element({ kind: 'arrow' })
@@ -89,8 +135,12 @@ describe('board sketch renderer', () => {
     expect(paths({ kind: 'frame', strokeStyle: 'pen' })[0]!.dash).toBe('8 6')
   })
   it('renders opt-in text containers using the same deterministic sketch geometry', () => {
-    expect(paths({ kind: 'text', textBackground: 'rectangle', strokeStyle: 'pencil' })).toEqual(paths({ kind: 'rectangle', strokeStyle: 'pencil' }))
-    expect(paths({ kind: 'text', textBackground: 'ellipse', strokeStyle: 'pen' })).toEqual(paths({ kind: 'ellipse', strokeStyle: 'pen' }))
+    expect(
+      paths({ kind: 'text', textBackground: 'rectangle', strokeStyle: 'pencil' })
+    ).toEqual(paths({ kind: 'rectangle', strokeStyle: 'pencil' }))
+    expect(
+      paths({ kind: 'text', textBackground: 'ellipse', strokeStyle: 'pen' })
+    ).toEqual(paths({ kind: 'ellipse', strokeStyle: 'pen' }))
     expect(paths({ kind: 'text', textBackground: 'none' })).toEqual([])
   })
   it('preserves freehand samples and supports single taps', () => {
@@ -118,29 +168,52 @@ describe('board sketch renderer', () => {
       true
     )
   })
-  it('renders a continuous smooth pen curve while pencil retains sampled segments', () => {
-    const points = [{ x: 0, y: 0 }, { x: 12, y: 8 }, { x: 24, y: 4 }, { x: 36, y: 16 }]
+  it('renders smooth pen curves and lighter graphite fibers for the pencil', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 12, y: 8 },
+      { x: 24, y: 4 },
+      { x: 36, y: 16 },
+    ]
     const pen = paths({ kind: 'draw', strokeStyle: 'pen', points })
     const pencil = paths({ kind: 'draw', strokeStyle: 'pencil', points })
     expect(pen[0]!.d).toContain('C')
     expect(pen[0]!.d.match(/M/g)).toHaveLength(1)
-    expect(pencil[0]!.d.match(/M/g)!.length).toBeGreaterThan(1)
+    expect(pencil).toHaveLength(4)
+    expect(pencil[0]!.d).toContain('Q')
+    expect(pencil.some((path) => path.dash)).toBe(true)
     expect(pen).not.toEqual(pencil)
     expect(pen[0]!.opacity).toBe(1)
-    expect(paths({ kind: 'draw', strokeStyle: 'clean', points })[0]!.d).toBe('M0 0 L12 8 L24 4 L36 16')
+    expect(paths({ kind: 'draw', strokeStyle: 'clean', points })[0]!.d).toBe(
+      'M0 0 L12 8 L24 4 L36 16'
+    )
   })
   it('keeps pen curves seeded, local to the element and leaves original samples unchanged', () => {
-    const points = [{ x: 2, y: 3 }, { x: 18, y: 22 }, { x: 32, y: 8 }]
-    const original = points.map(point => ({ ...point }))
+    const points = [
+      { x: 2, y: 3 },
+      { x: 18, y: 22 },
+      { x: 32, y: 8 },
+    ]
+    const original = points.map((point) => ({ ...point }))
     const first = paths({ kind: 'draw', strokeStyle: 'pen', points })
     expect(paths({ kind: 'draw', strokeStyle: 'pen', points })).toEqual(first)
-    expect(paths({ kind: 'draw', strokeStyle: 'pen', points, x: -500, y: 700 })).toEqual(first)
-    expect(paths({ kind: 'draw', strokeStyle: 'pen', points, id: 'another-pen' })).not.toEqual(first)
+    expect(paths({ kind: 'draw', strokeStyle: 'pen', points, x: -500, y: 700 })).toEqual(
+      first
+    )
+    expect(
+      paths({ kind: 'draw', strokeStyle: 'pen', points, id: 'another-pen' })
+    ).not.toEqual(first)
     expect(points).toEqual(original)
   })
   it('supports empty, single-point and two-point pen gestures without invalid curve output', () => {
     expect(paths({ kind: 'draw', strokeStyle: 'pen', points: [] })).toEqual([])
-    for (const points of [[{ x: 2, y: 3 }], [{ x: 2, y: 3 }, { x: 9, y: 12 }]]) {
+    for (const points of [
+      [{ x: 2, y: 3 }],
+      [
+        { x: 2, y: 3 },
+        { x: 9, y: 12 },
+      ],
+    ]) {
       const drawing = paths({ kind: 'draw', strokeStyle: 'pen', points })
       expect(drawing).toHaveLength(1)
       expect(drawing[0]!.d).not.toMatch(/NaN|undefined|Infinity/)

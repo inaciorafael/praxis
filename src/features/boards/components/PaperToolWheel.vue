@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, type Component } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Ellipsis, LockKeyhole, SlidersHorizontal } from '@lucide/vue'
+import { Ellipsis, LockKeyholeOpen, SlidersHorizontal } from '@lucide/vue'
+import BoardColorPresets from './BoardColorPresets.vue'
+import { PEN_COLORS } from '../lib/ink-colors'
 
 const props = defineProps<{
   activeTool: string
@@ -10,15 +12,59 @@ const props = defineProps<{
   width: number
   opacity: number
   settingsOpen: boolean
-  keepTool: boolean
+  activeBrush?: string | null
+  brushLibraryOpen?: boolean
+  penColors?: boolean
 }>()
 const emit = defineEmits<{
   choose: [toolId: string]
   toggleSettings: []
-  toggleKeepTool: []
+  lockPaper: []
+  toggleBrushLibrary: []
+  color: [color: string]
 }>()
 const { t } = useI18n()
 const expanded = ref(false)
+const root = ref<HTMLElement>()
+const active = computed(() => props.tools.find((tool) => tool.id === props.activeTool))
+watch(
+  () => props.settingsOpen,
+  (open) => {
+    if (open) expanded.value = false
+  }
+)
+watch(
+  () => props.activeTool,
+  () => {
+    expanded.value = false
+  }
+)
+function outside(event: PointerEvent) {
+  if (
+    expanded.value &&
+    event.target instanceof Node &&
+    !root.value?.contains(event.target)
+  )
+    expanded.value = false
+}
+onMounted(() => window.addEventListener('pointerdown', outside))
+onUnmounted(() => window.removeEventListener('pointerdown', outside))
+function keydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    expanded.value = false
+    if (props.settingsOpen) emit('toggleSettings')
+    return
+  }
+  if (event.ctrlKey || event.metaKey || event.altKey) return
+  const tool = props.tools.find(
+    (item) => item.shortcut?.toLowerCase() === event.key.toLowerCase()
+  )
+  if (tool) {
+    event.preventDefault()
+    choose(tool.id)
+  }
+}
 const primaryIds = ['draw', 'pen', 'select', 'pan', 'text', 'note']
 const primary = computed(() =>
   primaryIds.flatMap((id) => {
@@ -39,14 +85,27 @@ function choose(id: string) {
   emit('choose', id)
   expanded.value = false
 }
+function toggleSettings() {
+  expanded.value = false
+  emit('toggleSettings')
+}
+function toggleAdditional() {
+  if (!expanded.value && props.settingsOpen) emit('toggleSettings')
+  expanded.value = !expanded.value
+}
+function openBrushLibrary() {
+  expanded.value = false
+  emit('toggleBrushLibrary')
+}
 </script>
 
 <template>
   <div
+    ref="root"
     class="paper-tool-wheel"
     @pointerdown.stop
     @wheel.stop
-    @keydown.stop
+    @keydown.stop="keydown"
   >
     <div
       class="paper-tool-ring"
@@ -64,7 +123,9 @@ function choose(id: string) {
         class="paper-tool-slot"
         :style="position(index)"
         :data-tool="tool.id"
-        :aria-pressed="activeTool === tool.id"
+        :aria-pressed="
+          activeTool === tool.id && !(['draw', 'pen'].includes(tool.id) && activeBrush)
+        "
         :aria-label="label(tool)"
         :title="label(tool)"
         @click="choose(tool.id)"
@@ -74,6 +135,9 @@ function choose(id: string) {
           :size="20"
           aria-hidden="true"
         />
+        <span class="paper-tool-label">{{
+          t(tool.id === 'pan' ? 'boards.studio.panLabel' : `boards.tools.${tool.id}`)
+        }}</span>
       </button>
       <button
         type="button"
@@ -82,7 +146,7 @@ function choose(id: string) {
         :aria-label="t('boards.studio.toolSettings')"
         :title="t('boards.studio.toolSettings')"
         :aria-expanded="settingsOpen"
-        @click="emit('toggleSettings')"
+        @click="toggleSettings"
       >
         <span
           class="paper-tool-swatch"
@@ -94,9 +158,9 @@ function choose(id: string) {
           aria-hidden="true"
         />
         <span class="paper-tool-values">
-          <span :aria-label="`${t('boards.studio.strokeSize')}: ${width}`">{{
-            width
-          }}</span>
+          <span :aria-label="`${t('boards.studio.strokeSize')}: ${width}`"
+            >{{ width }} px</span
+          >
           <span aria-hidden="true">·</span>
           <span
             :aria-label="`${t('boards.studio.opacity')}: ${Math.round(opacity * 100)}%`"
@@ -105,19 +169,32 @@ function choose(id: string) {
         </span>
       </button>
     </div>
+    <div
+      class="paper-active-tool"
+      aria-live="polite"
+    >
+      <strong>{{
+        activeBrush
+          ? t(`boards.brushes.types.${activeBrush}`)
+          : active
+            ? t(`boards.tools.${active.id}`)
+            : ''
+      }}</strong
+      ><kbd v-if="active?.shortcut && !activeBrush">{{ active.shortcut }}</kbd>
+    </div>
     <div class="paper-tool-footer">
       <button
         type="button"
-        data-keep-tool
-        :aria-pressed="keepTool"
-        :aria-label="t('boards.keepToolActive')"
-        :title="t('boards.keepToolActive')"
-        @click="emit('toggleKeepTool')"
+        data-lock-paper
+        :aria-label="t('boards.lockPaper')"
+        :title="t('boards.lockedHint')"
+        @click="emit('lockPaper')"
       >
-        <LockKeyhole
+        <LockKeyholeOpen
           :size="15"
           aria-hidden="true"
         />
+        <span>{{ t('boards.lockPaper') }}</span>
       </button>
       <span
         class="paper-tool-divider"
@@ -129,14 +206,32 @@ function choose(id: string) {
         :aria-expanded="expanded"
         :aria-label="t('boards.studio.moreTools')"
         :title="t('boards.studio.moreTools')"
-        @click="expanded = !expanded"
+        @click="toggleAdditional"
       >
         <Ellipsis
           :size="20"
           aria-hidden="true"
         />
+        <span>{{ t('boards.studio.shapesLabel') }}</span>
       </button>
     </div>
+    <button
+      class="paper-brush-library-toggle"
+      type="button"
+      data-brush-library
+      :aria-expanded="brushLibraryOpen"
+      @click="openBrushLibrary"
+    >
+      {{ t('boards.brushes.title') }}
+    </button>
+    <BoardColorPresets
+      v-if="penColors"
+      class="paper-pen-colors"
+      :colors="PEN_COLORS"
+      :value="color"
+      :label="t('boards.penColors')"
+      @choose="emit('color', $event)"
+    />
     <div
       v-show="expanded"
       class="paper-tool-drawer"
@@ -158,12 +253,38 @@ function choose(id: string) {
           :size="19"
           aria-hidden="true"
         />
+        <span>{{ t(`boards.tools.${tool.id}`) }}</span
+        ><kbd v-if="tool.shortcut">{{ tool.shortcut }}</kbd>
       </button>
     </div>
   </div>
 </template>
 
 <style scoped>
+.paper-pen-colors {
+  margin-top: 10px;
+  justify-content: center;
+  padding: 8px;
+  background: var(--paper, white);
+  border: 1px solid var(--border, #e5e0d5);
+  border-radius: 8px;
+}
+.paper-tool-wheel .paper-brush-library-toggle {
+  width: 100%;
+  margin-top: 8px;
+  min-height: 38px;
+  border: 1px solid #e5e0d5;
+  border-radius: 10px;
+  background: #fff;
+  color: #33312c;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.paper-brush-library-toggle[aria-expanded='true'] {
+  background: #f5e6c8;
+  border-color: #b57e29;
+}
 .paper-tool-wheel {
   position: absolute;
   left: 12px;
@@ -216,10 +337,34 @@ function choose(id: string) {
 }
 .paper-tool-slot {
   position: absolute;
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
+  flex-direction: column;
+  gap: 3px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
+}
+.paper-tool-label {
+  font-size: 10px;
+  line-height: 12px;
+}
+.paper-active-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--paper-canvas-muted, #666259);
+}
+.paper-tool-wheel kbd {
+  font: inherit;
+  font-size: 10px;
+  padding: 1px 4px;
+  border: 1px solid #e5e0d5;
+  border-radius: 4px;
+  color: #8c877b;
+  background: #faf9f5;
 }
 .paper-tool-wheel .paper-tool-center {
   position: absolute;
@@ -259,18 +404,20 @@ function choose(id: string) {
   display: flex;
   justify-content: center;
   gap: 4px;
-  width: max-content;
+  width: 100%;
   margin: 8px auto 0;
-  padding: 3px 7px;
+  padding: 4px;
   background: #fff;
   border: 1px solid #e5e0d5;
-  border-radius: 20px;
+  border-radius: 12px;
   box-shadow: 0 3px 10px #3027190a;
 }
 .paper-tool-footer button {
-  width: 29px;
-  height: 27px;
-  border-radius: 50%;
+  flex: 1;
+  min-height: 36px;
+  gap: 5px;
+  font-size: 11px;
+  border-radius: 8px;
 }
 .paper-tool-divider {
   width: 1px;
@@ -279,9 +426,9 @@ function choose(id: string) {
   background: #e9e4db;
 }
 .paper-tool-drawer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  max-height: min(260px, calc(100vh - 380px));
+  overflow-y: auto;
   gap: 3px;
   padding: 7px;
   margin-top: 8px;
@@ -291,9 +438,15 @@ function choose(id: string) {
   box-shadow: 0 5px 16px #30271912;
 }
 .paper-tool-drawer button {
-  width: 31px;
-  height: 32px;
+  min-height: 40px;
+  gap: 9px;
+  padding: 6px 9px;
+  justify-content: flex-start;
+  font-size: 12px;
   border-radius: 9px;
+}
+.paper-tool-drawer kbd {
+  margin-left: auto;
 }
 @media (max-height: 500px) {
   .paper-tool-wheel {

@@ -2,7 +2,7 @@
 
 ## Papers
 
-Paper é o conceito do canvas livre anteriormente chamado de Board/quadro, com fundo branco e ferramentas de escrita, formas, desenho, imagens e exportação. Existe uma única biblioteca Papers com todos os documentos antigos e novos. No editor de uma tarefa, junto às suas anotações, é possível criar um Paper, anexar um existente, abrir ou remover apenas o vínculo. Lembretes usam esse mesmo editor de tarefa.
+Paper é o conceito do canvas livre anteriormente chamado de Board/quadro, com fundo configurável e ferramentas de escrita, formas, desenho, imagens e exportação. Existe uma única biblioteca Papers com todos os documentos antigos e novos. No editor de uma tarefa, junto às suas anotações, é possível criar um Paper, anexar um existente, abrir ou remover apenas o vínculo. Lembretes usam esse mesmo editor de tarefa.
 
 Um Paper pode ser vinculado a várias tarefas. Seus contextos aparecem no canvas e permitem abrir a tarefa com seu checklist, inclusive arquivada. As alterações do formulário são salvas antes de abrir um Paper. Falhas de salvamento impedem a navegação e preservam o rascunho.
 
@@ -22,7 +22,7 @@ O centro da roda abre os ajustes de traço: espessura de 0,5 a 32 pixels do espa
 
 A galeria reúne os Papers por nome e quantidade real de elementos. Abrir a galeria durante um desenho não desmonta o canvas nem descarta seu rascunho. Cabeçalho, contextos de tarefas e detalhes ficam sobrepostos e compactos, liberando o papel. A seleção oferece ações de edição, estilo, duplicação e remoção. O modo sem distrações continua recolhendo inclusive a roda de ferramentas. Esta reconstrução implementa a experiência de navegação e desenho com as ferramentas existentes; camadas nomeadas, pressão de caneta e importação de PDF não fazem parte dessa implementação.
 
-O botão Modo sem distrações abre o Paper em tela cheia no desktop e ocupa toda a janela com o canvas branco, sem navegação, título, biblioteca, detalhes ou barras de ferramentas. Mostrar ferramentas reexibe apenas os controles do desenho. Sair do modo sem distrações ou Esc retorna à visualização normal; Esc durante edição/gesto cancela essa interação antes de sair. O canvas e sua câmera não são recriados, e notas abertas no painel de tarefa são apenas ocultadas, preservando seu rascunho. A janela retorna ao estado de tela cheia anterior ao entrar no modo. Erros de salvamento continuam visíveis.
+O botão Modo sem distrações abre o Paper em tela cheia no desktop e ocupa toda a janela com o canvas, sem navegação, título, biblioteca, detalhes ou barras de ferramentas. Mostrar ferramentas reexibe apenas os controles do desenho. Sair do modo sem distrações ou Esc retorna à visualização normal; Esc durante edição/gesto cancela essa interação antes de sair. O canvas e sua câmera não são recriados, e notas abertas no painel de tarefa são apenas ocultadas, preservando seu rascunho. A janela retorna ao estado de tela cheia anterior ao entrar no modo. Erros de salvamento continuam visíveis.
 
 1. Abra Papers na navegação com o cofre desbloqueado. Todos os quadros já existentes aparecem nessa mesma biblioteca.
 2. Crie um novo quadro: ele começa vazio. O modo de foco recolhe a navegação do aplicativo.
@@ -49,7 +49,7 @@ O Paper usa controles inspirados no Excalidraw, adaptados aos atalhos existentes
 
 O painel Atalhos e controles mostra as combinações no próprio canvas. Rotação usa `angle` em radianos, zero por padrão em documentos antigos, validado no backend. Forma, rótulo e marca-texto giram juntos; conectores acompanham as bordas giradas. Exportação PNG calcula limites a partir dos quatro cantos transformados. Setas continuam sendo ajustadas pelos seus pontos. Redimensionamento e rotação por alças são individuais; a seleção múltipla conserva mover, duplicar e girar cada elemento pelo teclado.
 
-O canvas e a exportação PNG têm fundo branco em todos os temas; ferramentas e painéis acompanham o tema do aplicativo. As cores do desenho usam uma paleta fixa legível sobre branco.
+O menu Fundo configura cada Paper: liso, quadriculado, pautado ou pontilhado, em aparência clara ou escura, independentemente do tema do aplicativo. A escolha é persistida e incluída na exportação PNG. Documentos antigos usam papel branco liso sem alteração automática do arquivo. As guias acompanham o deslocamento e zoom da câmera. A paleta padrão adapta o contraste no modo escuro apenas na renderização, preservando cores personalizadas e os dados dos elementos.
 
 No painel de estilo, escolha Lápis, Caneta ou Linha limpa. Novos desenhos começam com Lápis. A escolha altera os elementos selecionados e pode ser desfeita. Elementos de quadros antigos mantêm Linha limpa até alteração explícita.
 
@@ -106,9 +106,31 @@ Erro de escrita pausa autosave. Tentar novamente preserva o conteúdo. Recarrega
 
 O espaço navegável é amplo, mas armazenamento e memória continuam limitados. Esses limites são proteções da primeira versão, não resultados de benchmark de capacidade máxima.
 
+## Materiais de escrita
+
+A paleta Instrumentos reúne Lápis e Grafite no grupo Lápis, e Caneta, Tinteiro e Nanquim no grupo Canetas. Abrir a paleta não troca a ferramenta; escolher uma opção fecha a paleta. Os ajustes de cor, espessura e opacidade ficam separados dos materiais e dos estilos de contorno de formas. No modo desenho, ajustes configuram os próximos riscos; apenas o modo seleção altera elementos existentes. Painéis são fechados ao trocar de ferramenta, começar a editar texto, pressionar Escape, clicar fora ou voltar ao canvas. Paleta, ajustes e propriedades não ficam abertos simultaneamente. Menus de fundo, contextos e ações do Paper fecham ao interagir fora deles.
+
+Nanquim · esboço usa ponta redonda fina, tinta opaca e leve variação de espessura com pressão e distância percorrida. O padrão é 1,6 px; cor, espessura e opacidade continuam ajustáveis. O mesmo caminho vetorial acompanha o gesto e permanece no canvas e no PNG, sem carregar o motor de pincéis raster. A opção persistida é `drawBrush: ink`, validada pelo Rust. Durante o desenho, painéis de propriedades e ações da seleção ficam ocultos; voltam ao selecionar os elementos com V.
+
+Lápis e grafite têm depósito de pigmento variável com a pressão, fibras com pequenos desvios e lacunas irregulares. A textura usa a distância percorrida e uma semente por elemento, mantendo o resultado estável durante o gesto, ao mover o desenho e na exportação. As formas com estilo lápis também usam curvas e vértices menos regulares; a posição lógica e as âncoras dos conectores permanecem intactas.
+
+A escolha de ferramentas oferece caneta padrão, lápis, grafite e caneta-tinteiro. Lápis e grafite usam fibras vetoriais finas com transparência e pequenas lacunas, simulando a textura do papel. O tinteiro usa um contorno preenchido que varia conforme a direção de uma ponta inclinada e a pressão registrada. Os padrões são discretos: lápis 1,2 px, caneta 1,6 px, grafite 1,8 px e tinteiro 2,4 px. A espessura permanece ajustável.
+
+Grafite e tinteiro usam o mesmo renderizador vetorial durante o gesto e após soltá-lo; não há textura assíncrona substituindo a prévia. O lápis também apresenta sua textura durante o movimento. Eventos de ponteiro agrupados pelo navegador são consumidos antes da atualização visual, preservando pressão e pontos intermediários. A exportação usa os mesmos caminhos SVG. Não há loop de desenho ocioso nem dependência de WebGL para os materiais atuais.
+
+### Compatibilidade com materiais artísticos anteriores
+
+Carvão, marcador, aquarela e spray foram retirados da escolha de ferramentas. Os parágrafos abaixo descrevem apenas o renderizador de compatibilidade dos desenhos antigos, que continuam legíveis e exportáveis sem converter ou apagar traços existentes.
+
+O Paper oferece grafite, carvão, marcador, aquarela e spray, além dos estilos clássicos. Cor, espessura e opacidade continuam nos controles do desenho; canetas compatíveis podem registrar pressão por ponto. Durante o gesto, o canvas mostra um traço vetorial leve. Ao concluir, `p5.brush/standalone`, carregado sob demanda, gera a textura em uma superfície WebGL2 temporária. Não há loop de desenho permanentemente ativo. A aquarela usa o contorno do gesto com pressão; os demais materiais usam os pincéis correspondentes da biblioteca.
+
+Os pontos vetoriais e a pressão permanecem no documento; a imagem de textura é temporária, não um novo anexo no cofre. O renderizador usa uma fila única, até 182 pontos amostrados e uma captura de no máximo 1024 pixels por lado. O cache guarda até 64 texturas dentro de um orçamento de 16 MiB e é liberado ao sair do Paper. Pan, rotação e opacidade reutilizam a textura; mudanças de pontos, cor, espessura ou material exigem nova captura. A exportação incorpora essas imagens ao SVG/PNG. Ampliações extremas podem mostrar o limite de resolução da textura. Sem WebGL2, o traço vetorial continua visível como alternativa simples.
+
+Uma única superfície WebGL2 de 1024 × 1024 permanece compartilhada e aquecida até o aplicativo fechar. Ao sair do Paper, o cache e os buffers de desenho são limpos, removendo o conteúdo visual privado dessa superfície; o contexto gráfico é preservado para evitar reconstrução de shaders. A limpeza ocorre em `onBeforeUnmount`, antes que o próximo canvas agende suas capturas, e invalida trabalhos pendentes do Paper anterior sem cancelar os trabalhos do seguinte.
+
 ## Arquitetura implementada
 
-- Editor SVG/Vue em `src/features/boards`, sem novo runtime ou dependência gráfica. Ferramentas, geometria e histórico são testados separadamente.
+- Editor SVG/Vue em `src/features/boards`, com Rough.js, Rough Notation e materiais artísticos p5.brush carregados sob demanda. Ferramentas, geometria e histórico são testados separadamente.
 - Página carregada por rota lazy `/app/boards`; store Pinia e serviço Tauri próprios.
 - Seção `boards` versionada no documento criptografado; cofres sem essa seção abrem com lista vazia.
 - Backend valida revisões, IDs, referências, tipos, coordenadas e limites de payload.
@@ -120,12 +142,38 @@ O espaço navegável é amplo, mas armazenamento e memória continuam limitados.
 
 ## Validação
 
+### Propriedades contextuais e organização
+
+O cadeado do cabeçalho bloqueia o Paper inteiro e persiste esse estado no documento. Antes de bloquear, a edição em andamento é concluída e salva. O modo bloqueado permite mover a câmera, zoom, consulta e exportação, mas impede desenho, texto, transformação, atalhos de edição, mudanças de título/fundo, exclusão e criação de tarefa por elemento. O backend também rejeita alterações ao conteúdo bloqueado; desbloquear exige uma operação sem alterar o conteúdo. Falha de salvamento mantém o estado anterior. Papers antigos começam desbloqueados sem escrita durante a leitura. O alfinete da roda tem outra função: manter a ferramenta ativa entre riscos.
+
+Alças de redimensionamento, ajustes de extremidades de setas e rotação aparecem e capturam o ponteiro somente na ferramenta Selecionar. Durante escrita e desenho, o próximo risco pode começar sobre o canto do anterior sem transformar o elemento existente.
+
+O texto livre pode ser ampliado ou reduzido arrastando os cantos: a caixa e os tamanhos de fonte escalam juntos, preservando a relação entre trechos formatados e a âncora oposta, inclusive com rotação. Alt mantém o centro; Ctrl/Cmd ajusta apenas a caixa e a quebra de linhas. O gesto parte sempre do snapshot inicial e gera uma única operação de desfazer. Os limites de fonte existentes (8–72) continuam valendo. Os quatro presets permanecem atalhos, não uma restrição a quatro tamanhos.
+
+O Paper escuro adapta o contraste de todas as cores de texto, inclusive cores personalizadas, sem modificar os valores persistidos. A mesma adaptação vale para o editor, SVG e PNG; voltar ao claro recupera a cor original. Texto manuscrito sem fundo no Paper escuro usa contraste de pelo menos 7:1. Preenchimentos personalizados usam sua cor efetiva como referência com alvo de 4,5:1. Marca-texto preserva a tinta sobre sua faixa clara. As cores de desenhos e contornos permanecem independentes dessa adaptação de texto.
+
+Ao selecionar um elemento, o Paper abre propriedades aplicáveis ao conteúdo: tamanho numérico da fonte (8–72), passos de dois pontos e presets, cor do texto, posição horizontal/vertical, preenchimento, contorno e opacidade. Texto livre também permite largura automática e fundo transparente, retangular ou elíptico. Notas e formas usam o mesmo editor rico do texto livre; a edição preserva a geometria da forma. Os sete efeitos Rough Notation permanecem visíveis no minimenu durante a edição. Fechar as propriedades mantém a seleção; o botão Propriedades reabre o painel.
+
+`fillColor` ausente ou nulo conserva a aparência legada. Valores explícitos aceitam `transparent` ou hexadecimal RGB validado, sem alterar o contorno e os trechos de texto. O backend limita o preenchimento a formas/cartões e ao texto com forma de fundo. Mudar o contorno de uma forma preserva as cores do texto. As propriedades e o preenchimento são persistidos, compartilhados pelo SVG e pela exportação PNG, e participam do histórico de desfazer.
+
+A multisseleção permite alinhar bordas ou centros e distribuir três ou mais elementos com espaçamento igual entre bordas. O cálculo usa limites visuais, inclusive para formas giradas. Setas ficam fora do cálculo: conectores vinculados acompanham os elementos por seus IDs. Tamanhos de fonte e preenchimentos diferentes não são apresentados como um único valor selecionado. Os ajustes não introduzem dependências ou processamento contínuo.
+
+Referências de interação: [Miro — texto](https://help.miro.com/hc/en-us/articles/360017572094-Text), [Miro — formas](https://help.miro.com/hc/en-us/articles/360017730713-Shapes), [tldraw — estilos](https://tldraw.dev/sdk-features/styles), [Concepts — seleção](https://concepts.app/en/manual/selection) e [Excalidraw — propriedades](https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/props/initialdata). A implementação conserva as ferramentas e a linguagem visual do Praxis.
+
 Testes cobrem gestos, câmera, conectores, imagens, texto, histórico, autosave, respostas atrasadas, reset, falhas, navegação, exportação, revisões do cofre, conflitos externos e criação/vínculo de tarefa. Há uma fixture de desenvolvimento em `tests/ui/boards-fixture.html` com backend em memória e conteúdo exclusivamente sintético, não incluída no build de produção.
 
 Validação em 13/10/2026: 108 testes frontend passaram na suíte completa; a correção adicional de normalização do autosave passou nos 10 testes do store. Os 9 testes Rust de boards passaram, incluindo 3 novos testes dos estilos; build frontend, diagnóstico Tauri e empacotamento Windows concluídos. A janela nativa foi reaberta com a rota de Pranchas acessível no cofre existente.
 
 Conferência visual usa essa fixture para validar canvas livre, formas e conectores, edição, vínculo e PNG sem alterar o cofre do usuário. Testes Rust validam o armazenamento e comandos reais separadamente. Benchmark de cenas grandes e acessibilidade com leitores de tela permanecem sem validação conclusiva.
 
+### Anotações desenhadas sobre o texto
+
+O painel de texto oferece os sete estilos Rough Notation: sublinhado, caixa, círculo, marca-texto, riscado, cruzado e colchetes. Selecione um trecho no editor para aplicar o efeito apenas à seleção; sem seleção, o efeito vale para o texto inteiro. Os controles permitem remover a anotação e ajustar cor, espessura, distância (inclusive por lado), repetições do traço, lados dos colchetes, linhas separadas e direção do desenho. A animação é opcional, com duração, espera e reprodução manual. A preferência do sistema por movimento reduzido mantém os efeitos estáticos. A exportação SVG/PNG sempre mostra a marcação final completa, mesmo durante uma animação.
+
+### Histórico de edição
+
+Os snapshots isolam geometria, texto rico e opções das anotações. Respostas de salvamento equivalentes, mesmo com campos reordenados e valores padrão preenchidos pelo Rust, preservam o histórico; alterações externas de conteúdo o reiniciam. Criar um texto e concluir sua primeira edição constitui uma única ação, sem caixas vazias ao desfazer. Durante a escrita, apenas o histórico do editor fica visível; concluir retorna o foco ao canvas. Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z e Ctrl/Cmd+Y também funcionam nos botões da paleta. Campos de entrada mantêm seus próprios atalhos. Os botões indicam a disponibilidade de cada operação. O limite de memória inclui texto rico e anotações.
+
 ### Consistência do marca-texto
 
-O editor usa uma imagem SVG de pincel gerada pelo Rough.js como fundo de cada trecho marcado; o canvas e o PNG usam os mesmos caminhos normalizados, com semente estável por elemento. Nenhum fundo retangular CSS é usado para representar a marcação. Palavras consecutivas com a mesma marcação formam uma faixa contínua na exportação. Testes verificam a igualdade dos paths entre edição e SVG, remoção da marcação e continuidade da frase.
+Rough Notation é a única opção de marcação de texto no minimenu e no painel lateral. O seletor antigo de marca-texto foi retirado. Documentos com `textHighlight` ou `run.highlight` continuam legíveis: o adaptador de compatibilidade desenha as cores salvas pelo mesmo renderizador Rough Notation, sem alterar o documento durante a leitura. A edição HTML e o SVG exportado compartilham esses caminhos. Aplicar uma anotação nova limpa a marcação legada correspondente, evitando sobreposição de estilos. Os sete tipos de anotação e suas opções de cor, traço e animação continuam disponíveis.

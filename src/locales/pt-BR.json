@@ -1,5 +1,20 @@
 {
   "papers": {
+    "library": {
+      "description": "Seus papéis, ideias e rascunhos.",
+      "count": "{visible} de {total} Papers",
+      "filter": "Mostrar",
+      "all": "Todos os Papers",
+      "editable": "Editáveis",
+      "locked": "Bloqueados",
+      "sort": "Ordenar por",
+      "created": "Mais novos",
+      "name": "Nome (A–Z)",
+      "view": "Visualização da biblioteca",
+      "grid": "Miniaturas de papéis",
+      "list": "Lista de papéis",
+      "open": "Aberto"
+    },
     "taskDefaultTitle": "Ideias para {title}",
     "taskDescription": "Um espaço visual livre para pensar esta tarefa. O mesmo Paper pode ser reutilizado em outras tarefas e continua na biblioteca.",
     "openNamed": "Abrir {title}",
@@ -50,7 +65,20 @@
     "error": "Não foi possível atualizar os Papers. Tente novamente.",
     "detachedHint": "Remover o vínculo mantém o Paper na biblioteca.",
     "retry": "Tentar novamente",
-    "openError": "Não foi possível abrir o Paper. Suas alterações foram preservadas."
+    "openError": "Não foi possível abrir o Paper. Suas alterações foram preservadas.",
+    "background": {
+      "title": "Fundo do Paper",
+      "shortTitle": "Fundo",
+      "appearance": "Aparência",
+      "pattern": "Tipo de papel",
+      "light": "Claro",
+      "dark": "Escuro",
+      "plain": "Liso",
+      "grid": "Quadriculado",
+      "ruled": "Pautado",
+      "dots": "Pontilhado",
+      "savedPerPaper": "Salvo neste Paper e aplicado à exportação PNG."
+    }
   },
   "common": {
     "cancel": "Cancelar",
@@ -253,7 +281,88 @@
     "noResults": "Nenhuma tarefa corresponde a esta busca."
   },
   "boards": {
+    "penColors": "Tintas de caneta",
+    "inkColors": {
+      "blue": "Azul",
+      "black": "Preta",
+      "red": "Vermelha",
+      "green": "Verde",
+      "yellow": "Amarela",
+      "pink": "Rosa",
+      "purple": "Lilás"
+    },
+    "lockPaper": "Bloquear Paper",
+    "unlockPaper": "Desbloquear Paper",
+    "lockedHint": "Paper bloqueado. Você pode navegar e exportar. Desbloqueie para editar.",
+    "brushes": {
+      "pencils": "Lápis",
+      "pens": "Canetas",
+      "title": "Instrumentos",
+      "classic": "Lápis e caneta clássicos",
+      "types": {
+        "graphite": "Grafite",
+        "fountain": "Caneta-tinteiro",
+        "ink": "Nanquim · esboço",
+        "charcoal": "Carvão",
+        "marker": "Marcador",
+        "watercolor": "Aquarela",
+        "spray": "Spray"
+      },
+      "descriptions": {
+        "draw": "Traço leve e texturizado para rascunhar.",
+        "pen": "Linha simples e uniforme para escrever.",
+        "graphite": "Grafite fino com textura discreta de lápis.",
+        "fountain": "Tinta contínua com variação suave de espessura.",
+        "ink": "Ponta fina e tinta firme para contornos, hachuras e esboços.",
+        "charcoal": "Traço granulado e expressivo.",
+        "marker": "Tinta ampla para destacar ideias.",
+        "watercolor": "Camadas suaves de cor translúcida.",
+        "spray": "Pontos de tinta para texturas livres."
+      },
+      "pressureHint": "Use cor e espessura para ajustar o material. Uma caneta compatível também pode variar o traço com a pressão.",
+      "processing": "Preparando o traço…",
+      "fallback": "Este traço está sendo exibido no modo simples."
+    },
+    "notation": {
+      "selectionHint": "Selecione um trecho para marcar. Sem seleção, o efeito vale para todo o texto.",
+      "wholeText": "Texto inteiro",
+      "title": "Anotações à mão",
+      "none": "Sem anotação",
+      "types": {
+        "underline": "Sublinhado",
+        "box": "Caixa",
+        "circle": "Círculo",
+        "highlight": "Marca-texto",
+        "strike-through": "Riscado",
+        "crossed-off": "Cruzado",
+        "bracket": "Colchetes"
+      },
+      "color": "Cor",
+      "width": "Espessura",
+      "padding": "Distância",
+      "sides": "Lados dos colchetes",
+      "top": "Topo",
+      "right": "Direita",
+      "bottom": "Base",
+      "left": "Esquerda",
+      "advanced": "Mais ajustes",
+      "iterations": "Repetições do traço",
+      "multiline": "Cada linha separadamente",
+      "rtl": "Traçar da direita para a esquerda",
+      "animate": "Animar o desenho",
+      "duration": "Duração (ms)",
+      "delay": "Espera (ms)",
+      "replay": "Reproduzir animação",
+      "options": "Ajustar anotação",
+      "remove": "Remover anotação"
+    },
     "studio": {
+      "textSettings": "Texto e alinhamento",
+      "panLabel": "Mover",
+      "keepLabel": "Fixar ferramenta",
+      "shapesLabel": "Formas",
+      "elementSettings": "Propriedades",
+      "quickWidths": "Espessuras rápidas",
       "gallery": "Galeria de Papers",
       "title": "Um espaço para pensar",
       "subtitle": "Escreva, rabisque e explore ideias no seu papel digital. Seus Papers ficam juntos aqui.",
@@ -322,7 +431,7 @@
     "rotateRight": "Girar 15° à direita",
     "resetRotation": "Zerar rotação",
     "shortcuts": "Atalhos e controles",
-    "resizeHint": "Arraste um canto para redimensionar. Shift ou Ctrl mantém proporções; Alt mantém o centro.",
+    "resizeHint": "Texto: arraste um canto para aumentar ou diminuir a fonte; Ctrl ajusta só a caixa. Formas: Shift ou Ctrl mantém proporções. Alt mantém o centro.",
     "rotateHint": "Arraste a alça circular para girar. Shift trava em passos de 15°.",
     "moveHint": "Shift + arrastar mantém o movimento horizontal ou vertical.",
     "shortcutTools": "P: lápis · B: caneta · V: seleção · H: mão · T: texto. Shift ao criar uma forma faz quadrado/círculo; nas setas, trava a direção.",
@@ -369,9 +478,16 @@
     "startDrawing": "Começar a desenhar",
     "linkedTask": "Tarefa vinculada",
     "strokeStyle": "Traço",
-    "strokeStyles": { "pencil": "Lápis", "pen": "Caneta", "clean": "Linha limpa" },
+    "strokeStyles": {
+      "pencil": "Lápis",
+      "pen": "Caneta",
+      "clean": "Linha limpa"
+    },
     "textFont": "Fonte do texto",
-    "textFonts": { "handwritten": "Manuscrita", "sans": "Simples" },
+    "textFonts": {
+      "handwritten": "Manuscrita",
+      "sans": "Simples"
+    },
     "textHighlight": "Marca-texto",
     "textHighlights": {
       "none": "Sem marcação",
@@ -389,9 +505,17 @@
       "ellipse": "Círculo / oval"
     },
     "textAlignment": "Alinhamento horizontal",
-    "textAlignments": { "left": "Esquerda", "center": "Centro", "right": "Direita" },
+    "textAlignments": {
+      "left": "Esquerda",
+      "center": "Centro",
+      "right": "Direita"
+    },
     "textVerticalAlignment": "Alinhamento vertical",
-    "textVerticalAlignments": { "top": "Topo", "middle": "Meio", "bottom": "Base" },
+    "textVerticalAlignments": {
+      "top": "Topo",
+      "middle": "Meio",
+      "bottom": "Base"
+    },
     "freeTextLabel": "Editar texto no canvas",
     "rich": {
       "editor": "Texto formatado",
@@ -409,11 +533,41 @@
       "ordered": "Lista numerada",
       "highlight": "Marcar seleção",
       "clear": "Limpar formatação",
-      "done": "Concluir edição"
+      "done": "Concluir edição",
+      "decreaseSize": "Diminuir fonte",
+      "increaseSize": "Aumentar fonte",
+      "sizePresets": "Tamanhos sugeridos",
+      "format": "Formatação",
+      "organization": "Organização do texto",
+      "actions": "Ações de edição"
     },
     "keepToolActive": "Manter ferramenta ativa",
     "canvasHintTitle": "Um espaço para suas ideias",
-    "canvasHintDescription": "Desenhe livremente e adicione formas, notas e imagens. V seleciona, H move a câmera, R cria retângulos, P desenha à mão e T adiciona texto."
+    "canvasHintDescription": "Desenhe livremente e adicione formas, notas e imagens. V seleciona, H move a câmera, R cria retângulos, P desenha à mão e T adiciona texto.",
+    "usability": {
+      "properties": "Propriedades",
+      "selection": "{count} elemento | {count} elementos",
+      "mixed": "Misto",
+      "textColor": "Cor do texto",
+      "textPosition": "Posição do texto na forma",
+      "fill": "Preenchimento",
+      "transparent": "Sem preenchimento",
+      "customColor": "Cor personalizada",
+      "defaultFill": "Restaurar fundo padrão",
+      "organize": "Organizar elementos",
+      "advanced": "Contorno e mais ajustes",
+      "stroke": "Cor do contorno",
+      "arrange": {
+        "left": "Alinhar à esquerda",
+        "center": "Centro horizontal",
+        "right": "Alinhar à direita",
+        "top": "Alinhar no topo",
+        "middle": "Centro vertical",
+        "bottom": "Alinhar na base",
+        "horizontal": "Distribuir na horizontal",
+        "vertical": "Distribuir na vertical"
+      }
+    }
   },
   "settings": {
     "title": "Configurações",

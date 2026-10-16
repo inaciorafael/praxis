@@ -1,12 +1,13 @@
-import type { BoardElement } from '@/shared/types/board'
+import type { BoardElement, PaperColorScheme } from '@/shared/types/board'
+import { paperInk } from './background'
 import { type SketchPath } from './sketch'
 import { markerPaths } from './marker'
 
 export const BOARD_HANDWRITTEN_FONT = '"Praxis Caveat", cursive'
 export const BOARD_SANS_FONT = 'sans-serif'
-export function boardInkColor(element: BoardElement) {
-  return (
-    element.strokeColor ??
+export function boardInkColor(element: BoardElement, scheme: PaperColorScheme = 'light') {
+  if (element.strokeColor) return element.strokeColor
+  return paperInk(
     {
       neutral: '#252a34',
       amber: '#985610',
@@ -14,7 +15,8 @@ export function boardInkColor(element: BoardElement) {
       blue: '#285bb5',
       rose: '#b13f60',
       purple: '#7846ac',
-    }[element.color]
+    }[element.color],
+    scheme
   )
 }
 export const TEXT_HIGHLIGHT_COLORS = {

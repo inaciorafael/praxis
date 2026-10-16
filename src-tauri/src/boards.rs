@@ -20,6 +20,20 @@ const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
 pub struct BoardPoint {
     pub x: f64,
     pub y: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pressure: Option<f64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardDrawBrush {
+    Graphite,
+    Fountain,
+    Ink,
+    Charcoal,
+    Marker,
+    Watercolor,
+    Spray,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
@@ -96,6 +110,54 @@ pub struct BoardTextRun {
     pub font_size: f64,
     pub color: String,
     pub highlight: BoardTextHighlight,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotation: Option<BoardTextAnnotation>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BoardAnnotationType {
+    Underline,
+    Box,
+    Circle,
+    Highlight,
+    StrikeThrough,
+    CrossedOff,
+    Bracket,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardAnnotationBracket {
+    Top,
+    Right,
+    Bottom,
+    Left,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BoardAnnotationPadding {
+    Uniform(f64),
+    Sides(Vec<f64>),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BoardTextAnnotation {
+    #[serde(rename = "type")]
+    pub annotation_type: BoardAnnotationType,
+    pub color: String,
+    pub stroke_width: f64,
+    pub padding: BoardAnnotationPadding,
+    pub iterations: u8,
+    pub brackets: Vec<BoardAnnotationBracket>,
+    pub animate: bool,
+    pub animation_duration: u32,
+    pub animation_delay: u32,
+    pub multiline: bool,
+    #[serde(default)]
+    pub rtl: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -128,13 +190,19 @@ pub struct BoardElement {
     #[serde(default)]
     pub stroke_style: BoardStrokeStyle,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub draw_brush: Option<BoardDrawBrush>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stroke_width: Option<f64>,
     #[serde(default = "default_opacity")]
     pub opacity: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stroke_color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill_color: Option<String>,
     #[serde(default)]
     pub text_highlight: BoardTextHighlight,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_annotation: Option<BoardTextAnnotation>,
     #[serde(default)]
     pub text_font: BoardTextFont,
     #[serde(default)]
@@ -163,12 +231,36 @@ pub enum BoardKind {
     Paper,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardBackground {
+    #[default]
+    Plain,
+    Grid,
+    Ruled,
+    Dots,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardColorScheme {
+    #[default]
+    Light,
+    Dark,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Board {
     pub id: String,
     #[serde(default)]
+    pub locked: bool,
+    #[serde(default)]
     pub kind: BoardKind,
+    #[serde(default)]
+    pub background: BoardBackground,
+    #[serde(default)]
+    pub color_scheme: BoardColorScheme,
     pub title: String,
     pub format_version: u32,
     pub revision: u64,
@@ -181,7 +273,10 @@ pub struct Board {
 #[serde(rename_all = "camelCase")]
 pub struct BoardSummary {
     id: String,
+    locked: bool,
     kind: BoardKind,
+    background: BoardBackground,
+    color_scheme: BoardColorScheme,
     title: String,
     format_version: u32,
     revision: u64,
@@ -191,9 +286,14 @@ pub struct BoardSummary {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateBoardInput {
     #[serde(default)]
     kind: BoardKind,
+    #[serde(default)]
+    background: BoardBackground,
+    #[serde(default)]
+    color_scheme: BoardColorScheme,
     title: String,
     elements: Vec<BoardElement>,
 }
@@ -202,9 +302,15 @@ pub struct CreateBoardInput {
 #[serde(rename_all = "camelCase")]
 pub struct SaveBoardInput {
     id: String,
+    #[serde(default)]
+    locked: Option<bool>,
     title: String,
     elements: Vec<BoardElement>,
     expected_revision: u64,
+    #[serde(default)]
+    background: Option<BoardBackground>,
+    #[serde(default)]
+    color_scheme: Option<BoardColorScheme>,
 }
 
 #[derive(Debug, Serialize)]
@@ -294,6 +400,9 @@ fn validate_board(board: &Board) -> Result<(), String> {
     }
     let mut ids = HashSet::new();
     for element in &board.elements {
+        if element.draw_brush.is_some() && element.kind != "draw" {
+            return Err("Pincel artistico permitido apenas em desenho livre.".into());
+        }
         if element
             .stroke_width
             .is_some_and(|width| !width.is_finite() || !(0.5..=32.0).contains(&width))
@@ -313,8 +422,27 @@ fn validate_board(board: &Board) -> Result<(), String> {
         if !element.angle.is_finite() || element.angle.abs() > std::f64::consts::TAU {
             return Err("Angulo de elemento deve estar entre -2pi e 2pi radianos.".into());
         }
+        if let Some(color) = &element.fill_color {
+            let supports_fill = [
+                "rectangle",
+                "ellipse",
+                "frame",
+                "note",
+                "question",
+                "decision",
+                "task",
+            ]
+            .contains(&element.kind.as_str())
+                || (element.kind == "text" && element.text_background != BoardTextBackground::None);
+            if !supports_fill || (color != "transparent" && !valid_hex_color(color)) {
+                return Err("Preenchimento requer uma forma e cor #RRGGBB ou transparent.".into());
+            }
+        }
         if let Some(rich_text) = &element.rich_text {
             validate_rich_text(element, rich_text)?;
+        }
+        if let Some(annotation) = &element.text_annotation {
+            validate_text_annotation(annotation)?;
         }
         if !valid_id(&element.id) || !ids.insert(element.id.as_str()) {
             return Err("Elementos possuem IDs invalidos ou duplicados.".into());
@@ -354,6 +482,9 @@ fn validate_board(board: &Board) -> Result<(), String> {
                     || !p.y.is_finite()
                     || p.x.abs() > 1_000_000.0
                     || p.y.abs() > 1_000_000.0
+                    || p.pressure.is_some_and(|pressure| {
+                        !pressure.is_finite() || !(0.0..=1.0).contains(&pressure)
+                    })
             })
         {
             return Err("Conteudo do elemento excede os limites.".into());
@@ -390,9 +521,52 @@ fn validate_board(board: &Board) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_text_annotation(annotation: &BoardTextAnnotation) -> Result<(), String> {
+    if !valid_hex_color(&annotation.color) {
+        return Err("Cor de anotacao deve usar #RRGGBB.".into());
+    }
+    let valid_padding = match &annotation.padding {
+        BoardAnnotationPadding::Uniform(value) => value.is_finite() && (0.0..=24.0).contains(value),
+        BoardAnnotationPadding::Sides(values) => {
+            [2, 4].contains(&values.len())
+                && values
+                    .iter()
+                    .all(|value| value.is_finite() && (0.0..=24.0).contains(value))
+        }
+    };
+    if !annotation.stroke_width.is_finite()
+        || !(0.5..=8.0).contains(&annotation.stroke_width)
+        || !valid_padding
+        || !(1..=4).contains(&annotation.iterations)
+        || !(100..=5000).contains(&annotation.animation_duration)
+        || annotation.animation_delay > 5000
+    {
+        return Err("Configuracao de anotacao fora dos limites.".into());
+    }
+    let sides: HashSet<_> = annotation.brackets.iter().collect();
+    if annotation.brackets.is_empty()
+        || annotation.brackets.len() > 4
+        || sides.len() != annotation.brackets.len()
+    {
+        return Err("Lados de anotacao devem ser unicos, entre um e quatro.".into());
+    }
+    Ok(())
+}
+
 fn validate_rich_text(element: &BoardElement, rich_text: &BoardRichText) -> Result<(), String> {
-    if element.kind != "text" {
-        return Err("Texto formatado permitido apenas em elemento de texto.".into());
+    if ![
+        "text",
+        "note",
+        "rectangle",
+        "ellipse",
+        "frame",
+        "question",
+        "decision",
+        "task",
+    ]
+    .contains(&element.kind.as_str())
+    {
+        return Err("Texto formatado requer um elemento com texto editavel.".into());
     }
     if rich_text.paragraphs.len() > 1000 {
         return Err("Texto formatado excede 1000 paragrafos.".into());
@@ -408,6 +582,9 @@ fn validate_rich_text(element: &BoardElement, rich_text: &BoardRichText) -> Resu
             return Err("Texto formatado excede 10000 trechos.".into());
         }
         for run in &paragraph.runs {
+            if let Some(annotation) = &run.annotation {
+                validate_text_annotation(annotation)?;
+            }
             if !run.font_size.is_finite() || !(8.0..=72.0).contains(&run.font_size) {
                 return Err("Tamanho de fonte deve estar entre 8 e 72.".into());
             }
@@ -476,7 +653,10 @@ fn create_in_document(document: &mut Value, input: CreateBoardInput) -> Result<B
     let now = now_iso()?;
     let board = Board {
         id: Uuid::new_v4().to_string(),
+        locked: false,
         kind: input.kind,
+        background: input.background,
+        color_scheme: input.color_scheme,
         title: input.title.trim().into(),
         format_version: FORMAT_VERSION,
         revision: 1,
@@ -495,11 +675,29 @@ fn save_in_document(document: &mut Value, input: SaveBoardInput) -> Result<Board
     let index = find_board(&boards, &input.id)?;
     let board = &mut boards[index];
     check_revision(board, input.expected_revision)?;
-    if board.title == input.title.trim() && board.elements == input.elements {
+    let background = input.background.unwrap_or(board.background);
+    let color_scheme = input.color_scheme.unwrap_or(board.color_scheme);
+    let locked = input.locked.unwrap_or(board.locked);
+    let content_changed = board.title != input.title.trim()
+        || board.elements != input.elements
+        || board.background != background
+        || board.color_scheme != color_scheme;
+    if board.locked && content_changed {
+        return Err("Desbloqueie o Paper antes de editar.".into());
+    }
+    if board.title == input.title.trim()
+        && board.elements == input.elements
+        && board.background == background
+        && board.color_scheme == color_scheme
+        && board.locked == locked
+    {
         return Ok(board.clone());
     }
     board.title = input.title.trim().into();
     board.elements = input.elements;
+    board.background = background;
+    board.color_scheme = color_scheme;
+    board.locked = locked;
     board.revision = board
         .revision
         .checked_add(1)
@@ -520,7 +718,10 @@ pub fn list_boards(vault: tauri::State<'_, VaultStore>) -> Result<Vec<BoardSumma
 fn board_summary(board: Board) -> BoardSummary {
     BoardSummary {
         id: board.id,
+        locked: board.locked,
         kind: board.kind,
+        background: board.background,
+        color_scheme: board.color_scheme,
         title: board.title,
         format_version: board.format_version,
         revision: board.revision,
@@ -571,6 +772,9 @@ fn delete_in_document(
     let mut boards = read_boards(document)?;
     let index = find_board(&boards, id)?;
     check_revision(&boards[index], expected_revision)?;
+    if boards[index].locked {
+        return Err("Desbloqueie o Paper antes de excluir.".into());
+    }
     let mut links = read_paper_links(document)?;
     links.retain(|link| link.paper_id != id);
     if document.get("paperLinks").is_some() {
@@ -709,6 +913,8 @@ fn create_paper_in_document(
     let paper = create_in_document(
         &mut staged,
         CreateBoardInput {
+            background: BoardBackground::Plain,
+            color_scheme: BoardColorScheme::Light,
             kind: BoardKind::Paper,
             title,
             elements: vec![],
@@ -857,6 +1063,9 @@ fn create_task_link(
     }
     let board = &mut boards[index];
     check_revision(board, expected_revision)?;
+    if board.locked {
+        return Err("Desbloqueie o Paper antes de criar uma tarefa no elemento.".into());
+    }
     let element = board
         .elements
         .iter_mut()
@@ -1081,10 +1290,13 @@ mod tests {
             text: "Como melhorar?".into(),
             color: "neutral".into(),
             stroke_style: BoardStrokeStyle::Clean,
+            draw_brush: None,
             stroke_width: None,
             opacity: 1.0,
             stroke_color: None,
+            fill_color: None,
             text_highlight: BoardTextHighlight::None,
+            text_annotation: None,
             text_font: BoardTextFont::Sans,
             text_background: BoardTextBackground::None,
             text_align: BoardTextAlign::Left,
@@ -1106,6 +1318,8 @@ mod tests {
         create_in_document(
             document,
             CreateBoardInput {
+                background: BoardBackground::Plain,
+                color_scheme: BoardColorScheme::Light,
                 kind: BoardKind::Board,
                 title: "Refinamento".into(),
                 elements: vec![element()],
@@ -1127,6 +1341,84 @@ mod tests {
         assert!(boards[0].elements[0].rich_text.is_none());
     }
 
+    fn save_input(board: &Board, locked: Option<bool>) -> SaveBoardInput {
+        SaveBoardInput {
+            id: board.id.clone(),
+            title: board.title.clone(),
+            elements: board.elements.clone(),
+            expected_revision: board.revision,
+            background: None,
+            color_scheme: None,
+            locked,
+        }
+    }
+
+    #[test]
+    fn paper_lock_defaults_read_only_and_roundtrips_with_explicit_unlock() {
+        let mut document = document();
+        let board = create(&mut document);
+        document["boards"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("locked");
+        let before = document.clone();
+        assert!(!read_boards(&document).unwrap()[0].locked);
+        assert_eq!(document, before);
+        let locked = save_in_document(&mut document, save_input(&board, Some(true))).unwrap();
+        assert!(locked.locked);
+        assert_eq!(locked.revision, 2);
+        assert!(board_summary(locked.clone()).locked);
+        assert_eq!(read_boards(&document).unwrap()[0], locked);
+        let before = document.clone();
+        assert_eq!(
+            save_in_document(&mut document, save_input(&locked, None)).unwrap(),
+            locked
+        );
+        assert_eq!(document, before);
+        let unlocked = save_in_document(&mut document, save_input(&locked, Some(false))).unwrap();
+        assert!(!unlocked.locked);
+        assert_eq!(unlocked.revision, 3);
+        assert_eq!(read_boards(&document).unwrap()[0], unlocked);
+    }
+
+    #[test]
+    fn locked_paper_rejects_content_delete_and_element_link_without_mutation() {
+        let mut document = document();
+        let board = create(&mut document);
+        let locked = save_in_document(&mut document, save_input(&board, Some(true))).unwrap();
+        let before = document.clone();
+        for unlock in [None, Some(false)] {
+            for field in ["title", "elements", "background", "scheme"] {
+                let mut input = save_input(&locked, unlock);
+                match field {
+                    "title" => input.title = "Changed".into(),
+                    "elements" => input.elements[0].x = 123.0,
+                    "background" => input.background = Some(BoardBackground::Ruled),
+                    _ => input.color_scheme = Some(BoardColorScheme::Dark),
+                }
+                assert!(save_in_document(&mut document, input).is_err());
+                assert_eq!(document, before);
+            }
+        }
+        assert!(delete_in_document(&mut document, &locked.id, locked.revision).is_err());
+        assert_eq!(document, before);
+        assert!(create_task_link(
+            &mut document,
+            &locked.id,
+            "element-1",
+            locked.revision,
+            "locked-operation",
+            "Action".into(),
+            None
+        )
+        .is_err());
+        assert_eq!(document, before);
+        let unlocked = save_in_document(&mut document, save_input(&locked, Some(false))).unwrap();
+        let mut input = save_input(&unlocked, None);
+        input.title = "Now editable".into();
+        assert!(save_in_document(&mut document, input).is_ok());
+    }
+
     #[test]
     fn legacy_stroke_presentation_defaults_without_hydration_writes() {
         let mut document = document();
@@ -1146,6 +1438,98 @@ mod tests {
     }
 
     #[test]
+    fn legacy_fill_defaults_without_hydration_writes() {
+        for explicit_null in [false, true] {
+            let mut document = document();
+            create(&mut document);
+            if explicit_null {
+                document["boards"][0]["elements"][0]["fillColor"] = Value::Null;
+            }
+            let before = document.clone();
+            assert!(read_boards(&document).unwrap()[0].elements[0]
+                .fill_color
+                .is_none());
+            assert_eq!(document, before);
+        }
+    }
+
+    #[test]
+    fn shape_fill_roundtrip_is_independent_from_stroke_and_palette() {
+        for kind in [
+            "rectangle",
+            "ellipse",
+            "frame",
+            "note",
+            "question",
+            "decision",
+            "task",
+            "text",
+        ] {
+            for color in ["transparent", "#aA12F0"] {
+                let mut document = document();
+                let board = create(&mut document);
+                let mut item = element();
+                item.kind = kind.into();
+                item.text_background = BoardTextBackground::Rectangle;
+                item.fill_color = Some(color.into());
+                item.stroke_color = Some("#123456".into());
+                let saved = save_in_document(
+                    &mut document,
+                    SaveBoardInput {
+                        locked: None,
+                        background: None,
+                        color_scheme: None,
+                        id: board.id,
+                        title: board.title,
+                        elements: vec![item.clone()],
+                        expected_revision: board.revision,
+                    },
+                )
+                .unwrap();
+                assert_eq!(saved.elements[0], item);
+                assert_eq!(read_boards(&document).unwrap()[0], saved);
+            }
+        }
+    }
+
+    #[test]
+    fn unsupported_or_invalid_fills_reject_without_mutation() {
+        for (kind, color) in [
+            ("draw", "transparent"),
+            ("image", "#123456"),
+            ("arrow", "#123456"),
+            ("text", "#123456"),
+            ("rectangle", "red"),
+            ("rectangle", "#fff"),
+            ("rectangle", "#12345678"),
+            ("rectangle", "url(example)"),
+            ("rectangle", "#ZZ1234"),
+            ("rectangle", ""),
+        ] {
+            let mut document = document();
+            let board = create(&mut document);
+            let before = document.clone();
+            let mut item = element();
+            item.kind = kind.into();
+            item.fill_color = Some(color.into());
+            assert!(save_in_document(
+                &mut document,
+                SaveBoardInput {
+                    locked: None,
+                    background: None,
+                    color_scheme: None,
+                    id: board.id,
+                    title: board.title,
+                    elements: vec![item],
+                    expected_revision: board.revision,
+                }
+            )
+            .is_err());
+            assert_eq!(document, before);
+        }
+    }
+
+    #[test]
     fn stroke_presentation_roundtrip_preserves_legacy_fields() {
         for (width, opacity, color) in [(0.5, 0.05, "#aA12F0"), (32.0, 1.0, "#000000")] {
             let mut document = document();
@@ -1157,6 +1541,9 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    locked: None,
+                    background: None,
+                    color_scheme: None,
                     id: board.id,
                     title: board.title,
                     elements: elements.clone(),
@@ -1207,6 +1594,9 @@ mod tests {
             assert!(save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    locked: None,
+                    background: None,
+                    color_scheme: None,
                     id: board.id,
                     title: board.title,
                     elements: vec![item],
@@ -1247,6 +1637,9 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    locked: None,
+                    background: None,
+                    color_scheme: None,
                     id: board.id.clone(),
                     title: board.title.clone(),
                     elements,
@@ -1279,6 +1672,9 @@ mod tests {
             assert!(save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    locked: None,
+                    background: None,
+                    color_scheme: None,
                     id: board.id,
                     title: board.title,
                     elements,
@@ -1570,6 +1966,222 @@ mod tests {
         assert_eq!(document["boards"], legacy_content);
     }
 
+    #[test]
+    fn artistic_brush_legacy_defaults_do_not_mutate_or_hydrate_payload() {
+        let mut document = document();
+        create(&mut document);
+        document["boards"][0]["elements"][0]["points"] = json!([{"x":1,"y":2}]);
+        let original = document.clone();
+        let boards = read_boards(&document).unwrap();
+        assert!(boards[0].elements[0].draw_brush.is_none());
+        assert!(boards[0].elements[0].points[0].pressure.is_none());
+        assert_eq!(document, original);
+        let value = serde_json::to_value(&boards[0].elements[0]).unwrap();
+        assert!(value.get("drawBrush").is_none());
+        assert!(value["points"][0].get("pressure").is_none());
+    }
+
+    #[test]
+    fn artistic_brushes_and_pressure_roundtrip_preserves_fountain_and_legacy_tools() {
+        for brush in [
+            BoardDrawBrush::Graphite,
+            BoardDrawBrush::Fountain,
+            BoardDrawBrush::Ink,
+            BoardDrawBrush::Charcoal,
+            BoardDrawBrush::Marker,
+            BoardDrawBrush::Watercolor,
+            BoardDrawBrush::Spray,
+        ] {
+            let mut document = document();
+            let board = create(&mut document);
+            let mut elements = board.elements.clone();
+            elements[0].kind = "draw".into();
+            elements[0].draw_brush = Some(brush);
+            elements[0].points = vec![
+                BoardPoint {
+                    x: 0.0,
+                    y: 0.0,
+                    pressure: Some(0.0),
+                },
+                BoardPoint {
+                    x: 1.0,
+                    y: 2.0,
+                    pressure: Some(0.5),
+                },
+                BoardPoint {
+                    x: 3.0,
+                    y: 4.0,
+                    pressure: Some(1.0),
+                },
+            ];
+            let saved = save_in_document(
+                &mut document,
+                SaveBoardInput {
+                    locked: None,
+                    background: None,
+                    color_scheme: None,
+                    id: board.id,
+                    title: board.title,
+                    elements,
+                    expected_revision: board.revision,
+                },
+            )
+            .unwrap();
+            assert_eq!(read_boards(&document).unwrap()[0], saved);
+            assert_eq!(saved.elements[0].draw_brush, Some(brush));
+            assert_eq!(saved.elements[0].points[1].pressure, Some(0.5));
+        }
+    }
+
+    #[test]
+    fn artistic_brushes_reject_unknown_tools_non_drawing_shapes_and_invalid_pressure() {
+        let mut value = serde_json::to_value(element()).unwrap();
+        value["drawBrush"] = json!("unknown");
+        assert!(serde_json::from_value::<BoardElement>(value).is_err());
+        let mut document = document();
+        let mut board = create(&mut document);
+        for brush in [BoardDrawBrush::Marker, BoardDrawBrush::Fountain] {
+            board.elements[0].draw_brush = Some(brush);
+            assert!(validate_board(&board).is_err());
+        }
+        board.elements[0].kind = "draw".into();
+        for pressure in [-0.01, 1.01, f64::NAN, f64::INFINITY] {
+            board.elements[0].points = vec![BoardPoint {
+                x: 0.0,
+                y: 0.0,
+                pressure: Some(pressure),
+            }];
+            assert!(validate_board(&board).is_err());
+        }
+    }
+
+    fn annotation() -> BoardTextAnnotation {
+        serde_json::from_value(json!({
+            "type":"bracket", "color":"#aA12F0", "strokeWidth":2,
+            "padding":5, "iterations":2, "brackets":["left","right"],
+            "animate":true, "animationDuration":800, "animationDelay":100,
+            "multiline":true
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn text_annotations_roundtrip_without_changing_legacy_documents() {
+        let mut document = document();
+        let board = create(&mut document);
+        let before = document.clone();
+        assert!(read_boards(&document).unwrap()[0].elements[0]
+            .text_annotation
+            .is_none());
+        assert_eq!(document, before);
+        let mut elements = board.elements.clone();
+        elements[0].kind = "text".into();
+        elements[0].text_annotation = Some(annotation());
+        let mut rich = rich_text();
+        assert!(rich.paragraphs[0].runs[0].annotation.is_none());
+        rich.paragraphs[0].runs[0].annotation = Some(annotation());
+        elements[0].rich_text = Some(rich);
+        let saved = save_in_document(
+            &mut document,
+            SaveBoardInput {
+                locked: None,
+                background: None,
+                color_scheme: None,
+                id: board.id,
+                title: board.title,
+                elements,
+                expected_revision: board.revision,
+            },
+        )
+        .unwrap();
+        assert_eq!(read_boards(&document).unwrap()[0], saved);
+        assert_eq!(saved.elements[0].text_annotation, Some(annotation()));
+        assert_eq!(
+            saved.elements[0].rich_text.as_ref().unwrap().paragraphs[0].runs[0].annotation,
+            Some(annotation())
+        );
+    }
+
+    #[test]
+    fn text_annotation_accepts_every_style_and_rejects_invalid_json() {
+        for kind in [
+            "underline",
+            "box",
+            "circle",
+            "highlight",
+            "strike-through",
+            "crossed-off",
+            "bracket",
+        ] {
+            let mut value = serde_json::to_value(annotation()).unwrap();
+            value["type"] = json!(kind);
+            validate_text_annotation(&serde_json::from_value(value).unwrap()).unwrap();
+        }
+        for padding in [json!([2, 4]), json!([1, 2, 3, 4])] {
+            let mut value = serde_json::to_value(annotation()).unwrap();
+            value["padding"] = padding;
+            value["rtl"] = json!(true);
+            let parsed: BoardTextAnnotation = serde_json::from_value(value).unwrap();
+            assert!(parsed.rtl);
+            validate_text_annotation(&parsed).unwrap();
+        }
+        for (field, value) in [
+            ("type", json!("unknown")),
+            ("brackets", json!(["center"])),
+            ("iterations", json!(1.5)),
+            ("animationDuration", json!(-1)),
+            ("animationDelay", json!(1.5)),
+            ("unexpected", json!(true)),
+        ] {
+            let mut data = serde_json::to_value(annotation()).unwrap();
+            data[field] = value;
+            assert!(serde_json::from_value::<BoardTextAnnotation>(data).is_err());
+        }
+    }
+
+    #[test]
+    fn text_annotation_validation_covers_element_and_run_metadata() {
+        for (field, value) in [
+            ("color", json!("url(example)")),
+            ("strokeWidth", json!(0.4)),
+            ("strokeWidth", json!(8.1)),
+            ("padding", json!(-1)),
+            ("padding", json!(25)),
+            ("iterations", json!(0)),
+            ("padding", json!([1])),
+            ("padding", json!([1, 2, 3])),
+            ("padding", json!([1, 25])),
+            ("iterations", json!(5)),
+            ("brackets", json!([])),
+            ("brackets", json!(["left", "left"])),
+            ("animationDuration", json!(99)),
+            ("animationDuration", json!(5001)),
+            ("animationDelay", json!(5001)),
+        ] {
+            let mut invalid = serde_json::to_value(annotation()).unwrap();
+            invalid[field] = value;
+            let annotation: BoardTextAnnotation = serde_json::from_value(invalid).unwrap();
+            assert!(validate_text_annotation(&annotation).is_err());
+            let mut document = document();
+            let mut board = create(&mut document);
+            board.elements[0].text_annotation = Some(annotation.clone());
+            assert!(validate_board(&board).is_err());
+            let mut element = element();
+            element.kind = "text".into();
+            let mut rich = rich_text();
+            rich.paragraphs[0].runs[0].annotation = Some(annotation);
+            assert!(validate_rich_text(&element, &rich).is_err());
+        }
+        for value in [f64::NAN, f64::INFINITY] {
+            let mut annotation = annotation();
+            annotation.stroke_width = value;
+            assert!(validate_text_annotation(&annotation).is_err());
+            annotation.stroke_width = 2.0;
+            annotation.padding = BoardAnnotationPadding::Uniform(value);
+            assert!(validate_text_annotation(&annotation).is_err());
+        }
+    }
+
     fn rich_text() -> BoardRichText {
         serde_json::from_value(json!({"paragraphs": [
             {"align":"center","list":"bullet","runs":[
@@ -1590,6 +2202,9 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                locked: None,
+                background: None,
+                color_scheme: None,
                 id: board.id,
                 title: board.title,
                 elements,
@@ -1618,7 +2233,7 @@ mod tests {
         element.text = "Outro texto".into();
         assert!(validate_rich_text(&element, &rich_text()).is_err());
         element.text = "Como melhorar?".into();
-        element.kind = "note".into();
+        element.kind = "arrow".into();
         assert!(validate_rich_text(&element, &rich_text()).is_err());
         for (field, value) in [("align", "justify"), ("list", "html")] {
             let mut rich = serde_json::to_value(rich_text()).unwrap();
@@ -1650,6 +2265,31 @@ mod tests {
     }
 
     #[test]
+    fn shape_text_preserves_rich_styles_including_linked_task_references() {
+        for kind in [
+            "text",
+            "note",
+            "rectangle",
+            "ellipse",
+            "frame",
+            "question",
+            "decision",
+            "task",
+        ] {
+            let mut item = element();
+            item.kind = kind.into();
+            assert!(validate_rich_text(&item, &rich_text()).is_ok());
+        }
+        let mut item = element();
+        item.kind = "task".into();
+        item.task_id = Some("task-1".into());
+        assert!(validate_rich_text(&item, &rich_text()).is_ok());
+        item.kind = "image".into();
+        item.task_id = None;
+        assert!(validate_rich_text(&item, &rich_text()).is_err());
+    }
+
+    #[test]
     fn automatic_text_width_survives_board_save_and_read() {
         let mut document = document();
         let board = create(&mut document);
@@ -1659,6 +2299,9 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                locked: None,
+                background: None,
+                color_scheme: None,
                 id: board.id,
                 title: board.title,
                 elements,
@@ -1696,6 +2339,9 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    locked: None,
+                    background: None,
+                    color_scheme: None,
                     id: board.id,
                     title: board.title,
                     elements,
@@ -1750,6 +2396,9 @@ mod tests {
                 let saved = save_in_document(
                     &mut document,
                     SaveBoardInput {
+                        locked: None,
+                        background: None,
+                        color_scheme: None,
                         id: board.id,
                         title: board.title,
                         elements,
@@ -1829,6 +2478,9 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                locked: None,
+                background: None,
+                color_scheme: None,
                 id: board.id,
                 title: board.title,
                 elements: elements.clone(),
@@ -1849,6 +2501,9 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                locked: None,
+                background: None,
+                color_scheme: None,
                 id: board.id.clone(),
                 title: board.title.clone(),
                 elements: board.elements.clone(),
@@ -1861,6 +2516,9 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                locked: None,
+                background: None,
+                color_scheme: None,
                 id: board.id.clone(),
                 title: "Novo titulo".into(),
                 elements: board.elements.clone(),
@@ -1872,6 +2530,9 @@ mod tests {
         assert!(save_in_document(
             &mut document,
             SaveBoardInput {
+                locked: None,
+                background: None,
+                color_scheme: None,
                 id: board.id.clone(),
                 title: "Antigo".into(),
                 elements: board.elements,
@@ -1967,6 +2628,8 @@ mod tests {
         let board = create_in_document(
             &mut document,
             CreateBoardInput {
+                background: BoardBackground::Plain,
+                color_scheme: BoardColorScheme::Light,
                 kind: BoardKind::Board,
                 title: "Quadro".into(),
                 elements: vec![card],
@@ -2065,5 +2728,70 @@ mod tests {
         assert!(decode_png_export(&png(8192, 8192)).is_err());
         assert!(decode_png_export("data:image/png;base64,aGVsbG8=").is_err());
         assert!(export_board_png("cofre.praxis".into(), png(100, 200)).is_err());
+    }
+
+    #[test]
+    fn legacy_paper_background_defaults_without_hydration_write() {
+        let mut document = document();
+        create(&mut document);
+        let value = document["boards"][0].as_object_mut().unwrap();
+        value.remove("background");
+        value.remove("colorScheme");
+        let before = document.clone();
+        let board = read_boards(&document).unwrap().remove(0);
+        assert_eq!(board.background, BoardBackground::Plain);
+        assert_eq!(board.color_scheme, BoardColorScheme::Light);
+        let summary = serde_json::to_value(board_summary(board)).unwrap();
+        assert_eq!(summary["background"], "plain");
+        assert_eq!(summary["colorScheme"], "light");
+        assert_eq!(document, before);
+        let input: CreateBoardInput =
+            serde_json::from_value(json!({"title":"Paper", "elements":[]})).unwrap();
+        assert_eq!(input.background, BoardBackground::Plain);
+        assert_eq!(input.color_scheme, BoardColorScheme::Light);
+    }
+
+    #[test]
+    fn paper_background_and_color_scheme_roundtrip_and_legacy_save_preserves_them() {
+        for background in ["plain", "grid", "ruled", "dots"] {
+            for color_scheme in ["light", "dark"] {
+                let mut document = document();
+                let input = serde_json::from_value(json!({"title":"Paper", "elements":[], "background":background, "colorScheme":color_scheme})).unwrap();
+                let board = create_in_document(&mut document, input).unwrap();
+                assert_eq!(
+                    serde_json::to_value(board_summary(board.clone())).unwrap()["colorScheme"],
+                    color_scheme
+                );
+                assert_eq!(read_boards(&document).unwrap()[0], board);
+                let input = serde_json::from_value(json!({"id":board.id, "title":"Novo titulo", "elements":[], "expectedRevision":1})).unwrap();
+                let saved = save_in_document(&mut document, input).unwrap();
+                assert_eq!(saved.background, board.background);
+                assert_eq!(saved.color_scheme, board.color_scheme);
+                let input = serde_json::from_value(json!({"id":saved.id, "title":saved.title, "elements":[], "expectedRevision":2, "background":"grid", "colorScheme":"dark"})).unwrap();
+                let updated = save_in_document(&mut document, input).unwrap();
+                assert_eq!(updated.background, BoardBackground::Grid);
+                assert_eq!(updated.color_scheme, BoardColorScheme::Dark);
+                assert_eq!(read_boards(&document).unwrap()[0], updated);
+            }
+        }
+    }
+
+    #[test]
+    fn unsupported_paper_background_values_are_rejected_before_mutation() {
+        for (field, value) in [("background", "image"), ("colorScheme", "system")] {
+            let mut document = document();
+            let board = create(&mut document);
+            let before = document.clone();
+            let mut create_input = json!({"title":"Paper", "elements":[]});
+            create_input[field] = json!(value);
+            assert!(serde_json::from_value::<CreateBoardInput>(create_input).is_err());
+            let mut save_input = json!({"id":board.id, "title":board.title, "elements":board.elements, "expectedRevision":board.revision});
+            save_input[field] = json!(value);
+            assert!(serde_json::from_value::<SaveBoardInput>(save_input).is_err());
+            let mut stored_board = serde_json::to_value(board).unwrap();
+            stored_board[field] = json!(value);
+            assert!(serde_json::from_value::<Board>(stored_board).is_err());
+            assert_eq!(document, before);
+        }
     }
 }

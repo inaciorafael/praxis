@@ -46,10 +46,17 @@ describe('rich board text', () => {
     const value = document([run('a full marked phrase', { highlight: 'yellow' })])
     const layout = layoutRichText({ ...element, textAutoWidth: true }, value, measure)
     expect(layout.lines[0]!.runs.length).toBeGreaterThan(1)
-    expect(richHighlightPaths(element, layout)).toHaveLength(1)
+    expect(richHighlightPaths(element, layout)).toHaveLength(2)
   })
   it('positions rich text vertically while preserving authored paragraph alignment', () => {
-    const node: BoardElement = { ...element, width: 200, height: 120, textBackground: 'ellipse', textAlign: 'right', textVerticalAlign: 'middle' }
+    const node: BoardElement = {
+      ...element,
+      width: 200,
+      height: 120,
+      textBackground: 'ellipse',
+      textAlign: 'right',
+      textVerticalAlign: 'middle',
+    }
     const value = document([run('abc')])
     value.paragraphs[0]!.align = 'center'
     const layout = layoutRichText(node, value, measure)
@@ -129,7 +136,9 @@ describe('rich board text', () => {
     const layout = layoutRichText({ ...element, textAutoWidth: true }, value, measure)
     const paths = richHighlightPaths(element, layout)
     expect(paths.length).toBeGreaterThan(0)
-    expect(paths.every((path) => path.fill === '#fde875')).toBe(true)
+    expect(paths.every((path) => path.stroke === '#fde875' && path.fill === 'none')).toBe(
+      true
+    )
     expect(richHighlightPaths({ ...element, x: 900, y: -200 }, layout)).toEqual(paths)
     expect(
       richHighlightPaths(

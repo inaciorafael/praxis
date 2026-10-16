@@ -52,8 +52,8 @@ const initial: Board = {
   updatedAt: '2026-10-13',
 }
 const canvasStub = defineComponent({
-  props: ['elements', 'taskTitles', 'distractionFree'],
-  emits: ['select', 'change'],
+  props: ['elements', 'taskTitles', 'distractionFree', 'readOnly'],
+  emits: ['select', 'change', 'interact'],
   setup(_, { expose }) {
     expose({
       cancelGesture: vi.fn(),
@@ -98,6 +98,123 @@ async function mountPage(url = '/app/boards') {
   return wrapper
 }
 describe('BoardsPage integration', () => {
+  it('dismisses open Paper menus when returning to the canvas', async () => {
+    const wrapper = await mountPage('/app/boards?boardId=board')
+    const contexts = wrapper.get('.paper-contexts')
+    contexts.element.setAttribute('open', '')
+    wrapper.findComponent(canvasStub).vm.$emit('interact')
+    await flushPromises()
+    expect(contexts.attributes('open')).toBeUndefined()
+    contexts.element.setAttribute('open', '')
+    await wrapper.get('input.paper-title').trigger('pointerdown')
+    expect(contexts.attributes('open')).toBeUndefined()
+    wrapper.unmount()
+    useBoardStore().reset()
+  })
+  it('organizes Papers by title, dates and lock state without fetching their content', async () => {
+    vi.mocked(service.listBoards).mockResolvedValue([
+      {
+        ...initial,
+        id: 'z',
+        title: 'Zebra',
+        elementCount: 2,
+        updatedAt: '2026-10-15',
+        createdAt: '2026-10-10',
+      },
+      {
+        ...initial,
+        id: 'a',
+        title: 'Árvore',
+        locked: true,
+        elementCount: 1,
+        updatedAt: '2026-10-14',
+        createdAt: '2026-10-15',
+      },
+      {
+        ...initial,
+        id: 'b',
+        title: 'Beta',
+        elementCount: 0,
+        updatedAt: '2026-10-13',
+        createdAt: '2026-10-11',
+      },
+    ])
+    const wrapper = await mountPage()
+    const titles = () => wrapper.findAll('.paper-card-title').map((item) => item.text())
+    expect(titles()[0]).toBe('Zebra')
+    await wrapper.get('[data-library-sort]').setValue('name')
+    expect(titles()[0]).toContain('Árvore')
+    await wrapper.get('[data-library-sort]').setValue('created')
+    expect(titles()[0]).toContain('Árvore')
+    await wrapper.get('[data-library-filter]').setValue('locked')
+    expect(titles()).toHaveLength(1)
+    expect(wrapper.get('[data-library-count]').text()).toBe('1 of 3 Papers')
+    await wrapper.get('#board-search').setValue('  arvore ')
+    expect(titles()).toHaveLength(1)
+    await wrapper.get('[data-library-filter]').setValue('editable')
+    expect(wrapper.findAll('.paper-card')).toHaveLength(0)
+    expect(wrapper.get('.gallery-empty').text()).toBe('No Papers match your search.')
+    await wrapper.get('#board-search').setValue('')
+    expect(titles()).toHaveLength(2)
+    await wrapper.get('[data-library-list]').trigger('click')
+    expect(wrapper.get('.gallery-grid').classes()).toContain('gallery-list')
+    expect(service.getBoard).not.toHaveBeenCalled()
+    wrapper.unmount()
+    useBoardStore().reset()
+  })
+  it('commits the current canvas draft before locking and prevents repeated requests while saving', async () => {
+    const wrapper = await mountPage('/app/boards?boardId=board')
+    const store = useBoardStore()
+    const commit = vi.fn()
+    window.addEventListener('praxis:commit-board-edit', commit)
+    let complete!: () => void
+    const setLocked = vi.spyOn(store, 'setLocked').mockImplementation(async (value) => {
+      await new Promise<void>((resolve) => {
+        complete = resolve
+      })
+      store.current = { ...store.current!, locked: value }
+      return true
+    })
+    wrapper.findComponent(canvasStub).vm.$emit('lockPaper')
+    await flushPromises()
+    expect(commit).toHaveBeenCalledOnce()
+    expect(setLocked).toHaveBeenCalledWith(true)
+    expect(commit.mock.invocationCallOrder[0]).toBeLessThan(
+      setLocked.mock.invocationCallOrder[0]!
+    )
+    expect(wrapper.get('[data-board-lock]').attributes('disabled')).toBeDefined()
+    complete()
+    await flushPromises()
+    expect(wrapper.findComponent(canvasStub).props('readOnly')).toBe(true)
+    expect(wrapper.get('[data-board-lock]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('input.paper-title').attributes('readonly')).toBeDefined()
+    expect(wrapper.findComponent({ name: 'PaperBackgroundControls' }).exists()).toBe(
+      false
+    )
+    expect(wrapper.get('#paper-context-search').attributes('disabled')).toBeDefined()
+    await wrapper.get('input.paper-title').setValue('Cannot change locked title')
+    expect(store.current?.title).toBe(initial.title)
+    window.removeEventListener('praxis:commit-board-edit', commit)
+    wrapper.unmount()
+    store.reset()
+  })
+  it('keeps unlocking reachable in distraction-free mode after reopening a locked Paper', async () => {
+    vi.mocked(service.getBoard).mockResolvedValue({ ...initial, locked: true })
+    const wrapper = await mountPage('/app/boards?boardId=board&focus=1')
+    const store = useBoardStore()
+    const setLocked = vi.spyOn(store, 'setLocked').mockImplementation(async (value) => {
+      store.current = { ...store.current!, locked: value }
+      return true
+    })
+    expect(wrapper.findComponent(canvasStub).props('readOnly')).toBe(true)
+    expect(wrapper.get('[data-board-lock]').attributes('aria-label')).toBe('Unlock Paper')
+    await wrapper.get('[data-board-lock]').trigger('click')
+    await flushPromises()
+    expect(setLocked).toHaveBeenCalledWith(false)
+    expect(wrapper.findComponent(canvasStub).props('readOnly')).toBe(false)
+    wrapper.unmount()
+    store.reset()
+  })
   it('returns only to a related source task and restores its official execution details', async () => {
     const task = { id: 'source', title: 'Source reminder', status: 'pending' } as Task
     vi.mocked(listPaperTaskContexts).mockResolvedValue([task])

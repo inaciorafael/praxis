@@ -1,3 +1,5 @@
+export const BOARD_FONT_SIZE_PRESETS = [14, 22, 36, 48] as const
+
 /** Wrap plain text without introducing midword breaks for ordinary words. */
 export function wrapBoardText(text: string, maxCharacters: number, maxLines = Infinity): string[] {
   const width = Math.max(1, Math.floor(maxCharacters))

@@ -1,5 +1,20 @@
 {
   "papers": {
+    "library": {
+      "description": "Your papers, ideas and sketches.",
+      "count": "{visible} of {total} Papers",
+      "filter": "Show",
+      "all": "All Papers",
+      "editable": "Editable",
+      "locked": "Locked",
+      "sort": "Sort by",
+      "created": "Newest",
+      "name": "Name (A–Z)",
+      "view": "Library view",
+      "grid": "Paper thumbnails",
+      "list": "Paper list",
+      "open": "Open"
+    },
     "taskDefaultTitle": "Ideas for {title}",
     "taskDescription": "A free visual space to think through this task. The same Paper can be reused in other tasks and remains in the library.",
     "openNamed": "Open {title}",
@@ -50,7 +65,20 @@
     "error": "Could not update Papers. Try again.",
     "detachedHint": "Removing a link keeps the Paper in the library.",
     "retry": "Try again",
-    "openError": "Could not open the Paper. Your changes were preserved."
+    "openError": "Could not open the Paper. Your changes were preserved.",
+    "background": {
+      "title": "Paper background",
+      "shortTitle": "Background",
+      "appearance": "Appearance",
+      "pattern": "Paper pattern",
+      "light": "Light",
+      "dark": "Dark",
+      "plain": "Plain",
+      "grid": "Grid",
+      "ruled": "Ruled",
+      "dots": "Dotted",
+      "savedPerPaper": "Saved for this Paper and included in PNG exports."
+    }
   },
   "common": {
     "cancel": "Cancel",
@@ -253,7 +281,88 @@
     "noResults": "No tasks match this search."
   },
   "boards": {
+    "penColors": "Pen inks",
+    "inkColors": {
+      "blue": "Blue",
+      "black": "Black",
+      "red": "Red",
+      "green": "Green",
+      "yellow": "Yellow",
+      "pink": "Pink",
+      "purple": "Purple"
+    },
+    "lockPaper": "Lock Paper",
+    "unlockPaper": "Unlock Paper",
+    "lockedHint": "Paper locked. You can navigate and export. Unlock to edit.",
+    "brushes": {
+      "pencils": "Pencils",
+      "pens": "Pens",
+      "title": "Drawing tools",
+      "classic": "Classic pencil and pen",
+      "types": {
+        "graphite": "Graphite",
+        "fountain": "Fountain pen",
+        "ink": "Ink · sketch",
+        "charcoal": "Charcoal",
+        "marker": "Marker",
+        "watercolor": "Watercolor",
+        "spray": "Spray"
+      },
+      "descriptions": {
+        "draw": "Light, textured strokes for sketching.",
+        "pen": "Simple, even lines for writing.",
+        "graphite": "Fine graphite with a subtle pencil texture.",
+        "fountain": "Continuous ink with gentle width variation.",
+        "ink": "Fine nib and solid ink for outlines, hatching and sketches.",
+        "charcoal": "Grainy, expressive strokes.",
+        "marker": "Broad ink for emphasizing ideas.",
+        "watercolor": "Soft layers of translucent color.",
+        "spray": "Scattered ink for freeform textures."
+      },
+      "pressureHint": "Adjust color and width to tune the material. A compatible pen can also vary strokes with pressure.",
+      "processing": "Preparing the stroke…",
+      "fallback": "This stroke is being shown in simple mode."
+    },
+    "notation": {
+      "selectionHint": "Select a passage to annotate. Without a selection, the effect applies to the whole text.",
+      "wholeText": "Whole text",
+      "title": "Hand-drawn annotations",
+      "none": "No annotation",
+      "types": {
+        "underline": "Underline",
+        "box": "Box",
+        "circle": "Circle",
+        "highlight": "Highlight",
+        "strike-through": "Strike-through",
+        "crossed-off": "Crossed off",
+        "bracket": "Brackets"
+      },
+      "color": "Color",
+      "width": "Stroke width",
+      "padding": "Padding",
+      "sides": "Bracket sides",
+      "top": "Top",
+      "right": "Right",
+      "bottom": "Bottom",
+      "left": "Left",
+      "advanced": "More settings",
+      "iterations": "Stroke repetitions",
+      "multiline": "Annotate each line separately",
+      "rtl": "Draw from right to left",
+      "animate": "Animate drawing",
+      "duration": "Duration (ms)",
+      "delay": "Delay (ms)",
+      "replay": "Replay animation",
+      "options": "Annotation settings",
+      "remove": "Remove annotation"
+    },
     "studio": {
+      "textSettings": "Text and alignment",
+      "panLabel": "Pan",
+      "keepLabel": "Pin tool",
+      "shapesLabel": "Shapes",
+      "elementSettings": "Properties",
+      "quickWidths": "Quick stroke widths",
       "gallery": "Paper gallery",
       "title": "A space to think",
       "subtitle": "Write, sketch and explore ideas on your digital paper. All your Papers live here.",
@@ -322,7 +431,7 @@
     "rotateRight": "Rotate right 15°",
     "resetRotation": "Reset rotation",
     "shortcuts": "Shortcuts and controls",
-    "resizeHint": "Drag a corner to resize. Shift or Ctrl keeps proportions; Alt keeps the center.",
+    "resizeHint": "Text: drag a corner to scale the font; Ctrl resizes only the box. Shapes: Shift or Ctrl keeps proportions. Alt keeps the center.",
     "rotateHint": "Drag the circular handle to rotate. Shift snaps to 15° steps.",
     "moveHint": "Shift + drag constrains movement to the horizontal or vertical axis.",
     "shortcutTools": "P: pencil · B: pen · V: selection · H: hand · T: text. Shift creates squares/circles and constrains arrow directions.",
@@ -369,9 +478,16 @@
     "startDrawing": "Start drawing",
     "linkedTask": "Linked task",
     "strokeStyle": "Stroke",
-    "strokeStyles": { "pencil": "Pencil", "pen": "Pen", "clean": "Clean" },
+    "strokeStyles": {
+      "pencil": "Pencil",
+      "pen": "Pen",
+      "clean": "Clean"
+    },
     "textFont": "Text font",
-    "textFonts": { "handwritten": "Handwritten", "sans": "Simple" },
+    "textFonts": {
+      "handwritten": "Handwritten",
+      "sans": "Simple"
+    },
     "textHighlight": "Highlighter",
     "textHighlights": {
       "none": "No highlight",
@@ -389,9 +505,17 @@
       "ellipse": "Circle / oval"
     },
     "textAlignment": "Horizontal alignment",
-    "textAlignments": { "left": "Left", "center": "Center", "right": "Right" },
+    "textAlignments": {
+      "left": "Left",
+      "center": "Center",
+      "right": "Right"
+    },
     "textVerticalAlignment": "Vertical alignment",
-    "textVerticalAlignments": { "top": "Top", "middle": "Middle", "bottom": "Bottom" },
+    "textVerticalAlignments": {
+      "top": "Top",
+      "middle": "Middle",
+      "bottom": "Bottom"
+    },
     "freeTextLabel": "Edit text on canvas",
     "rich": {
       "editor": "Formatted text",
@@ -409,11 +533,41 @@
       "ordered": "Numbered list",
       "highlight": "Highlight selection",
       "clear": "Clear formatting",
-      "done": "Finish editing"
+      "done": "Finish editing",
+      "decreaseSize": "Decrease font size",
+      "increaseSize": "Increase font size",
+      "sizePresets": "Suggested sizes",
+      "format": "Formatting",
+      "organization": "Text organization",
+      "actions": "Editing actions"
     },
     "keepToolActive": "Keep tool active",
     "canvasHintTitle": "A space for your ideas",
-    "canvasHintDescription": "Draw freely, add shapes, notes, and images. V selects, H pans, R draws rectangles, P draws freehand, and T adds text."
+    "canvasHintDescription": "Draw freely, add shapes, notes, and images. V selects, H pans, R draws rectangles, P draws freehand, and T adds text.",
+    "usability": {
+      "properties": "Properties",
+      "selection": "{count} element | {count} elements",
+      "mixed": "Mixed",
+      "textColor": "Text color",
+      "textPosition": "Text position in shape",
+      "fill": "Fill",
+      "transparent": "No fill",
+      "customColor": "Custom color",
+      "defaultFill": "Restore default fill",
+      "organize": "Arrange elements",
+      "advanced": "Outline and more settings",
+      "stroke": "Outline color",
+      "arrange": {
+        "left": "Align left",
+        "center": "Horizontal center",
+        "right": "Align right",
+        "top": "Align top",
+        "middle": "Vertical center",
+        "bottom": "Align bottom",
+        "horizontal": "Distribute horizontally",
+        "vertical": "Distribute vertically"
+      }
+    }
   },
   "settings": {
     "title": "Settings",

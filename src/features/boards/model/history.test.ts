@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { BoardElement } from '@/shared/types/board'
-import { createHistory } from './history'
+import { createHistory, sameElements } from './history'
+import { plainToRich } from '../lib/rich-text'
+import { defaultAnnotation } from '../lib/notation'
 const item = (text: string): BoardElement[] => [
   {
     id: 'a',
@@ -20,6 +22,51 @@ const item = (text: string): BoardElement[] => [
   },
 ]
 describe('bounded board history', () => {
+  it('ignores numeric representation noise without hiding actual geometry or text edits', () => {
+    const original = item('initial')
+    original[0]!.x = 123.456789
+    const saved = item('initial')
+    saved[0]!.x = original[0]!.x + Number.EPSILON * original[0]!.x
+    expect(sameElements(original, saved)).toBe(true)
+    saved[0]!.x = original[0]!.x + 0.000001
+    expect(sameElements(original, saved)).toBe(false)
+    saved[0]!.x = original[0]!.x
+    saved[0]!.text = 'changed'
+    expect(sameElements(original, saved)).toBe(false)
+  })
+  it('isolates rich text and nested annotation options across undo and redo', () => {
+    const history = createHistory()
+    const initial = item('initial')
+    initial[0]!.richText = plainToRich('initial', initial[0]!)
+    initial[0]!.textAnnotation = { ...defaultAnnotation('bracket'), padding: [2, 4] }
+    initial[0]!.richText.paragraphs[0]!.runs[0]!.annotation = defaultAnnotation('circle')
+    history.push(initial)
+    initial[0]!.richText.paragraphs[0]!.runs[0]!.fontSize = 40
+    initial[0]!.richText.paragraphs[0]!.runs[0]!.annotation!.color = '#123456'
+    initial[0]!.textAnnotation.brackets.push('left')
+    ;(initial[0]!.textAnnotation.padding as number[])[0] = 20
+    const previous = history.undo(initial)!
+    expect(previous[0]!.richText!.paragraphs[0]!.runs[0]).toMatchObject({
+      fontSize: 14,
+      annotation: { color: '#e07a28' },
+    })
+    expect(previous[0]!.textAnnotation).toMatchObject({
+      padding: [2, 4],
+      brackets: ['right'],
+    })
+    initial[0]!.richText.paragraphs[0]!.runs[0]!.fontSize = 70
+    const next = history.redo(previous)!
+    expect(next[0]!.richText!.paragraphs[0]!.runs[0]!.fontSize).toBe(40)
+    expect(history.canRedo).toBe(false)
+    expect(history.canUndo).toBe(true)
+  })
+  it('includes rich text and annotations in the memory budget', () => {
+    const history = createHistory(100, 1000)
+    const snapshot = item('short')
+    snapshot[0]!.richText = plainToRich('x'.repeat(1000), snapshot[0]!)
+    history.push(snapshot)
+    expect(history.canUndo).toBe(false)
+  })
   it('keeps independent geometry snapshots and invalidates redo on a new edit', () => {
     const history = createHistory()
     const initial = item('initial')

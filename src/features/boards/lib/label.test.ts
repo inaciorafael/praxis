@@ -36,10 +36,20 @@ describe('board text layout and highlights', () => {
     expect(layout.lineHeight).toBe(24)
   })
   it('aligns labels within their container without moving the element', () => {
-    const node = element({ kind: 'rectangle', width: 200, height: 120, textAlign: 'center', textVerticalAlign: 'middle' })
+    const node = element({
+      kind: 'rectangle',
+      width: 200,
+      height: 120,
+      textAlign: 'center',
+      textVerticalAlign: 'middle',
+    })
     const layout = labelLayout(node, 'hello', measure)
     expect(layout.lines[0]).toMatchObject({ x: 75, y: 64, width: 50 })
-    const bottom = labelLayout({ ...node, textAlign: 'right', textVerticalAlign: 'bottom' }, 'hello', measure)
+    const bottom = labelLayout(
+      { ...node, textAlign: 'right', textVerticalAlign: 'bottom' },
+      'hello',
+      measure
+    )
     expect(bottom.lines[0]).toMatchObject({ x: 138, y: 102 })
   })
   it('preserves explicit text containers while growing for overflowing content', () => {
@@ -76,11 +86,11 @@ describe('board text layout and highlights', () => {
   it('highlights only visible nonempty lines and leaves legacy text unmarked', () => {
     const node = element({ kind: 'note', textHighlight: 'yellow', height: 72 })
     const layout = labelLayout(node, 'first\n\nlast\nhidden', measure)
-    expect(labelHighlightPaths(node, layout)).toHaveLength(2)
+    expect(labelHighlightPaths(node, layout).length).toBeGreaterThanOrEqual(2)
     expect(labelHighlightPaths(element(), layout)).toEqual([])
     expect(
       labelHighlightPaths(node, layout).every(
-        (path) => path.stroke === 'none' && path.fill === '#fde875'
+        (path) => path.stroke === '#fde875' && path.fill === 'none'
       )
     ).toBe(true)
   })

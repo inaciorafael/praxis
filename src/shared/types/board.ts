@@ -13,12 +13,42 @@ export type BoardElementKind =
 
 export type BoardColor = 'neutral' | 'amber' | 'sage' | 'blue' | 'rose' | 'purple'
 export type BoardStrokeStyle = 'clean' | 'pencil' | 'pen'
+export type BoardDrawBrush =
+  | 'graphite'
+  | 'fountain'
+  | 'ink'
+  | 'charcoal'
+  | 'marker'
+  | 'watercolor'
+  | 'spray'
 export type BoardTextFont = 'handwritten' | 'sans'
 export type BoardTextHighlight = 'none' | 'yellow' | 'green' | 'pink' | 'blue'
+export type BoardAnnotationType =
+  | 'underline'
+  | 'box'
+  | 'circle'
+  | 'highlight'
+  | 'strike-through'
+  | 'crossed-off'
+  | 'bracket'
+export type BoardAnnotationSide = 'top' | 'right' | 'bottom' | 'left'
+export type BoardTextAnnotation = {
+  type: BoardAnnotationType
+  color: string
+  strokeWidth: number
+  padding: number | [number, number] | [number, number, number, number]
+  iterations: number
+  brackets: BoardAnnotationSide[]
+  animate: boolean
+  animationDuration: number
+  animationDelay: number
+  multiline: boolean
+  rtl: boolean
+}
 export type BoardTextBackground = 'none' | 'rectangle' | 'ellipse'
 export type BoardTextAlign = 'left' | 'center' | 'right'
 export type BoardTextVerticalAlign = 'top' | 'middle' | 'bottom'
-export type BoardPoint = { x: number; y: number }
+export type BoardPoint = { x: number; y: number; pressure?: number }
 export type BoardRichRun = {
   text: string
   bold: boolean
@@ -28,6 +58,7 @@ export type BoardRichRun = {
   fontSize: number
   color: string
   highlight: BoardTextHighlight
+  annotation?: BoardTextAnnotation | null
 }
 export type BoardRichParagraph = {
   align: 'left' | 'center' | 'right'
@@ -46,12 +77,15 @@ export type BoardElement = {
   angle?: number
   strokeWidth?: number | null
   strokeColor?: string | null
+  fillColor?: string | null
   opacity?: number
   text: string
   color: BoardColor
   strokeStyle?: BoardStrokeStyle
+  drawBrush?: BoardDrawBrush | null
   textFont?: BoardTextFont
   textHighlight?: BoardTextHighlight
+  textAnnotation?: BoardTextAnnotation | null
   textAutoWidth?: boolean
   textBackground?: BoardTextBackground
   textAlign?: BoardTextAlign
@@ -66,8 +100,17 @@ export type BoardElement = {
 }
 
 export type BoardDocumentKind = 'board' | 'paper'
+export type PaperBackground = 'plain' | 'grid' | 'ruled' | 'dots'
+export type PaperColorScheme = 'light' | 'dark'
+export type PaperAppearance = {
+  background: PaperBackground
+  colorScheme: PaperColorScheme
+}
 
 export type Board = {
+  locked?: boolean
+  background?: PaperBackground
+  colorScheme?: PaperColorScheme
   kind?: BoardDocumentKind
   id: string
   title: string
@@ -80,11 +123,14 @@ export type Board = {
 
 export type BoardSummary = Omit<Board, 'elements'> & { elementCount: number }
 export type CreateBoardInput = {
+  background?: PaperBackground
+  colorScheme?: PaperColorScheme
   title: string
   elements: BoardElement[]
   kind?: BoardDocumentKind
 }
 export type SaveBoardInput = Omit<CreateBoardInput, 'kind'> & {
+  locked?: boolean
   id: string
   expectedRevision: number
 }

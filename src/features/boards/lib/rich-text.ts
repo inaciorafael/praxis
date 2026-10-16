@@ -9,12 +9,14 @@ import {
 } from './label'
 import { type SketchPath } from './sketch'
 import { markerPaths } from './marker'
+import { type AnnotationShape, type AnnotationRect, safeAnnotation } from './notation'
 
 export type RichLayoutRun = BoardRichRun & {
   x: number
   y: number
   width: number
   fontFamily: string
+  annotationGroup?: number
 }
 export type RichLayoutLine = {
   runs: RichLayoutRun[]
@@ -95,6 +97,7 @@ export function layoutRichText(
   const lines: RichLayoutLine[] = []
   let top = 12
   let ordered = 0
+  let annotationGroup = 0
   for (const paragraph of document.paragraphs) {
     ordered = paragraph.list === 'ordered' ? ordered + 1 : 0
     const first = paragraph.runs[0] ?? plainToRich('', element).paragraphs[0]!.runs[0]!
@@ -105,7 +108,10 @@ export function layoutRichText(
           ? `${ordered}. `
           : ''
     const source = prefix
-      ? [{ ...first, text: prefix, highlight: 'none' as const }, ...paragraph.runs]
+      ? [
+          { ...first, text: prefix, highlight: 'none' as const, annotation: null },
+          ...paragraph.runs,
+        ]
       : paragraph.runs
     let runs: RichLayoutRun[] = []
     let width = 0
@@ -135,7 +141,11 @@ export function layoutRichText(
       width = 0
       height = Math.max(20, first.fontSize * 1.25)
     }
+    let previousAnnotation = ''
     for (const run of source) {
+      const annotationKey = JSON.stringify(run.annotation ?? null)
+      if (!previousAnnotation || previousAnnotation !== annotationKey) annotationGroup++
+      previousAnnotation = annotationKey
       const { fontFamily, font } = typography(run)
       const normalized = run.text.replace(/\r\n?/g, '\n')
       for (const token of normalized.match(/\n|[^\S\n]+|[^\s]+/g) ?? []) {
@@ -152,6 +162,7 @@ export function layoutRichText(
             ...run,
             text: piece,
             fontFamily,
+            annotationGroup,
             x: 12 + width,
             y: 0,
             width: measured,
@@ -187,6 +198,56 @@ export function layoutRichText(
       : Math.max(48, element.width),
     height: preserveTextBoxHeight(element, Math.max(36, Math.ceil(top + 6))),
   }
+}
+
+export function richAnnotationShapes(
+  element: BoardElement,
+  layout: RichTextLayout
+): AnnotationShape[] {
+  const groups = new Map<number, AnnotationShape>()
+  const fullRects: AnnotationRect[] = []
+  for (const line of layout.lines) {
+    const nonempty = line.runs.filter((run) => run.text.trim() && run.width > 0)
+    if (nonempty.length) {
+      const x = nonempty[0]!.x
+      const last = nonempty[nonempty.length - 1]!
+      fullRects.push({
+        x,
+        y: line.y - line.height * 0.8,
+        width: last.x + last.width - x,
+        height: line.height,
+      })
+    }
+    for (const run of line.runs) {
+      const config = safeAnnotation(run.annotation)
+      if (!config || !run.text || run.width <= 0) continue
+      const id = run.annotationGroup ?? 0
+      let group = groups.get(id)
+      if (!group) {
+        group = { config, rects: [], seed: `${element.id}:run:${id}` }
+        groups.set(id, group)
+      }
+      const rect = {
+        x: run.x,
+        y: run.y - run.fontSize * 0.8,
+        width: run.width,
+        height: run.fontSize,
+      }
+      const previous = group.rects[group.rects.length - 1]
+      if (
+        previous &&
+        Math.abs(previous.x + previous.width - rect.x) < 0.1 &&
+        Math.abs(previous.y - rect.y) < 0.1
+      )
+        previous.width += rect.width
+      else group.rects.push(rect)
+    }
+  }
+  const config = safeAnnotation(element.textAnnotation)
+  return [
+    ...(config ? [{ config, rects: fullRects, seed: `${element.id}:whole` }] : []),
+    ...groups.values(),
+  ]
 }
 
 export function fitRichText(

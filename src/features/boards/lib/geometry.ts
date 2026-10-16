@@ -156,7 +156,7 @@ export function normalizedStroke(points: BoardPoint[]) {
     y,
     width: Math.max(1, Math.max(...limited.map((p) => p.x)) - x),
     height: Math.max(1, Math.max(...limited.map((p) => p.y)) - y),
-    points: limited.map((p) => ({ x: p.x - x, y: p.y - y })),
+    points: limited.map((p) => ({ ...p, x: p.x - x, y: p.y - y })),
   }
 }
 export function exportSize(width: number, height: number) {

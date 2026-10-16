@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import {
   List,
+  LayoutGrid,
   Plus,
   Maximize,
   Minimize,
@@ -11,9 +12,14 @@ import {
   FilePenLine,
   ArrowUpRight,
   ArrowLeft,
+  Sun,
+  Moon,
+  LockKeyhole,
+  LockKeyholeOpen,
 } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import BoardCanvas from '@/features/boards/components/BoardCanvas.vue'
+import PaperBackgroundControls from '@/features/papers/components/PaperBackgroundControls.vue'
 import { useBoardStore } from '@/stores/board.store'
 import { useTaskStore } from '@/stores/task.store'
 import { searchTasks } from '@/shared/lib/tasks/task.service'
@@ -49,6 +55,18 @@ function focusKeydown(event: KeyboardEvent) {
 }
 const board = useBoardStore()
 const currentDocument = computed(() => board.current)
+const locked = computed(() => currentDocument.value?.locked === true)
+async function togglePaperLock() {
+  if (!currentDocument.value || busy.value) return
+  commitCanvas()
+  busy.value = true
+  closeAppearanceMenu()
+  try {
+    await board.setLocked(!locked.value)
+  } finally {
+    busy.value = false
+  }
+}
 const paperContexts = ref<Task[]>([])
 const sourceTask = computed(() =>
   paperContexts.value.find((task) => task.id === route.query.fromTaskId)
@@ -80,7 +98,32 @@ function commitCanvas() {
 }
 const tasks = useTaskStore()
 const canvas = ref<InstanceType<typeof BoardCanvas> | null>(null)
+const appearanceMenu = ref<HTMLDetailsElement>()
+const paperStudio = ref<HTMLElement>()
+function closePaperMenus() {
+  paperStudio.value
+    ?.querySelectorAll('details[open]')
+    .forEach((menu) => menu.removeAttribute('open'))
+}
+function closeOtherPaperMenus(event: PointerEvent) {
+  if (!(event.target instanceof Element)) return
+  const target = event.target
+  paperStudio.value?.querySelectorAll('details[open]').forEach((menu) => {
+    if (!menu.contains(target)) menu.removeAttribute('open')
+  })
+}
+function closeAppearanceMenu() {
+  appearanceMenu.value?.removeAttribute('open')
+}
 const query = ref('')
+const librarySort = ref<'edited' | 'created' | 'name'>('edited')
+const libraryFilter = ref<'all' | 'editable' | 'locked'>('all')
+const libraryView = ref<'grid' | 'list'>('grid')
+const searchTitle = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase(locale.value)
 const selectedId = ref<string | null>(null)
 function focusBoardElement(id: string) {
   selectedId.value = id
@@ -103,10 +146,18 @@ const canLinkTask = computed(
 )
 const filtered = computed(() =>
   board.boards
-    .filter((item) =>
-      item.title.toLocaleLowerCase().includes(query.value.toLocaleLowerCase())
+    .filter(
+      (item) =>
+        searchTitle(item.title).includes(searchTitle(query.value.trim())) &&
+        (libraryFilter.value === 'all' ||
+          (libraryFilter.value === 'locked' ? item.locked === true : !item.locked))
     )
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .sort((left, right) => {
+      if (librarySort.value === 'name')
+        return left.title.localeCompare(right.title, locale.value, { numeric: true })
+      const field = librarySort.value === 'created' ? 'createdAt' : 'updatedAt'
+      return right[field].localeCompare(left[field]) || left.id.localeCompare(right.id)
+    })
 )
 function editedLabel(value: string) {
   const date = new Date(value)
@@ -254,7 +305,10 @@ async function duplicate() {
       endId: item.endId ? (ids.get(item.endId) ?? null) : null,
     }))
     if (
-      await board.create(`${source.title} ${t('boards.copySuffix')}`, elements, 'paper')
+      await board.create(`${source.title} ${t('boards.copySuffix')}`, elements, 'paper', {
+        background: source.background ?? 'plain',
+        colorScheme: source.colorScheme ?? 'light',
+      })
     ) {
       selectedId.value = null
       await refreshPaperContexts()
@@ -266,6 +320,7 @@ async function duplicate() {
 async function remove() {
   if (
     currentDocument.value &&
+    !locked.value &&
     !busy.value &&
     window.confirm(documentLabel('deleteConfirm'))
   ) {
@@ -289,7 +344,7 @@ async function discardAndReload() {
   }
 }
 function updateSelected(patch: Partial<BoardElement>) {
-  if (!selected.value || busy.value) return
+  if (!selected.value || busy.value || locked.value) return
   board.setElements(
     board.current!.elements.map((item) =>
       item.id === selected.value!.id ? { ...item, ...patch } : item
@@ -304,7 +359,7 @@ function unlinkTask() {
     })
 }
 async function search() {
-  if (busy.value) return
+  if (busy.value || locked.value) return
   busy.value = true
   taskError.value = ''
   try {
@@ -321,13 +376,20 @@ async function search() {
   }
 }
 async function link(task: Task) {
-  if (!canLinkTask.value) return
+  if (!canLinkTask.value || locked.value || busy.value) return
   updateSelected({ taskId: task.id })
   if (await board.flush()) await board.refreshTasks()
 }
 async function makeTask() {
   const item = selected.value
-  if (!item || !canLinkTask.value || item.taskId || busy.value || !item.text.trim())
+  if (
+    !item ||
+    !canLinkTask.value ||
+    item.taskId ||
+    busy.value ||
+    locked.value ||
+    !item.text.trim()
+  )
     return
   busy.value = true
   try {
@@ -372,7 +434,7 @@ async function openTask(id: string) {
   }
 }
 async function searchContext() {
-  if (busy.value || !contextQuery.value.trim()) return
+  if (busy.value || locked.value || !contextQuery.value.trim()) return
   const id = currentDocument.value?.id
   if (!id) return
   busy.value = true
@@ -396,7 +458,7 @@ async function searchContext() {
 }
 async function attachContext(taskId: string) {
   const id = currentDocument.value?.id
-  if (!id || busy.value) return
+  if (!id || busy.value || locked.value) return
   commitCanvas()
   busy.value = true
   taskError.value = ''
@@ -421,6 +483,8 @@ async function exportPng() {
 
 <template>
   <section
+    ref="paperStudio"
+    @pointerdown.capture="closeOtherPaperMenus"
     class="paper-studio relative flex h-full min-h-0 flex-col"
     :class="isFocus ? 'paper-focus fixed inset-0 z-40 bg-white' : ''"
     :data-focus="isFocus"
@@ -436,6 +500,20 @@ async function exportPng() {
         @click="focusControls = !focusControls"
       >
         {{ t(focusControls ? 'boards.hideFocusTools' : 'boards.showFocusTools') }}
+      </button>
+      <button
+        class="board-button"
+        data-board-lock
+        :aria-label="t(locked ? 'boards.unlockPaper' : 'boards.lockPaper')"
+        :title="t(locked ? 'boards.unlockPaper' : 'boards.lockPaper')"
+        :aria-pressed="locked"
+        :disabled="busy"
+        @click="togglePaperLock"
+      >
+        <component
+          :is="locked ? LockKeyhole : LockKeyholeOpen"
+          :size="16"
+        /><span>{{ t(locked ? 'boards.unlockPaper' : 'boards.lockPaper') }}</span>
       </button>
       <button
         class="board-button"
@@ -474,8 +552,11 @@ async function exportPng() {
         :aria-label="documentLabel('name')"
         :value="currentDocument.title"
         :disabled="busy"
+        :readonly="locked"
         maxlength="200"
-        @input="board.setTitle(($event.target as HTMLInputElement).value)"
+        @input="
+          !locked && !busy && board.setTitle(($event.target as HTMLInputElement).value)
+        "
       />
       <h1
         v-else
@@ -524,6 +605,44 @@ async function exportPng() {
         />
       </button>
       <details
+        ref="appearanceMenu"
+        v-if="!locked"
+        class="relative"
+      >
+        <summary
+          class="board-button cursor-pointer list-none"
+          :aria-label="t('papers.background.title')"
+          :title="t('papers.background.title')"
+        >
+          <component
+            :is="currentDocument.colorScheme === 'dark' ? Moon : Sun"
+            :size="16"
+          /><span>{{ t('papers.background.shortTitle') }}</span>
+        </summary>
+        <div class="absolute right-0 top-full z-30 mt-2">
+          <PaperBackgroundControls
+            :background="currentDocument.background"
+            :color-scheme="currentDocument.colorScheme"
+            @change="!locked && !busy && board.setAppearance($event)"
+            @close="closeAppearanceMenu"
+          />
+        </div>
+      </details>
+      <button
+        class="board-button paper-lock-button"
+        data-board-lock
+        :aria-label="t(locked ? 'boards.unlockPaper' : 'boards.lockPaper')"
+        :title="t(locked ? 'boards.unlockPaper' : 'boards.lockPaper')"
+        :aria-pressed="locked"
+        :disabled="busy"
+        @click="togglePaperLock"
+      >
+        <component
+          :is="locked ? LockKeyhole : LockKeyholeOpen"
+          :size="16"
+        /><span>{{ t(locked ? 'boards.unlockPaper' : 'boards.lockPaper') }}</span>
+      </button>
+      <details
         v-if="currentDocument"
         class="relative"
       >
@@ -551,7 +670,7 @@ async function exportPng() {
             {{ t('boards.exportPng') }}</button
           ><button
             class="board-button text-left text-brick"
-            :disabled="busy"
+            :disabled="busy || locked"
             @click="remove"
           >
             {{ t('boards.delete') }}
@@ -605,11 +724,11 @@ async function exportPng() {
             v-model="contextQuery"
             class="board-input w-full"
             type="search"
-            :disabled="busy"
+            :disabled="busy || locked"
           />
           <button
             class="board-button"
-            :disabled="busy || !contextQuery.trim()"
+            :disabled="busy || locked || !contextQuery.trim()"
           >
             {{ t('nav.search') }}
           </button>
@@ -624,7 +743,7 @@ async function exportPng() {
           v-for="task in contextResults"
           :key="task.id"
           class="board-button text-left"
-          :disabled="busy"
+          :disabled="busy || locked"
           @click="attachContext(task.id)"
         >
           {{ t('papers.attachTask') }} · {{ task.title }}
@@ -674,9 +793,10 @@ async function exportPng() {
         class="paper-gallery absolute inset-0 z-30 flex min-h-0 flex-col bg-paper text-ink"
       >
         <header class="flex items-center justify-between gap-4">
-          <span class="text-small font-semibold uppercase tracking-widest">{{
-            t('boards.studio.gallery')
-          }}</span>
+          <div class="gallery-heading">
+            <h1 class="text-display">{{ documentLabel('title') }}</h1>
+            <p class="text-body text-ink-soft">{{ t('papers.library.description') }}</p>
+          </div>
           <button
             v-if="currentDocument"
             class="board-button gallery-close"
@@ -686,10 +806,6 @@ async function exportPng() {
             <X :size="18" />
           </button>
         </header>
-        <div class="gallery-heading">
-          <h1>{{ documentLabel('title') }}</h1>
-          <p>{{ t('papers.conceptDescription') }}</p>
-        </div>
         <details
           class="paper-concept-guide"
           :open="!board.boards.length"
@@ -731,13 +847,73 @@ async function exportPng() {
             <Plus :size="18" />{{ t('boards.studio.createPaper') }}
           </button>
         </div>
-        <h2
-          v-if="filtered.length"
-          class="text-small font-semibold"
+        <div class="gallery-organization">
+          <p
+            class="text-small text-ink-muted"
+            role="status"
+            data-library-count
+          >
+            {{
+              t('papers.library.count', {
+                visible: filtered.length,
+                total: board.boards.length,
+              })
+            }}
+          </p>
+          <label class="gallery-control text-small">
+            {{ t('papers.library.filter') }}
+            <select
+              v-model="libraryFilter"
+              class="board-input"
+              data-library-filter
+            >
+              <option value="all">{{ t('papers.library.all') }}</option>
+              <option value="editable">{{ t('papers.library.editable') }}</option>
+              <option value="locked">{{ t('papers.library.locked') }}</option>
+            </select>
+          </label>
+          <label class="gallery-control text-small">
+            {{ t('papers.library.sort') }}
+            <select
+              v-model="librarySort"
+              class="board-input"
+              data-library-sort
+            >
+              <option value="edited">{{ t('papers.recent') }}</option>
+              <option value="created">{{ t('papers.library.created') }}</option>
+              <option value="name">{{ t('papers.library.name') }}</option>
+            </select>
+          </label>
+          <div
+            class="gallery-view"
+            role="group"
+            :aria-label="t('papers.library.view')"
+          >
+            <button
+              class="board-button"
+              :aria-label="t('papers.library.grid')"
+              :title="t('papers.library.grid')"
+              :aria-pressed="libraryView === 'grid'"
+              @click="libraryView = 'grid'"
+            >
+              <LayoutGrid :size="16" />
+            </button>
+            <button
+              class="board-button"
+              data-library-list
+              :aria-label="t('papers.library.list')"
+              :title="t('papers.library.list')"
+              :aria-pressed="libraryView === 'list'"
+              @click="libraryView = 'list'"
+            >
+              <List :size="16" />
+            </button>
+          </div>
+        </div>
+        <div
+          class="gallery-grid overflow-auto"
+          :class="{ 'gallery-list': libraryView === 'list' }"
         >
-          {{ t('papers.recent') }}
-        </h2>
-        <div class="gallery-grid overflow-auto">
           <button
             v-for="item in filtered"
             :key="item.id"
@@ -747,16 +923,42 @@ async function exportPng() {
             :disabled="busy"
             @click="open(item.id)"
           >
-            <span class="paper-card-icon"
-              ><FilePenLine
-                :size="28"
-                :stroke-width="1.3"
-            /></span>
-            <span class="paper-card-title">{{ item.title }}</span>
-            <span class="text-small text-ink-muted">{{
+            <span
+              class="paper-card-preview"
+              aria-hidden="true"
+            >
+              <span
+                class="paper-card-sheet"
+                :data-background="item.background ?? 'plain'"
+              >
+                <FilePenLine
+                  :size="24"
+                  :stroke-width="1.3"
+                />
+                <LockKeyhole
+                  v-if="item.locked"
+                  class="paper-card-lock"
+                  :size="14"
+                />
+              </span>
+            </span>
+            <span class="paper-card-title"
+              >{{ item.title }}
+              <span
+                v-if="currentDocument?.id === item.id"
+                class="paper-card-badge"
+                >{{ t('papers.library.open') }}</span
+              >
+              <span
+                v-if="item.locked"
+                class="paper-card-badge"
+                ><LockKeyhole :size="12" />{{ t('papers.library.locked') }}</span
+              >
+            </span>
+            <span class="paper-card-count text-small text-ink-muted">{{
               t('papers.elementCount', item.elementCount)
             }}</span>
-            <span class="text-caption text-ink-muted">{{
+            <span class="paper-card-date text-caption text-ink-muted">{{
               editedLabel(item.updatedAt)
             }}</span>
             <span class="paper-card-open"
@@ -770,7 +972,7 @@ async function exportPng() {
             {{
               board.isLoading
                 ? t('boards.loading')
-                : query.trim()
+                : query.trim() || libraryFilter !== 'all'
                   ? t('papers.noSearchResults')
                   : t('boards.studio.emptyGallery')
             }}
@@ -790,10 +992,15 @@ async function exportPng() {
             ref="canvas"
             :key="currentDocument.id"
             :elements="currentDocument.elements"
+            :background="currentDocument.background"
+            :color-scheme="currentDocument.colorScheme"
+            :read-only="locked || board.isLocking"
             :task-titles="taskTitles"
             :distraction-free="isFocus && !focusControls"
-            @change="board.setElements"
+            @change="!locked && board.setElements($event)"
             @select="selectedId = $event"
+            @lock-paper="togglePaperLock"
+            @interact="closePaperMenus"
           />
         </div>
         <details
@@ -804,7 +1011,7 @@ async function exportPng() {
             {{ t('boards.inspector') }}
           </summary>
           <div
-            v-if="selected"
+            v-if="selected && !locked"
             class="grid gap-2 border-t border-border bg-surface p-3"
           >
             <button
@@ -1066,10 +1273,12 @@ async function exportPng() {
   overflow-y: auto;
 }
 .paper-concept-guide {
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #faf9f5;
+  order: 2;
+  flex-shrink: 0;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--paper);
 }
 .paper-concept-steps {
   display: grid;
@@ -1098,34 +1307,28 @@ async function exportPng() {
   top: 112px;
 }
 .paper-gallery {
-  padding: clamp(20px, 3vw, 40px);
-  gap: 16px;
+  padding: 20px;
+  gap: 20px;
   overflow-y: auto;
 }
 .gallery-heading h1 {
-  font-size: 28px;
-  line-height: 1.2;
-  letter-spacing: -0.04em;
-  font-weight: 600;
+  font-weight: 400;
 }
 .gallery-heading p {
-  margin-top: 10px;
-  max-width: 620px;
-  color: var(--ink-soft);
-  font-size: 15px;
-  line-height: 1.6;
+  margin-top: 4px;
+  max-width: 720px;
 }
 .gallery-search {
   width: min(360px, 100%);
-  border-radius: 12px;
-  padding: 12px 16px;
+  border-radius: 0;
+  padding: 8px 12px;
 }
 .board-button.gallery-create {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 18px;
-  border-radius: 12px;
+  padding: 8px 12px;
+  border-radius: 0;
   background: var(--ink);
   color: var(--paper);
 }
@@ -1133,55 +1336,191 @@ async function exportPng() {
   background: var(--ink-soft);
 }
 .gallery-close {
-  border-radius: 10px;
+  border-radius: 0;
 }
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: 28px 24px;
+  flex: 1;
+  min-height: 160px;
   align-content: start;
+}
+.gallery-organization {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.gallery-organization > p {
+  margin-right: auto;
+}
+.gallery-control,
+.gallery-view {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gallery-control select {
+  min-height: 34px;
+  border-radius: 0;
+  background: var(--paper);
+}
+.gallery-view {
+  gap: 0;
+}
+.gallery-view button {
+  border-radius: 0;
+  min-height: 34px;
+}
+.gallery-view button + button {
+  border-left: 0;
+}
+.gallery-view button[aria-pressed='true'] {
+  background: var(--selection);
+  box-shadow: inset 0 -2px var(--ink);
+}
+.paper-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 5px;
+  border: 1px solid var(--border);
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
+  font-weight: 400;
+}
+.paper-card-title .paper-card-badge {
+  margin-left: 6px;
+}
+.gallery-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.gallery-list .paper-card {
+  grid-template-columns: 60px minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 12px;
+  gap: 4px 16px;
+}
+.gallery-list .paper-card + .paper-card {
+  border-top: 0;
+}
+.gallery-list .paper-card-preview {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  height: 76px;
+  border: 0;
+  margin: 0;
+}
+.gallery-list .paper-card-sheet {
+  width: 44px;
+  height: 60px;
+}
+.gallery-list .paper-card-title,
+.gallery-list .paper-card-count,
+.gallery-list .paper-card-date {
+  grid-column: 2;
+  padding: 0;
+}
+.gallery-list .paper-card-open {
+  grid-column: 3;
+  grid-row: 1 / 4;
+  border: 0;
+  padding: 0;
+  margin: 0;
 }
 .paper-card {
   display: grid;
-  gap: 12px;
-  padding: 24px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--surface);
-  transition:
-    border-color 120ms,
-    transform 120ms;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: start;
+  gap: 6px 12px;
+  padding: 0 0 12px;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: var(--paper);
 }
 .paper-card:hover {
-  border-color: var(--ink-muted);
-  transform: translateY(-2px);
+  background: var(--hover);
 }
 .paper-card[aria-pressed='true'] {
-  border-color: var(--ink-soft);
+  box-shadow: none;
 }
-.paper-card-icon {
+.paper-card[aria-pressed='true'] .paper-card-sheet {
+  border-color: var(--ink);
+  outline: 1px solid var(--ink);
+  outline-offset: -1px;
+}
+.paper-card-preview {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 64px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  height: 172px;
+  margin-bottom: 6px;
   background: var(--paper);
+}
+.paper-card-sheet {
+  position: relative;
+  display: grid;
+  align-items: end;
+  padding: 12px;
+  width: calc(100% - 24px);
+  height: 156px;
+  border: 1px solid var(--border-strong);
+  background-color: var(--paper);
   color: var(--ink-soft);
+  box-shadow: 0 2px 0 var(--border);
+}
+.paper-card-sheet[data-background='grid'] {
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 12px 12px;
+}
+.paper-card-sheet[data-background='ruled'] {
+  background-image: repeating-linear-gradient(
+    transparent 0 14px,
+    var(--border) 14px 15px
+  );
+}
+.paper-card-sheet[data-background='dots'] {
+  background-image: radial-gradient(var(--ink-muted) 0.7px, transparent 0.7px);
+  background-size: 12px 12px;
+}
+.paper-card-lock {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  background: var(--paper);
 }
 .paper-card-title {
-  font-size: 17px;
-  font-weight: 600;
+  grid-column: 1 / -1;
+  padding: 0 12px;
+  font-size: var(--text-body);
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 .paper-card-open {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  margin: 6px 12px 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-top: 12px;
+  gap: 8px;
   color: var(--ink-soft);
   font-size: 12px;
+}
+.paper-card-count {
+  padding-left: 12px;
+}
+.paper-card-date {
+  grid-column: 1 / -1;
+  padding: 0 12px;
 }
 .gallery-empty {
   grid-column: 1/-1;
@@ -1190,8 +1529,13 @@ async function exportPng() {
   text-align: center;
 }
 .paper-card:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+@media (max-width: 700px) {
+  .paper-gallery {
+    padding: 16px;
+  }
 }
 @media (max-width: 800px) {
   .paper-contexts {
@@ -1241,6 +1585,16 @@ async function exportPng() {
 .paper-focus-actions .board-button:hover {
   background: #f1f5f9;
   color: #252a34;
+}
+.paper-lock-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.paper-lock-button[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--selection);
 }
 .board-button:disabled {
   opacity: 0.5;
