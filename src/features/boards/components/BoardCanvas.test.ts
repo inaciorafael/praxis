@@ -5,6 +5,9 @@ import { describe, expect, it, vi } from 'vitest'
 import BoardCanvas from './BoardCanvas.vue'
 import BoardRichTextEditor from './BoardRichTextEditor.vue'
 import PaperScenesPanel from './PaperScenesPanel.vue'
+import PaperLayersPanel from './PaperLayersPanel.vue'
+import BoardSketch from './BoardSketch.vue'
+import { defaultLayers } from '../lib/layers'
 import { plainToRich } from '../lib/rich-text'
 import { defaultAnnotation } from '../lib/notation'
 import type { BoardElement } from '@/shared/types/board'
@@ -54,6 +57,10 @@ const mountCanvas = (elements: BoardElement[] = []) =>
       ],
     },
   })
+async function openProperties(wrapper: ReturnType<typeof mountCanvas>) {
+  if (!wrapper.find('.paper-element-controls').exists())
+    await wrapper.get('[data-context-settings]').trigger('click')
+}
 const note: BoardElement = {
   id: 'note',
   kind: 'note',
@@ -71,6 +78,148 @@ const note: BoardElement = {
   imageData: null,
 }
 describe('board canvas interactions', () => {
+  it('uses exact shape dimensions for the selection outline without padding', async () => {
+    const wrapper = mountCanvas()
+    await wrapper.setProps({
+      elements: [{ ...note, kind: 'rectangle', angle: Math.PI / 6 }],
+    })
+    const viewport = wrapper.get('.board-viewport')
+    await viewport.trigger('keydown', { key: 'v' })
+    await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 100, 100)
+    await pointer(viewport.element, 'pointerup', 1, 100, 100)
+    const outline = wrapper.get('[data-selection-outline]')
+    expect(outline.attributes()).toMatchObject({
+      x: '10',
+      y: '10',
+      width: '180',
+      height: '120',
+    })
+    expect(outline.element.parentElement!.getAttribute('transform')).toContain('rotate(')
+    wrapper.unmount()
+  })
+  it('snaps arrows drawn just outside the visible boundary to both actual shape edges', async () => {
+    const wrapper = mountCanvas()
+    await wrapper.setProps({
+      elements: [
+        { ...note, id: 'a', kind: 'rectangle' },
+        { ...note, id: 'b', kind: 'rectangle', x: 350 },
+      ],
+    })
+    const viewport = wrapper.get('.board-viewport')
+    await viewport.trigger('keydown', { key: 'a' })
+    await pointer(viewport.element, 'pointerdown', 1, 234, 110)
+    await pointer(viewport.element, 'pointermove', 1, 386, 110)
+    await pointer(viewport.element, 'pointerup', 1, 386, 110)
+    const saved = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    const arrow = saved.find((element) => element.kind === 'arrow')!
+    expect(arrow).toMatchObject({ startId: 'a', endId: 'b' })
+    expect(
+      wrapper
+        .get(`[data-element-id="${arrow.id}"]`)
+        .getComponent(BoardSketch)
+        .props('endpoints')
+    ).toEqual([
+      { x: 190, y: 70 },
+      { x: 350, y: 70 },
+    ])
+    wrapper.unmount()
+  })
+  it('creates layers and draws on the active layer, preserving both through undo and redo', async () => {
+    const wrapper = mountCanvas()
+    await wrapper.getComponent(PaperLayersPanel).vm.$emit('collapse')
+    await nextTick()
+    await wrapper.get('[data-add-layer]').trigger('click')
+    const content = wrapper.emitted('contentChange')!.slice(-1)[0]![0] as {
+      elements: BoardElement[]
+      layers: import('@/shared/types/board').BoardLayer[]
+    }
+    expect(content.layers).toHaveLength(2)
+    const id = content.layers[1]!.id
+    await wrapper.setProps({
+      elements: content.elements,
+      layers: structuredClone(content.layers),
+    })
+    await wrapper.get('[data-tool="pen"]').trigger('click')
+    const viewport = wrapper.get('.board-viewport')
+    await pointer(viewport.element, 'pointerdown', 1, 350, 200)
+    await pointer(viewport.element, 'pointermove', 1, 450, 230)
+    await pointer(viewport.element, 'pointerup', 1, 450, 230)
+    const saved = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    expect(saved[0]!.layerId).toBe(id)
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(wrapper.emitted('change')!.slice(-1)[0]![0]).toEqual([])
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(
+      (wrapper.emitted('contentChange')!.slice(-1)[0]![0] as typeof content).layers
+    ).toEqual(defaultLayers())
+    await wrapper.get('[data-board-redo]').trigger('click')
+    expect(
+      (wrapper.emitted('contentChange')!.slice(-1)[0]![0] as typeof content).layers
+    ).toHaveLength(2)
+    wrapper.unmount()
+  })
+  it('hides layer content and prevents drawing, erasing and editing in a locked active layer', async () => {
+    const drawing = {
+      ...note,
+      kind: 'draw' as const,
+      text: '',
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+      ],
+    }
+    const wrapper = mountCanvas()
+    await wrapper.setProps({ elements: [drawing], layers: defaultLayers() })
+    wrapper.getComponent(PaperLayersPanel).vm.$emit('collapse')
+    await nextTick()
+    await wrapper.get('[data-layer-lock="base"]').trigger('click')
+    const changes = wrapper.emitted('change')!.length
+    await wrapper.get('[data-tool="pen"]').trigger('click')
+    const viewport = wrapper.get('.board-viewport')
+    await pointer(viewport.element, 'pointerdown', 1, 90, 50)
+    await pointer(viewport.element, 'pointerup', 1, 90, 50)
+    await wrapper.get('[data-tool="eraser"]').trigger('click')
+    await pointer(viewport.element, 'pointerdown', 2, 90, 50)
+    await pointer(viewport.element, 'pointerup', 2, 90, 50)
+    expect(wrapper.emitted('change')).toHaveLength(changes)
+    await wrapper.get('[data-layer-visibility="base"]').trigger('click')
+    expect(wrapper.find('[data-element-id]').exists()).toBe(false)
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(wrapper.find('[data-element-id]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+  it('moves an entire group to another layer and renders layer order and opacity', async () => {
+    const wrapper = mountCanvas()
+    await wrapper.setProps({
+      elements: [
+        { ...note, id: 'a', groupId: 'g' },
+        { ...note, id: 'b', groupId: 'g', x: 250 },
+      ],
+      layers: [
+        ...defaultLayers(),
+        { id: 'top', name: 'Top', visible: true, locked: false, opacity: 0.5 },
+      ],
+    })
+    const viewport = wrapper.get('.board-viewport')
+    await viewport.trigger('keydown', { key: 'v' })
+    await pointer(wrapper.get('[data-element-id="a"]').element, 'pointerdown', 1, 70, 70)
+    await pointer(viewport.element, 'pointerup', 1, 70, 70)
+    wrapper.getComponent(PaperLayersPanel).vm.$emit('collapse')
+    await nextTick()
+    wrapper.getComponent(PaperLayersPanel).vm.$emit('active', 'top')
+    await nextTick()
+    await wrapper.get('[data-move-to-layer]').trigger('click')
+    const elements = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    expect(elements.every((e) => e.layerId === 'top' && e.groupId === 'g')).toBe(true)
+    expect(wrapper.get('[data-element-id="a"]').attributes('opacity')).toBe('0.5')
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(
+      (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]).every(
+        (e) => !e.layerId
+      )
+    ).toBe(true)
+    wrapper.unmount()
+  })
   it('groups from the context menu, selects and moves the whole group, duplicates independently and ungroups', async () => {
     const elements = [
       { ...note, id: 'a', kind: 'rectangle' as const },
@@ -241,6 +390,7 @@ describe('board canvas interactions', () => {
     const wrapper = mountCanvas([{ ...note, kind: 'rectangle', strokeStyle: 'pencil' }])
     await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 70, 70)
     await pointer(wrapper.get('.board-viewport').element, 'pointerup', 1, 70, 70)
+    await openProperties(wrapper)
     await wrapper.get('[data-stroke-pattern="dashed"]').trigger('click')
     const saved = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
     expect(saved[0]!.sketch).toMatchObject({ strokePattern: 'dashed', roughness: 1 })
@@ -484,41 +634,36 @@ describe('board canvas interactions', () => {
     expect(wrapper.findAll('[data-element-id]')).toHaveLength(1)
     wrapper.unmount()
   })
-  it('separates instrument choice from settings and dismisses panels on selection, Escape and drawing', async () => {
+  it('keeps material selection in the context bar and dismisses advanced settings on drawing and Escape', async () => {
     const wrapper = mountCanvas()
     await wrapper.get('[data-tool="pan"]').trigger('click')
-    await wrapper.get('[data-brush-library]').trigger('click')
-    expect(wrapper.get('[data-tool="pan"]').attributes('aria-pressed')).toBe('true')
-    expect(wrapper.find('[data-brush-width]').exists()).toBe(false)
-    await wrapper.get('[data-paper-brush="ink"]').trigger('click')
-    expect(wrapper.get('.board-style-panel').isVisible()).toBe(false)
-    expect(wrapper.get('[data-brush-library]').attributes('aria-expanded')).toBe('false')
-    await wrapper.get('[data-tool-settings]').trigger('click')
-    expect(wrapper.get('.board-style-panel').attributes('style')).not.toContain(
+    expect(wrapper.find('[data-context-instrument]').exists()).toBe(false)
+    await wrapper.get('[data-tool="pen"]').trigger('click')
+    await wrapper.get('[data-context-instrument]').setValue('ink')
+    expect(wrapper.find('[data-paper-brush]').exists()).toBe(false)
+    await wrapper.get('[data-context-settings]').trigger('click')
+    expect(wrapper.get('.board-style-panel').isVisible()).toBe(true)
+    await wrapper.get('.board-style-panel').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.get('.board-style-panel').attributes('style')).toContain(
       'display: none'
     )
-    expect(wrapper.find('[data-brush-width]').exists()).toBe(true)
-    expect(wrapper.find('[data-paper-brush]').exists()).toBe(false)
-    expect(wrapper.find('[data-stroke-style]').exists()).toBe(false)
-    await wrapper.get('.board-style-panel').trigger('keydown', { key: 'Escape' })
-    expect(wrapper.get('.board-style-panel').isVisible()).toBe(false)
-    await wrapper.get('[data-brush-library]').trigger('click')
-    await wrapper.get('[data-base-tool="draw"]').trigger('click')
-    expect(wrapper.get('[data-tool="draw"]').attributes('aria-pressed')).toBe('true')
-    expect(wrapper.get('.board-style-panel').isVisible()).toBe(false)
-    await wrapper.get('[data-tool-settings]').trigger('click')
+    await wrapper.get('[data-context-instrument]').setValue('pencil')
+    await wrapper.get('[data-context-settings]').trigger('click')
     const viewport = wrapper.get('.board-viewport')
     await pointer(viewport.element, 'pointerdown', 1, 300, 300)
-    expect(wrapper.get('.board-style-panel').isVisible()).toBe(false)
-    await pointer(viewport.element, 'pointermove', 1, 360, 340)
+    expect(wrapper.get('.board-style-panel').attributes('style')).toContain(
+      'display: none'
+    )
     await pointer(viewport.element, 'pointerup', 1, 360, 340)
-    expect(wrapper.emitted('interact')).toHaveLength(1)
-    await wrapper.get('[data-tool-settings]').trigger('click')
+    await wrapper.get('[data-context-settings]').trigger('click')
     document.dispatchEvent(new Event('pointerdown', { bubbles: true }))
     await nextTick()
-    expect(wrapper.get('.board-style-panel').isVisible()).toBe(false)
+    expect(wrapper.get('.board-style-panel').attributes('style')).toContain(
+      'display: none'
+    )
     wrapper.unmount()
   })
+
   it('treats a new text box and its first text as one undoable action without restoring empty boxes', async () => {
     const wrapper = mountCanvas()
     const viewport = wrapper.get('.board-viewport')
@@ -560,6 +705,7 @@ describe('board canvas interactions', () => {
     const viewport = wrapper.get('.board-viewport')
     await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 70, 70)
     await pointer(viewport.element, 'pointerup', 1, 70, 70)
+    await openProperties(wrapper)
     await wrapper.get('[data-fill-preset="#d8eaff"]').trigger('click')
     const saved = (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]).map(
       (element) =>
@@ -648,13 +794,12 @@ describe('board canvas interactions', () => {
     expect(wrapper.findAll('[data-element-id]')).toHaveLength(1)
     wrapper.unmount()
   })
-  it('requests the whole Paper lock from the tool palette', async () => {
-    const wrapper = mountCanvas([note])
-    await wrapper.get('[data-lock-paper]').trigger('click')
-    expect(wrapper.emitted('lockPaper')).toHaveLength(1)
-    expect(wrapper.emitted('change')).toBeUndefined()
+  it('leaves whole Paper locking in the studio header rather than mixing it with tools', () => {
+    const wrapper = mountCanvas()
+    expect(wrapper.find('.paper-tool-rail [data-lock-paper]').exists()).toBe(false)
     wrapper.unmount()
   })
+
   it('keeps locked content unchanged through drags, editing commands and shortcuts while allowing camera movement', async () => {
     const wrapper = mountCanvas([note])
     await wrapper.setProps({ readOnly: true })
@@ -707,8 +852,7 @@ describe('board canvas interactions', () => {
     async (material) => {
       const wrapper = mountCanvas()
       if (['graphite', 'fountain', 'ink'].includes(material)) {
-        await wrapper.get('[data-brush-library]').trigger('click')
-        await wrapper.get(`[data-paper-brush="${material}"]`).trigger('click')
+        await wrapper.get('[data-context-instrument]').setValue(material)
       } else await wrapper.get(`[data-tool="${material}"]`).trigger('click')
       const viewport = wrapper.get('.board-viewport')
       await pointer(viewport.element, 'pointerdown', 1, 300, 300)
@@ -776,8 +920,7 @@ describe('board canvas interactions', () => {
   })
   it('shows fountain ink before release and consumes coalesced pen samples without changing the finish', async () => {
     const wrapper = mountCanvas()
-    await wrapper.get('[data-brush-library]').trigger('click')
-    await wrapper.get('[data-paper-brush="fountain"]').trigger('click')
+    await wrapper.get('[data-context-instrument]').setValue('fountain')
     const viewport = wrapper.get('.board-viewport')
     await pointer(viewport.element, 'pointerdown', 1, 300, 300, {
       pointerType: 'pen',
@@ -822,6 +965,7 @@ describe('board canvas interactions', () => {
     ])
     await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 70, 70)
     await pointer(wrapper.get('.board-viewport').element, 'pointerup', 1, 70, 70)
+    await openProperties(wrapper)
     await wrapper.get('[data-element-stroke-color]').setValue('#397349')
     const changed = (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!
     expect(changed.strokeColor).toBe('#397349')
@@ -835,8 +979,12 @@ describe('board canvas interactions', () => {
     const wrapper = mountCanvas([{ ...note, kind: 'rectangle', richText }])
     await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 70, 70)
     await pointer(wrapper.get('.board-viewport').element, 'pointerup', 1, 70, 70)
+    expect(wrapper.find('.paper-element-controls').exists()).toBe(false)
+    await wrapper.get('[data-context-settings]').trigger('click')
     expect(wrapper.find('.paper-element-controls').exists()).toBe(true)
+    await openProperties(wrapper)
     await wrapper.get('[data-fill-preset="#d8eaff"]').trigger('click')
+    await openProperties(wrapper)
     await wrapper.get('[data-element-stroke-color]').setValue('#397349')
     await wrapper.get('[data-element-font-size]').setValue('31')
     const last = (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!
@@ -881,6 +1029,7 @@ describe('board canvas interactions', () => {
     second.richText.paragraphs[0]!.runs[0]!.fontSize = 36
     const wrapper = mountCanvas([first, second])
     await wrapper.get('.board-viewport').trigger('keydown', { key: 'a', ctrlKey: true })
+    await openProperties(wrapper)
     expect(
       (wrapper.get('[data-element-font-size]').element as HTMLInputElement).value
     ).toBe('')
@@ -930,8 +1079,7 @@ describe('board canvas interactions', () => {
   })
   it('chooses subtle graphite defaults and retains a custom width when reselecting the material', async () => {
     const wrapper = mountCanvas()
-    await wrapper.get('[data-brush-library]').trigger('click')
-    await wrapper.get('[data-paper-brush="graphite"]').trigger('click')
+    await wrapper.get('[data-context-instrument]').setValue('graphite')
     const viewport = wrapper.get('.board-viewport')
     await pointer(viewport.element, 'pointerdown', 1, 300, 300)
     await pointer(viewport.element, 'pointermove', 1, 360, 340)
@@ -943,13 +1091,12 @@ describe('board canvas interactions', () => {
       strokeWidth: 1.8,
       opacity: 1,
     })
-    await wrapper.get('[data-tool-settings]').trigger('click')
+    await wrapper.get('[data-context-settings]').trigger('click')
     await wrapper.get('[data-brush-width]').setValue('9')
     await wrapper
       .get('.board-style-panel .board-swatch[aria-label="boards.colors.blue"]')
       .trigger('click')
-    await wrapper.get('[data-brush-library]').trigger('click')
-    await wrapper.get('[data-paper-brush="graphite"]').trigger('click')
+    await wrapper.get('[data-context-instrument]').setValue('graphite')
     await pointer(viewport.element, 'pointerdown', 2, 400, 400)
     await pointer(viewport.element, 'pointermove', 2, 460, 440)
     await pointer(viewport.element, 'pointerup', 2, 460, 440)
@@ -964,8 +1111,7 @@ describe('board canvas interactions', () => {
 
   it('switches future drawing material without rewriting a completed stroke, and pen clears artistic material', async () => {
     const wrapper = mountCanvas()
-    await wrapper.get('[data-brush-library]').trigger('click')
-    await wrapper.get('[data-paper-brush="graphite"]').trigger('click')
+    await wrapper.get('[data-context-instrument]').setValue('graphite')
     const viewport = wrapper.get('.board-viewport')
     await pointer(viewport.element, 'pointerdown', 1, 300, 300)
     await pointer(viewport.element, 'pointermove', 1, 360, 340)
@@ -973,8 +1119,7 @@ describe('board canvas interactions', () => {
     const first = structuredClone(
       (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]
     )
-    await wrapper.get('[data-brush-library]').trigger('click')
-    await wrapper.get('[data-paper-brush="fountain"]').trigger('click')
+    await wrapper.get('[data-context-instrument]').setValue('fountain')
     await pointer(viewport.element, 'pointerdown', 2, 400, 400)
     await pointer(viewport.element, 'pointermove', 2, 460, 440)
     await pointer(viewport.element, 'pointerup', 2, 460, 440)
@@ -1006,8 +1151,7 @@ describe('board canvas interactions', () => {
     const viewport = wrapper.get('.board-viewport')
     await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 70, 70)
     await pointer(viewport.element, 'pointerup', 1, 70, 70)
-    await wrapper.get('[data-brush-library]').trigger('click')
-    await wrapper.get('[data-paper-brush="fountain"]').trigger('click')
+    await wrapper.get('[data-context-instrument]').setValue('fountain')
     expect(
       (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]?.drawBrush
     ).toBe('fountain')
@@ -1020,8 +1164,7 @@ describe('board canvas interactions', () => {
 
   it('captures pen pressure and preserves it when resizing the artistic drawing', async () => {
     const wrapper = mountCanvas()
-    await wrapper.get('[data-brush-library]').trigger('click')
-    await wrapper.get('[data-paper-brush="graphite"]').trigger('click')
+    await wrapper.get('[data-context-instrument]').setValue('graphite')
     const viewport = wrapper.get('.board-viewport')
     await pointer(viewport.element, 'pointerdown', 1, 300, 300, {
       pointerType: 'pen',
@@ -1069,7 +1212,7 @@ describe('board canvas interactions', () => {
   })
   it('applies quick widths and keeps the chosen width when reselecting the same pencil', async () => {
     const wrapper = mountCanvas()
-    await wrapper.get('[data-tool-settings]').trigger('click')
+    await wrapper.get('[data-context-settings]').trigger('click')
     await wrapper.get('[data-brush-preset="4"]').trigger('click')
     expect(wrapper.get('[data-brush-width]').element).toHaveProperty('value', '4')
     await wrapper.get('[data-tool="draw"]').trigger('click')
@@ -1085,7 +1228,7 @@ describe('board canvas interactions', () => {
   it('starts with a pencil and persists customized brush presets on a new stroke', async () => {
     const wrapper = mountCanvas()
     expect(wrapper.get('[data-tool="draw"]').attributes('aria-pressed')).toBe('true')
-    await wrapper.get('[data-tool-settings]').trigger('click')
+    await wrapper.get('[data-context-settings]').trigger('click')
     await wrapper.get('[data-brush-width]').setValue('6')
     await wrapper.get('[data-brush-opacity]').setValue('45')
     await wrapper.get('[data-brush-color]').setValue('#336699')
@@ -1113,7 +1256,7 @@ describe('board canvas interactions', () => {
     const viewport = wrapper.get('.board-viewport')
     await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 70, 70)
     await pointer(viewport.element, 'pointerup', 1, 70, 70)
-    await wrapper.get('[data-tool-settings]').trigger('click')
+    await wrapper.get('[data-context-settings]').trigger('click')
     await wrapper.get('[data-brush-width]').setValue('8')
     await wrapper.get('[data-brush-opacity]').setValue('30')
     await wrapper.get('[data-brush-color]').setValue('#996633')

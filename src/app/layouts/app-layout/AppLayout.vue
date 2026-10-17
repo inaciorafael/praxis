@@ -61,15 +61,12 @@ onMounted(async () => {
     :class="
       isBoardFocus || isPaperStudio
         ? 'grid-cols-[minmax(0,1fr)]'
-        : isBoardPage
-          ? 'grid-cols-[11rem_minmax(0,1fr)]'
-          : 'grid-cols-12'
+        : 'grid-cols-12'
     "
   >
     <aside
       v-if="!isBoardFocus && !isPaperStudio"
-      class="min-w-0 border-r border-border bg-surface"
-      :class="isBoardPage ? '' : 'col-span-2'"
+      class="col-span-2 min-w-0 border-r border-border bg-surface"
     >
       <AppAside @handleClickSearchTask="openSearchTask" />
     </aside>
@@ -78,7 +75,13 @@ onMounted(async () => {
       :class="[
         'h-screen min-w-0 bg-paper',
         isBoardPage ? 'overflow-hidden p-0' : 'overflow-y-auto p-10',
-        isBoardPage ? 'col-span-1' : hasSelectedTask ? 'col-span-7' : 'col-span-10',
+        isBoardFocus || isPaperStudio
+          ? 'col-span-1'
+          : isBoardPage
+            ? 'col-span-10'
+            : hasSelectedTask
+              ? 'col-span-7'
+              : 'col-span-10',
       ]"
     >
       <TaskRuntimeProvider>
@@ -98,7 +101,9 @@ onMounted(async () => {
         isBoardPage
           ? [
               'absolute right-0 top-0 z-30 w-80 shadow-xl',
-              isBoardFocus || isPaperStudio ? 'max-w-full' : 'max-w-[calc(100%-11rem)]',
+              isBoardFocus || isPaperStudio
+                ? 'max-w-full'
+                : 'max-w-[calc(100%-100%/6)]',
             ]
           : 'col-span-3'
       "

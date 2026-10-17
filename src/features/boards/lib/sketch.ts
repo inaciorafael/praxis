@@ -153,6 +153,7 @@ export function sketchPaths(
     stroke,
     fill: fill === 'transparent' || hatched ? undefined : fill,
     fillStyle: 'solid',
+    curveFitting: 1,
     strokeWidth,
     roughness: (pencil ? 1.85 : 0.55) * settings.roughness,
     bowing: (pencil ? 1.6 : 0.45) * settings.bowing,

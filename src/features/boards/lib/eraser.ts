@@ -81,10 +81,12 @@ export function eraseStrokes(
   start: BoardPoint,
   end: BoardPoint,
   radius: number,
-  makeId: () => string = () => crypto.randomUUID()
+  makeId: () => string = () => crypto.randomUUID(),
+  canErase: (element: BoardElement) => boolean = () => true
 ): BoardElement[] {
   return elements.flatMap((element) => {
-    if (element.kind !== 'draw' || !element.points.length) return [element]
+    if (element.kind !== 'draw' || !element.points.length || !canErase(element))
+      return [element]
     const angle = element.angle ?? 0,
       cos = Math.cos(angle),
       sin = Math.sin(angle)

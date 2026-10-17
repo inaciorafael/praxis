@@ -1,0 +1,126 @@
+/* Paper editor tokens are deliberately scoped away from the rest of Praxis. */
+.board-editor {
+  --pe-rail-width: 112px;
+  --pe-surface: var(--surface);
+  --pe-ink: var(--ink);
+  --pe-muted: var(--ink-muted);
+  --pe-border: var(--border);
+  --pe-hover: var(--hover);
+  --pe-active: var(--selection);
+  --pe-radius: 8px;
+  --pe-panel-radius: 12px;
+  --pe-shadow: 0 4px 16px var(--shadow-color);
+  border: 0;
+  border-radius: 0;
+}
+.board-editor .board-viewport .paper-layers {
+  left: calc(var(--pe-rail-width) + 8px);
+  top: 140px;
+  bottom: 76px;
+  z-index: 7;
+}
+.board-editor .board-viewport .paper-layers.collapsed {
+  left: 0;
+  top: auto;
+  bottom: 44px;
+  width: var(--pe-rail-width);
+  height: 44px;
+  padding: 4px;
+  border-radius: 0;
+  box-shadow: none;
+  border-left: 0;
+}
+.board-editor .paper-layers.collapsed header {
+  justify-content: center;
+}
+.board-editor .paper-layers.collapsed header button {
+  min-height: 36px;
+}
+.board-editor .board-viewport .board-style-panel {
+  top: 140px !important;
+  left: calc(var(--pe-rail-width) + 8px) !important;
+  max-height: calc(100% - 196px);
+  max-width: calc(100% - var(--pe-rail-width) - 36px) !important;
+  background: var(--pe-surface);
+  color: var(--pe-ink);
+  border-color: var(--pe-border);
+  border-radius: var(--pe-panel-radius);
+}
+.board-editor .board-style-panel button {
+  color: var(--pe-ink);
+}
+.board-editor .board-style-panel button:hover {
+  background: var(--pe-hover);
+}
+.board-editor .board-style-panel button[aria-pressed='true'] {
+  background: var(--pe-active);
+  border-color: var(--pe-ink);
+}
+.board-editor .board-viewport .paper-element-controls {
+  top: 140px;
+  max-height: calc(100% - 196px);
+  background: var(--pe-surface);
+  color: var(--pe-ink);
+  border-radius: var(--pe-panel-radius);
+}
+.board-editor .board-viewport .board-shortcuts {
+  top: auto;
+  bottom: 72px;
+  right: 12px;
+}
+.board-editor .paper-selection-bar {
+  background: var(--pe-surface);
+  color: var(--pe-ink);
+}
+.board-editor .paper-selection-bar button {
+  color: inherit;
+}
+.board-editor .board-viewport .paper-eraser-options {
+  top: 0;
+  left: var(--pe-rail-width);
+  max-width: calc(100% - var(--pe-rail-width) - 36px);
+}
+.board-editor .board-viewport .board-history {
+  left: 0;
+  bottom: 0;
+  width: var(--pe-rail-width);
+  height: 44px;
+  padding: 2px;
+  justify-content: center;
+  border-radius: 0;
+  box-shadow: none;
+  border-left: 0;
+  border-bottom: 0;
+}
+.board-editor .board-viewport .board-history button {
+  width: 36px;
+  height: 38px;
+}
+.board-editor .board-viewport .board-zoom {
+  bottom: 0;
+  right: 0;
+  padding: 2px;
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 0;
+  border-right: 0;
+}
+@media (max-width: 650px) {
+  .board-editor {
+    --pe-rail-width: 72px;
+  }
+  .board-editor .paper-element-controls {
+    left: calc(var(--pe-rail-width) + 24px);
+    right: 12px;
+    width: auto;
+    max-width: none;
+  }
+  .board-editor .paper-layers:not(.collapsed) {
+    width: min(240px, calc(100% - var(--pe-rail-width) - 36px));
+    top: 216px;
+  }
+  .board-editor .board-style-panel {
+    top: 216px !important;
+    max-height: calc(100% - 280px);
+  }
+}

@@ -62,7 +62,11 @@ export function elementCorners(element: BoardElement): BoardPoint[] {
     { x: element.x, y: element.y + element.height },
   ].map((point) => rotatePoint(point, center, element.angle ?? 0))
 }
-export function pointInElement(element: BoardElement, point: BoardPoint): boolean {
+export function pointInElement(
+  element: BoardElement,
+  point: BoardPoint,
+  tolerance = 0
+): boolean {
   const local = rotatePoint(point, elementCenter(element), -(element.angle ?? 0))
   const polygon = polygonVertices(element)
   if (polygon) {
@@ -70,14 +74,26 @@ export function pointInElement(element: BoardElement, point: BoardPoint): boolea
       y = local.y - element.y
     return polygon.every((a, index) => {
       const b = polygon[(index + 1) % polygon.length]!
-      return (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x) >= -0.000001
+      return (
+        (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x) >=
+        -tolerance * Math.hypot(b.x - a.x, b.y - a.y) - 0.000001
+      )
     })
   }
+  if (
+    element.kind === 'ellipse' ||
+    (element.kind === 'text' && element.textBackground === 'ellipse')
+  ) {
+    const center = elementCenter(element)
+    const rx = Math.max(0.5, Math.abs(element.width) / 2) + tolerance
+    const ry = Math.max(0.5, Math.abs(element.height) / 2) + tolerance
+    return ((local.x - center.x) / rx) ** 2 + ((local.y - center.y) / ry) ** 2 <= 1 + 1e-9
+  }
   return (
-    local.x >= Math.min(element.x, element.x + element.width) &&
-    local.x <= Math.max(element.x, element.x + element.width) &&
-    local.y >= Math.min(element.y, element.y + element.height) &&
-    local.y <= Math.max(element.y, element.y + element.height)
+    local.x >= Math.min(element.x, element.x + element.width) - tolerance &&
+    local.x <= Math.max(element.x, element.x + element.width) + tolerance &&
+    local.y >= Math.min(element.y, element.y + element.height) - tolerance &&
+    local.y <= Math.max(element.y, element.y + element.height) + tolerance
   )
 }
 export type ResizeOptions = {

@@ -20,6 +20,13 @@ import { useI18n } from 'vue-i18n'
 import BoardCanvas from '@/features/boards/components/BoardCanvas.vue'
 import PaperThumbnail from '@/features/boards/components/PaperThumbnail.vue'
 import PaperBackgroundControls from '@/features/papers/components/PaperBackgroundControls.vue'
+import PaperBooks from '@/features/papers/components/PaperBooks.vue'
+import {
+  listPaperBooks,
+  changePaperBooks,
+  type PaperBook,
+  type PaperBookChange,
+} from '@/shared/lib/papers/paper-books.service'
 import { useBoardStore } from '@/stores/board.store'
 import { useTaskStore } from '@/stores/task.store'
 import { searchTasks } from '@/shared/lib/tasks/task.service'
@@ -116,6 +123,65 @@ function closeAppearanceMenu() {
   appearanceMenu.value?.removeAttribute('open')
 }
 const query = ref('')
+const books = ref<PaperBook[]>([])
+const activeBook = ref('all')
+const booksBusy = ref(false)
+const booksError = ref('')
+const booksReady = ref(false)
+const paperBookIds = computed(
+  () =>
+    new Map(
+      books.value.flatMap((book) => book.paperIds.map((id) => [id, book.id] as const))
+    )
+)
+const looseCount = computed(
+  () => board.boards.filter((paper) => !paperBookIds.value.has(paper.id)).length
+)
+async function loadBooks() {
+  try {
+    books.value = await listPaperBooks()
+    booksReady.value = true
+    booksError.value = ''
+  } catch (cause) {
+    booksError.value = String(cause)
+  }
+}
+async function updateBooks(change: PaperBookChange, done: () => void = () => {}) {
+  if (booksBusy.value) return false
+  booksBusy.value = true
+  booksError.value = ''
+  try {
+    const previous = new Set(books.value.map((book) => book.id))
+    books.value = await changePaperBooks(change)
+    if (change.type === 'create')
+      activeBook.value = books.value.find((book) => !previous.has(book.id))?.id ?? 'all'
+    if (
+      !['all', 'loose'].includes(activeBook.value) &&
+      !books.value.some((book) => book.id === activeBook.value)
+    )
+      activeBook.value = 'all'
+    done()
+    return true
+  } catch (cause) {
+    booksError.value = String(cause)
+    try {
+      books.value = await listPaperBooks()
+    } catch {
+      /* Keep last confirmed collection until retry. */
+    }
+    return false
+  } finally {
+    booksBusy.value = false
+  }
+}
+async function movePaper(paperId: string, bookId: string) {
+  await updateBooks({
+    type: 'move',
+    paperId,
+    bookId: bookId || null,
+    expectedBookId: paperBookIds.value.get(paperId) ?? null,
+  })
+}
 const librarySort = ref<'edited' | 'created' | 'name'>('edited')
 const libraryFilter = ref<'all' | 'editable' | 'locked'>('all')
 const libraryView = ref<'grid' | 'list'>('grid')
@@ -149,6 +215,10 @@ const filtered = computed(() =>
     .filter(
       (item) =>
         searchTitle(item.title).includes(searchTitle(query.value.trim())) &&
+        (activeBook.value === 'all' ||
+          (activeBook.value === 'loose'
+            ? !paperBookIds.value.has(item.id)
+            : paperBookIds.value.get(item.id) === activeBook.value)) &&
         (libraryFilter.value === 'all' ||
           (libraryFilter.value === 'locked' ? item.locked === true : !item.locked))
     )
@@ -211,6 +281,7 @@ onMounted(async () => {
   window.addEventListener('keydown', focusKeydown, true)
   window.addEventListener('praxis:paper-links-changed', refreshPaperLinks)
   await board.hydrate()
+  await loadBooks()
   await openFromQuery()
 })
 watch(
@@ -276,11 +347,13 @@ async function open(id: string) {
   }
 }
 async function create() {
-  if (busy.value) return
+  if (busy.value || booksBusy.value) return
   commitCanvas()
   busy.value = true
   try {
     if (await board.create(documentLabel('untitled'), [], 'paper')) {
+      if (board.current && !['all', 'loose'].includes(activeBook.value))
+        await movePaper(board.current.id, activeBook.value)
       selectedId.value = null
       listOpen.value = false
       await refreshPaperContexts()
@@ -313,7 +386,8 @@ async function duplicate() {
           background: source.background ?? 'plain',
           colorScheme: source.colorScheme ?? 'light',
         },
-        source.scenes ?? []
+        source.scenes ?? [],
+        source.layers
       )
     ) {
       selectedId.value = null
@@ -692,6 +766,69 @@ async function exportPng() {
           </button>
         </div>
       </details>
+      <details
+        v-if="!isFocus && currentDocument"
+        class="paper-contexts text-small"
+        :class="{ 'paper-contexts-from-task': sourceTask }"
+      >
+        <summary class="board-button cursor-pointer">
+          {{
+            paperContexts.length
+              ? t('papers.taskContexts') + ' · ' + paperContexts.length
+              : t('papers.standalone')
+          }}
+        </summary>
+        <div class="grid gap-1 rounded-lg border border-border bg-surface p-2 shadow-lg">
+          <button
+            v-for="task in paperContexts"
+            :key="task.id"
+            class="board-button"
+            :disabled="busy"
+            @click="openTask(task.id)"
+          >
+            {{ task.title }}
+          </button>
+          <p class="py-2 text-small text-ink-soft">{{ t('papers.contextHint') }}</p>
+          <form
+            class="grid gap-2"
+            @submit.prevent="searchContext"
+          >
+            <label
+              for="paper-context-search"
+              class="text-small"
+              >{{ t('papers.searchTasks') }}</label
+            >
+            <input
+              id="paper-context-search"
+              v-model="contextQuery"
+              class="board-input w-full"
+              type="search"
+              :disabled="busy || locked"
+            />
+            <button
+              class="board-button"
+              :disabled="busy || locked || !contextQuery.trim()"
+            >
+              {{ t('nav.search') }}
+            </button>
+          </form>
+          <p
+            v-if="contextSearched && !contextResults.length"
+            class="text-small text-ink-muted"
+          >
+            {{ t('papers.noTaskResults') }}
+          </p>
+          <button
+            v-for="task in contextResults"
+            :key="task.id"
+            class="board-button text-left"
+            :disabled="busy || locked"
+            @click="attachContext(task.id)"
+          >
+            {{ t('papers.attachTask') }} · {{ task.title }}
+          </button>
+        </div>
+      </details>
     </div>
     <button
       v-if="!isFocus && sourceTask"
@@ -702,69 +839,6 @@ async function exportPng() {
     >
       <ArrowLeft :size="14" />{{ t('papers.backToTask') }} · {{ sourceTask.title }}
     </button>
-    <details
-      v-if="!isFocus && currentDocument"
-      class="paper-contexts text-small"
-      :class="{ 'paper-contexts-from-task': sourceTask }"
-    >
-      <summary class="board-button cursor-pointer">
-        {{
-          paperContexts.length
-            ? t('papers.taskContexts') + ' · ' + paperContexts.length
-            : t('papers.standalone')
-        }}
-      </summary>
-      <div class="grid gap-1 rounded-lg border border-border bg-surface p-2 shadow-lg">
-        <button
-          v-for="task in paperContexts"
-          :key="task.id"
-          class="board-button"
-          :disabled="busy"
-          @click="openTask(task.id)"
-        >
-          {{ task.title }}
-        </button>
-        <p class="py-2 text-small text-ink-soft">{{ t('papers.contextHint') }}</p>
-        <form
-          class="grid gap-2"
-          @submit.prevent="searchContext"
-        >
-          <label
-            for="paper-context-search"
-            class="text-small"
-            >{{ t('papers.searchTasks') }}</label
-          >
-          <input
-            id="paper-context-search"
-            v-model="contextQuery"
-            class="board-input w-full"
-            type="search"
-            :disabled="busy || locked"
-          />
-          <button
-            class="board-button"
-            :disabled="busy || locked || !contextQuery.trim()"
-          >
-            {{ t('nav.search') }}
-          </button>
-        </form>
-        <p
-          v-if="contextSearched && !contextResults.length"
-          class="text-small text-ink-muted"
-        >
-          {{ t('papers.noTaskResults') }}
-        </p>
-        <button
-          v-for="task in contextResults"
-          :key="task.id"
-          class="board-button text-left"
-          :disabled="busy || locked"
-          @click="attachContext(task.id)"
-        >
-          {{ t('papers.attachTask') }} · {{ task.title }}
-        </button>
-      </div>
-    </details>
     <p
       v-if="board.error"
       role="alert"
@@ -840,6 +914,27 @@ async function exportPng() {
           </div>
           <p class="text-small text-ink-muted">{{ t('papers.reuseHint') }}</p>
         </details>
+        <PaperBooks
+          :books="books"
+          v-model="activeBook"
+          :busy="booksBusy || !booksReady"
+          :total="board.boards.length"
+          :loose="looseCount"
+          @change="updateBooks"
+        />
+        <div
+          v-if="booksError"
+          role="alert"
+          class="flex flex-wrap items-center gap-2 text-small"
+        >
+          <span>{{ booksError }}</span
+          ><button
+            class="board-button"
+            @click="loadBooks"
+          >
+            {{ t('papers.books.retry') }}
+          </button>
+        </div>
         <div class="flex flex-wrap items-center justify-between gap-3">
           <label
             class="sr-only"
@@ -929,54 +1024,78 @@ async function exportPng() {
           class="gallery-grid overflow-auto"
           :class="{ 'gallery-list': libraryView === 'list' }"
         >
-          <button
+          <article
             v-for="item in filtered"
             :key="item.id"
             class="paper-card text-left"
             :class="{ 'bg-selection': currentDocument?.id === item.id }"
             :aria-pressed="currentDocument?.id === item.id"
-            :disabled="busy"
-            @click="open(item.id)"
           >
-            <span
-              class="paper-card-preview"
-              aria-hidden="true"
+            <button
+              class="paper-card-content"
+              :disabled="busy"
+              :aria-label="`${t('boards.studio.openPaper')}: ${item.title}`"
+              @click="open(item.id)"
             >
               <span
-                class="paper-card-sheet"
-                :data-background="item.background ?? 'plain'"
+                class="paper-card-preview"
+                aria-hidden="true"
               >
-                <PaperThumbnail :paper="item" />
-                <LockKeyhole
-                  v-if="item.locked"
-                  class="paper-card-lock"
-                  :size="14"
-                />
+                <span
+                  class="paper-card-sheet"
+                  :data-background="item.background ?? 'plain'"
+                >
+                  <PaperThumbnail :paper="item" />
+                  <LockKeyhole
+                    v-if="item.locked"
+                    class="paper-card-lock"
+                    :size="14"
+                  />
+                </span>
               </span>
-            </span>
-            <span class="paper-card-title"
-              >{{ item.title }}
-              <span
-                v-if="currentDocument?.id === item.id"
-                class="paper-card-badge"
-                >{{ t('papers.library.open') }}</span
+              <span class="paper-card-title"
+                >{{ item.title }}
+                <span
+                  v-if="currentDocument?.id === item.id"
+                  class="paper-card-badge"
+                  >{{ t('papers.library.open') }}</span
+                >
+                <span
+                  v-if="item.locked"
+                  class="paper-card-badge"
+                  ><LockKeyhole :size="12" />{{ t('papers.library.locked') }}</span
+                >
+              </span>
+              <span class="paper-card-count text-small text-ink-muted">{{
+                t('papers.elementCount', item.elementCount)
+              }}</span>
+              <span class="paper-card-date text-caption text-ink-muted">{{
+                editedLabel(item.updatedAt)
+              }}</span>
+              <span class="paper-card-open"
+                >{{ t('boards.studio.openPaper') }}<ArrowUpRight :size="16"
+              /></span>
+            </button>
+            <label class="paper-card-book text-small text-ink-muted">
+              {{ t('papers.books.book') }}
+              <select
+                class="board-input"
+                :aria-label="t('papers.books.move', { name: item.title })"
+                :value="paperBookIds.get(item.id) ?? ''"
+                :disabled="booksBusy || !booksReady"
+                @change="movePaper(item.id, ($event.target as HTMLSelectElement).value)"
               >
-              <span
-                v-if="item.locked"
-                class="paper-card-badge"
-                ><LockKeyhole :size="12" />{{ t('papers.library.locked') }}</span
-              >
-            </span>
-            <span class="paper-card-count text-small text-ink-muted">{{
-              t('papers.elementCount', item.elementCount)
-            }}</span>
-            <span class="paper-card-date text-caption text-ink-muted">{{
-              editedLabel(item.updatedAt)
-            }}</span>
-            <span class="paper-card-open"
-              >{{ t('boards.studio.openPaper') }}<ArrowUpRight :size="16"
-            /></span>
-          </button>
+                <option value="">{{ t('papers.books.loose') }}</option>
+                <option
+                  v-for="bookItem in books"
+                  :key="bookItem.id"
+                  :value="bookItem.id"
+                >
+                  {{ bookItem.name }}
+                </option>
+              </select>
+            </label>
+          </article>
           <p
             v-if="!filtered.length"
             class="gallery-empty"
@@ -1005,13 +1124,16 @@ async function exportPng() {
             :key="currentDocument.id"
             :elements="currentDocument.elements"
             :scenes="currentDocument.scenes ?? []"
+            :layers="currentDocument.layers"
             :title="currentDocument.title"
             :background="currentDocument.background"
             :color-scheme="currentDocument.colorScheme"
             :read-only="locked || board.isLocking"
             :task-titles="taskTitles"
             :distraction-free="isFocus && !focusControls"
-            @content-change="!locked && board.setContent($event.elements, $event.scenes)"
+            @content-change="
+              !locked && board.setContent($event.elements, $event.scenes, $event.layers)
+            "
             @select="selectedId = $event"
             @lock-paper="togglePaperLock"
             @interact="closePaperMenus"
@@ -1220,17 +1342,16 @@ async function exportPng() {
   border-radius: 0;
 }
 .paper-studio-header {
-  position: absolute;
-  top: 12px;
-  left: 12px;
+  position: relative;
   z-index: 25;
-  max-width: calc(100% - 24px);
-  padding: 5px;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.96);
+  width: 100%;
+  min-height: 44px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
   color: #252a34;
-  box-shadow: 0 3px 16px #1422380d;
 }
 .paper-studio-header .board-button {
   display: flex;
@@ -1256,14 +1377,13 @@ async function exportPng() {
   color: #64748b;
 }
 .paper-contexts {
-  position: absolute;
-  top: 14px;
-  right: 12px;
+  position: relative;
+  margin-left: auto;
   z-index: 24;
   max-width: 320px;
 }
 .paper-contexts[open] {
-  width: min(320px, calc(100vw - 24px));
+  width: auto;
 }
 .paper-source-task {
   position: absolute;
@@ -1280,9 +1400,13 @@ async function exportPng() {
   border-radius: 9px;
 }
 .paper-contexts-from-task {
-  top: 108px;
+  top: auto;
 }
 .paper-contexts > div {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: min(320px, calc(100vw - 24px));
   max-height: calc(100vh - 90px);
   overflow-y: auto;
 }
@@ -1456,6 +1580,34 @@ async function exportPng() {
   border-radius: 0;
   background: var(--paper);
 }
+.paper-card-content {
+  display: contents;
+  text-align: left;
+}
+.paper-card-content:focus-visible .paper-card-sheet {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.paper-card-content:disabled {
+  opacity: 0.5;
+}
+.paper-card-book {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 0;
+}
+.paper-card-book select {
+  width: 100%;
+  min-width: 0;
+  border-radius: 0;
+  padding: 5px;
+}
+.gallery-list .paper-card-book {
+  grid-column: 2 / -1;
+  padding: 6px 0 0;
+}
 .paper-card:hover {
   background: var(--hover);
 }
@@ -1553,12 +1705,17 @@ async function exportPng() {
 }
 @media (max-width: 800px) {
   .paper-contexts {
-    top: 64px;
+    top: auto;
   }
   .paper-contexts-from-task {
-    top: 108px;
+    top: auto;
   }
   .paper-studio-header [role='status'] {
+    display: none;
+  }
+}
+@media (max-width: 1100px) {
+  .paper-studio-header .board-button > span {
     display: none;
   }
 }

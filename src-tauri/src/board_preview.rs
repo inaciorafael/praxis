@@ -123,11 +123,33 @@ fn content_bounds(elements: &[BoardElement]) -> PreviewBounds {
 }
 
 fn make_preview(board: &Board) -> BoardPreview {
+    let visible: Vec<BoardElement> = if board.layers.is_empty() {
+        board.elements.clone()
+    } else {
+        board
+            .layers
+            .iter()
+            .filter(|layer| layer.visible && layer.opacity > 0.0)
+            .flat_map(|layer| {
+                board
+                    .elements
+                    .iter()
+                    .filter(move |element| {
+                        element.layer_id.as_deref().unwrap_or("base") == layer.id
+                    })
+                    .map(move |element| {
+                        let mut item = element.clone();
+                        item.opacity *= layer.opacity;
+                        item
+                    })
+            })
+            .collect()
+    };
     let mut image_budget = MAX_IMAGE_BYTES;
-    let elements = sample_indices(board.elements.len(), MAX_ELEMENTS)
+    let elements = sample_indices(visible.len(), MAX_ELEMENTS)
         .into_iter()
         .map(|index| {
-            let mut element = board.elements[index].clone();
+            let mut element = visible[index].clone();
             element.text = element.text.chars().take(MAX_TEXT).collect();
             element.points = preview_points(&element.points);
             if let Some(annotation) = &mut element.text_annotation {
@@ -167,7 +189,7 @@ fn make_preview(board: &Board) -> BoardPreview {
         revision: board.revision,
         background: board.background,
         color_scheme: board.color_scheme,
-        bounds: content_bounds(&board.elements),
+        bounds: content_bounds(&visible),
         elements,
     }
 }
@@ -198,6 +220,35 @@ mod tests {
         serde_json::from_value(json!({"id":"preview","title":"Preview","revision":1,
             "formatVersion":1,"elements":elements,"createdAt":"now","updatedAt":"now"}))
         .unwrap()
+    }
+
+    #[test]
+    fn layers_control_preview_visibility_order_and_opacity_without_mutation() {
+        let mut a = element(0);
+        a.layer_id = Some("top".into());
+        a.opacity = 0.8;
+        let mut b = element(1);
+        b.layer_id = Some("hidden".into());
+        let c = element(2);
+        let mut original = board(vec![a, b, c]);
+        original.layers = serde_json::from_value(json!([
+            {"id":"base","name":"Base","visible":true,"locked":false,"opacity":1.0},
+            {"id":"hidden","name":"Hidden","visible":false,"locked":false,"opacity":1.0},
+            {"id":"top","name":"Top","visible":true,"locked":false,"opacity":0.5}
+        ]))
+        .unwrap();
+        let before = original.clone();
+        let result = make_preview(&original);
+        assert_eq!(
+            result
+                .elements
+                .iter()
+                .map(|e| e.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["2", "0"]
+        );
+        assert_eq!(result.elements[1].opacity, 0.4);
+        assert_eq!(original, before);
     }
 
     #[test]

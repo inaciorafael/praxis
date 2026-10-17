@@ -32,6 +32,17 @@ const element = (values: Partial<BoardElement>): BoardElement => ({
   ...values,
 })
 describe('board geometry', () => {
+  it('hits the actual ellipse outline and only expands attachment tolerance when requested', () => {
+    const oval = element({ kind: 'ellipse', width: 100, height: 100 })
+    expect(pointInElement(oval, { x: 0, y: 0 })).toBe(false)
+    expect(pointInElement(oval, { x: 100, y: 50 })).toBe(true)
+    expect(pointInElement(oval, { x: 105, y: 50 })).toBe(false)
+    expect(pointInElement(oval, { x: 105, y: 50 }, 6)).toBe(true)
+    const rectangle = element({ angle: Math.PI / 4 })
+    const near = rotatePoint({ x: 104, y: 25 }, { x: 50, y: 25 }, Math.PI / 4)
+    expect(pointInElement(rectangle, near)).toBe(false)
+    expect(pointInElement(rectangle, near, 6)).toBe(true)
+  })
   it('hit tests polygon edges instead of their surrounding rectangles, including rotation', () => {
     for (const kind of ['triangle', 'hexagon'] as const) {
       const shape = element({ kind, width: 100, height: 100, angle: Math.PI / 3 })

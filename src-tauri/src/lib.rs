@@ -9,6 +9,7 @@ mod jump_list;
 mod lifecycle;
 mod native_reminders;
 mod notification_launch;
+mod paper_books;
 mod recurrence;
 mod reminders;
 mod showcase;
@@ -130,6 +131,8 @@ pub fn run() {
             app_config::get_app_health,
             tray::finish_quit,
             boards::list_boards,
+            paper_books::list_paper_books,
+            paper_books::change_paper_books,
             boards::get_board,
             board_preview::get_board_preview,
             boards::create_board,

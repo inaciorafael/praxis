@@ -1,5 +1,24 @@
 {
   "papers": {
+    "books": {
+      "title": "Cadernos",
+      "hint": "Reúna seus Papers por projeto ou assunto.",
+      "new": "Novo caderno",
+      "browse": "Navegar pelos cadernos",
+      "all": "Todos os Papers",
+      "loose": "Sem caderno",
+      "current": "Caderno: {name}",
+      "rename": "Renomear",
+      "remove": "Remover caderno",
+      "name": "Nome do caderno",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "removeHint": "Seus Papers serão mantidos e ficarão em Sem caderno.",
+      "confirmRemove": "Remover só o caderno",
+      "book": "Caderno",
+      "move": "Mover {name} para um caderno",
+      "retry": "Atualizar cadernos"
+    },
     "library": {
       "description": "Seus papéis, ideias e rascunhos.",
       "count": "{visible} de {total} Papers",
@@ -342,6 +361,16 @@
     "noResults": "Nenhuma tarefa corresponde a esta busca."
   },
   "boards": {
+    "atelier": {
+      "tools": "Ferramentas do Paper",
+      "context": "Ajustes da ferramenta e seleção",
+      "insert": "Inserir",
+      "fill": "Fundo",
+      "transparent": "Sem fundo",
+      "adjustments": "Mais ajustes",
+      "selectHint": "Selecione um elemento. Duplo clique edita o texto.",
+      "panHint": "Arraste para navegar. Espaço também move a câmera."
+    },
     "presentation": {
       "exportPdf": "Exportar apresentação em PDF"
     },
@@ -669,6 +698,29 @@
       "back": "Enviar para trás",
       "delete": "Excluir seleção",
       "label": "Grupo · {count} elementos"
+    },
+    "layers": {
+      "title": "Camadas",
+      "hint": "Do topo para o fundo. Desenhe na camada ativa.",
+      "add": "Nova camada",
+      "default": "Camada inicial",
+      "newName": "Camada {number}",
+      "items": "Nenhum elemento | 1 elemento | {count} elementos",
+      "name": "Nome da camada",
+      "rename": "Renomear",
+      "hide": "Ocultar camada",
+      "show": "Mostrar camada",
+      "lock": "Bloquear camada",
+      "unlock": "Desbloquear camada",
+      "up": "Subir camada",
+      "down": "Descer camada",
+      "removeEmpty": "Remover camada vazia",
+      "opacity": "Opacidade",
+      "unavailable": "Mostre e desbloqueie esta camada para desenhar.",
+      "drawingOn": "Desenhando em: {name}",
+      "moveSelection": "Mover seleção para esta camada ({count})",
+      "expand": "Expandir camadas",
+      "collapse": "Recolher camadas"
     }
   },
   "settings": {

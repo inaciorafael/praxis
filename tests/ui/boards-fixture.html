@@ -78,10 +78,20 @@ if (new URLSearchParams(location.search).has('contrast')) {
   }
 }
 const paperLinks = []
+let paperBooks = []
 const paperFixture = new URLSearchParams(location.search).has('papers')
 const now = () => new Date().toISOString()
 if (paperFixture) tasks.push({id:'fixture-task',title:'Organizar ideias do projeto',notes:'Anotações de teste',status:'pending',plannedFor:null,dueAt:null,reminderAt:now(),recurrenceId:null,occurrenceDate:null,completedAt:null,archivedAt:null,createdAt:now(),updatedAt:now(),isOverdue:false,progress:{total:0,completed:0,percentage:0}})
 window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
+  if (command === 'list_paper_books') return structuredClone(paperBooks)
+  if (command === 'change_paper_books') {
+    const change=args.change
+    if(change.type==='create') paperBooks.push({id:crypto.randomUUID(),name:change.name.trim(),revision:1,paperIds:[]})
+    if(change.type==='rename') {const book=paperBooks.find(book=>book.id===change.id);book.name=change.name.trim();book.revision++}
+    if(change.type==='remove') paperBooks=paperBooks.filter(book=>book.id!==change.id)
+    if(change.type==='move') for(const book of paperBooks) {book.paperIds=book.paperIds.filter(id=>id!==change.paperId);if(book.id===change.bookId)book.paperIds.push(change.paperId);book.revision++}
+    return structuredClone(paperBooks)
+  }
   if (command === 'list_boards') return boards.map(({elements,scenes,...board}) => ({...board,elementCount:elements.length}))
   if (command === 'get_board') return structuredClone(boards.find(board => board.id === args.id))
   if (command === 'get_board_preview') {
@@ -95,6 +105,7 @@ window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
   if (command === 'create_board') {
     const board = {id:crypto.randomUUID(),kind:args.input.kind??'board',background:args.input.background??'plain',colorScheme:args.input.colorScheme??'light',title:args.input.title,elements:args.input.elements,revision:1,formatVersion:1,createdAt:now(),updatedAt:now()}
     board.scenes=args.input.scenes??[]
+    board.layers=args.input.layers??[]
     boards.push(board); return structuredClone(board)
   }
   if (command === 'save_board') {
@@ -102,6 +113,7 @@ window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
     if (args.input.expectedRevision !== board.revision) throw Error('Fixture revision conflict')
     Object.assign(board,{locked:args.input.locked??board.locked??false,background:args.input.background??board.background,colorScheme:args.input.colorScheme??board.colorScheme,title:args.input.title,elements:args.input.elements,revision:board.revision+1,updatedAt:now()})
     board.scenes=args.input.scenes??board.scenes??[]
+    board.layers=args.input.layers??board.layers??[]
     return structuredClone(board)
   }
   if (command === 'get_board_tasks') {

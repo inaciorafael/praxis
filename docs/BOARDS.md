@@ -223,3 +223,16 @@ Selecione elementos com Shift ou selecao por area e use clique direito > Agrupar
 
 O menu contextual oferece agrupar/desagrupar, duplicar, trazer para frente, enviar para tras, excluir e undo/redo. Clique direito preserva a multisselecao quando o alvo ja faz parte dela. Escape, clique fora ou executar uma acao fecham o menu; setas, Home e End navegam nas opcoes. Papers bloqueados e apresentacao nao permitem acoes de edicao. Duplicar remapeia os ids de grupos e conectores, mantendo a copia independente. Apagar desenhos com borracha preserva o grupo dos fragmentos restantes.
 
+
+## Camadas do Paper
+
+Painel fixo a esquerda, recolhivel sem perder o acesso. A lista apresenta o topo acima do fundo. Cada camada possui nome, visibilidade, bloqueio e opacidade, com controles para subir/descer. Novos elementos entram na camada ativa; camada oculta, bloqueada ou com opacidade zero impede desenhar. Selecao e borracha respeitam esses estados. Selecione elementos, ative outra camada e use Mover selecao; grupos sao movidos inteiros. Camadas vazias podem ser removidas, preservando sempre pelo menos uma. Limite: 32 camadas.
+
+Todos os controles de conteudo e metadados participam de undo/redo e autosave atomico com elementos e cenas. Camada ativa e painel recolhido sao estados locais da interface. Papers antigos usam uma camada inicial virtual sem escrita na leitura. Renderizacao, exportacao e miniaturas respeitam visibilidade, ordem e opacidade das camadas. O enquadramento reserva espaco para a lateral e para os instrumentos. Paper bloqueado e apresentacao continuam protegendo todas as edicoes.
+
+# Notebooks
+
+Papers can be organized into named notebooks (Cadernos). A notebook groups infinite canvases by topic or project; it does not turn a canvas into fixed pages or change task organization. Each Paper belongs to at most one notebook. All Papers and Unfiled remain directly accessible, with existing title search, sorting and lock filters applied within the selected notebook.
+
+Membership is stored in `paperBooks` inside the encrypted vault, separately from drawing content and board revisions. Old vaults default to an empty collection without a migration write. Notebook rename/remove use optimistic revisions; moves verify the previous membership. Removing a notebook preserves all Papers. Missing/deleted Paper references are ignored on read. Changes use the existing atomic vault mutation and external-file conflict protection.
+

@@ -32,6 +32,29 @@ beforeEach(() => {
 })
 
 describe('board autosave', () => {
+  it('autosaves layers atomically with elements and isolates caller mutation', async () => {
+    vi.mocked(service.saveBoard).mockImplementation(async (input) => ({
+      ...initial,
+      ...input,
+      revision: input.expectedRevision + 1,
+    }))
+    const store = useBoardStore()
+    await store.open('board')
+    const layers = [
+      { id: 'base', name: 'Sketch', visible: true, locked: false, opacity: 0.5 },
+    ]
+    store.setContent([], [], layers)
+    layers[0]!.name = 'Caller changed'
+    expect(store.current!.layers![0]!.name).toBe('Sketch')
+    expect(await store.flush()).toBe(true)
+    expect(service.saveBoard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        layers: [expect.objectContaining({ name: 'Sketch', opacity: 0.5 })],
+      })
+    )
+    expect(store.dirty).toBe(false)
+    store.reset()
+  })
   it('autosaves scenes atomically with content and preserves them when locking', async () => {
     vi.mocked(service.saveBoard).mockImplementation(async (input) => ({
       ...initial,

@@ -80,6 +80,7 @@ export type BoardRichText = { paragraphs: BoardRichParagraph[] }
 
 export type BoardElement = {
   id: string
+  layerId?: string | null
   groupId?: string | null
   kind: BoardElementKind
   x: number
@@ -114,6 +115,13 @@ export type BoardElement = {
 }
 
 export type BoardDocumentKind = 'board' | 'paper'
+export type BoardLayer = {
+  id: string
+  name: string
+  visible: boolean
+  locked: boolean
+  opacity: number
+}
 export type PaperBackground = 'plain' | 'grid' | 'ruled' | 'dots'
 export type PaperColorScheme = 'light' | 'dark'
 export type PaperAppearance = {
@@ -142,17 +150,21 @@ export type Board = {
   revision: number
   elements: BoardElement[]
   scenes?: BoardScene[]
+  layers?: BoardLayer[]
   createdAt: string
   updatedAt: string
 }
 
-export type BoardSummary = Omit<Board, 'elements' | 'scenes'> & { elementCount: number }
+export type BoardSummary = Omit<Board, 'elements' | 'scenes' | 'layers'> & {
+  elementCount: number
+}
 export type CreateBoardInput = {
   background?: PaperBackground
   colorScheme?: PaperColorScheme
   title: string
   elements: BoardElement[]
   scenes?: BoardScene[]
+  layers?: BoardLayer[]
   kind?: BoardDocumentKind
 }
 export type SaveBoardInput = Omit<CreateBoardInput, 'kind'> & {

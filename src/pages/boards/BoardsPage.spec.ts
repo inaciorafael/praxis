@@ -13,6 +13,11 @@ import { searchTasks } from '@/shared/lib/tasks/task.service'
 import type { Board } from '@/shared/types/board'
 import type { Task } from '@/shared/types/task'
 import BoardsPage from './BoardsPage.vue'
+import * as booksService from '@/shared/lib/papers/paper-books.service'
+vi.mock('@/shared/lib/papers/paper-books.service', () => ({
+  listPaperBooks: vi.fn().mockResolvedValue([]),
+  changePaperBooks: vi.fn(),
+}))
 
 const focusMocks = vi.hoisted(() => ({
   enter: vi.fn(),
@@ -68,6 +73,7 @@ const canvasStub = defineComponent({
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  vi.mocked(booksService.listPaperBooks).mockResolvedValue([])
   i18n.global.locale.value = 'en'
   focusMocks.enter.mockResolvedValue(undefined)
   focusMocks.leave.mockResolvedValue(undefined)
@@ -98,6 +104,50 @@ async function mountPage(url = '/app/boards') {
   return wrapper
 }
 describe('BoardsPage integration', () => {
+  it('files a new Paper in the selected notebook', async () => {
+    const notebook = { id: 'book', name: 'Estudos', revision: 1, paperIds: [] as string[] }
+    vi.mocked(booksService.listPaperBooks).mockResolvedValue([notebook])
+    vi.mocked(booksService.changePaperBooks).mockResolvedValue([{ ...notebook, revision: 2, paperIds: ['new'] }])
+    vi.mocked(service.createBoard).mockResolvedValue({ ...initial, id: 'new' })
+    const wrapper = await mountPage()
+    await wrapper.findAll('.book-tab')[2]!.trigger('click')
+    await wrapper.get('.gallery-create').trigger('click')
+    await flushPromises()
+    expect(booksService.changePaperBooks).toHaveBeenCalledWith({ type: 'move', paperId: 'new', bookId: 'book', expectedBookId: null })
+    wrapper.unmount()
+    useBoardStore().reset()
+  })
+  it('filters notebooks and moves Papers without loading or changing drawing content', async () => {
+    const notebook = { id: 'book', name: 'Estudos', revision: 1, paperIds: ['board'] }
+    vi.mocked(booksService.listPaperBooks).mockResolvedValue([notebook])
+    vi.mocked(service.listBoards).mockResolvedValue([
+      { ...initial, elementCount: 0 },
+      { ...initial, id: 'loose', title: 'Loose drawing', elementCount: 0 },
+    ])
+    const wrapper = await mountPage()
+    const tabs = wrapper.findAll('.book-tab')
+    await tabs[2]!.trigger('click')
+    expect(wrapper.findAll('.paper-card-title').map((item) => item.text())).toEqual([
+      'Refinement',
+    ])
+    vi.mocked(booksService.changePaperBooks).mockResolvedValue([
+      { ...notebook, revision: 2, paperIds: [] },
+    ])
+    await wrapper.get('.paper-card-book select').setValue('')
+    await flushPromises()
+    expect(booksService.changePaperBooks).toHaveBeenCalledWith({
+      type: 'move',
+      paperId: 'board',
+      bookId: null,
+      expectedBookId: 'book',
+    })
+    expect(wrapper.findAll('.paper-card')).toHaveLength(0)
+    expect(service.getBoard).not.toHaveBeenCalled()
+    expect(service.saveBoard).not.toHaveBeenCalled()
+    await wrapper.findAll('.book-tab')[1]!.trigger('click')
+    expect(wrapper.findAll('.paper-card')).toHaveLength(2)
+    wrapper.unmount()
+  })
   it('dismisses open Paper menus when returning to the canvas', async () => {
     const wrapper = await mountPage('/app/boards?boardId=board')
     const contexts = wrapper.get('.paper-contexts')

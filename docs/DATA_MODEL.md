@@ -157,6 +157,10 @@ The selected `.praxis` file is the source of truth. Cache files are rebuildable.
 
 ## Core Concepts
 
+### Paper Notebooks
+
+`paperBooks` is an optional encrypted document collection of `{ id, name, revision, paperIds }` records. It groups Papers by project or topic, without introducing task projects or changing task views. Each Paper can belong to one notebook or remain unfiled. Notebook deletion only removes membership; drawings and linked tasks remain intact. Missing `paperBooks` means no notebooks, with no hydration write.
+
 ### Task
 
 A task is one actionable item the user wants to complete.
@@ -780,4 +784,9 @@ Objeto opcional: strokePattern (solid/dashed/dotted), roughness e bowing (multip
 ### BoardElement.groupId
 
 String opcional, nao vazia, com ate 100 bytes. Elementos com o mesmo groupId pertencem a um grupo plano dentro do Paper. Os elementos mantem seus tipos, estilos, ids e coordenadas individuais; nao ha imagem rasterizada ou entidade de tarefa adicional. Ausencia ou null indica elemento livre, sem migracao ou escrita na leitura. O historico inclui agrupamento, desagrupamento e transformacoes de membros. Duplicacao cria um novo groupId.
+
+
+### Camadas do Paper
+
+Board.layers e opcional (ausencia ou lista vazia representa a camada virtual base). BoardLayer: id (1 a 100 bytes, unico), name (ate 80 caracteres), visible, locked e opacity (0 a 1). Ordem da lista: fundo para topo. Limite 32. BoardElement.layerId e opcional e usa base quando ausente. Referencias devem existir; grupos nao podem atravessar camadas. SaveBoardInput.layers omitido preserva as camadas atuais. Rust rejeita alteracoes nos elementos de uma camada que permanece bloqueada. O salvamento e o historico incluem elementos, cenas e camadas juntos. Miniaturas sao projecoes visiveis, ordenadas e com opacidade composta, sem alterar dados originais.
 

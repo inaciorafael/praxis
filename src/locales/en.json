@@ -1,5 +1,24 @@
 {
   "papers": {
+    "books": {
+      "title": "Notebooks",
+      "hint": "Collect your Papers by project or topic.",
+      "new": "New notebook",
+      "browse": "Browse notebooks",
+      "all": "All Papers",
+      "loose": "Unfiled",
+      "current": "Notebook: {name}",
+      "rename": "Rename",
+      "remove": "Remove notebook",
+      "name": "Notebook name",
+      "save": "Save",
+      "cancel": "Cancel",
+      "removeHint": "Your Papers will be kept and moved to Unfiled.",
+      "confirmRemove": "Remove notebook only",
+      "book": "Notebook",
+      "move": "Move {name} to a notebook",
+      "retry": "Refresh notebooks"
+    },
     "library": {
       "description": "Your papers, ideas and sketches.",
       "count": "{visible} of {total} Papers",
@@ -342,6 +361,16 @@
     "noResults": "No tasks match this search."
   },
   "boards": {
+    "atelier": {
+      "tools": "Paper tools",
+      "context": "Tool and selection settings",
+      "insert": "Insert",
+      "fill": "Background",
+      "transparent": "No background",
+      "adjustments": "More settings",
+      "selectHint": "Select an element. Double-click to edit its text.",
+      "panHint": "Drag to navigate. Space also moves the camera."
+    },
     "presentation": {
       "exportPdf": "Export presentation as PDF"
     },
@@ -669,6 +698,29 @@
       "back": "Send to back",
       "delete": "Delete selection",
       "label": "Group · {count} elements"
+    },
+    "layers": {
+      "title": "Layers",
+      "hint": "Top to bottom. Draw on the active layer.",
+      "add": "New layer",
+      "default": "Initial layer",
+      "newName": "Layer {number}",
+      "items": "No elements | 1 element | {count} elements",
+      "name": "Layer name",
+      "rename": "Rename",
+      "hide": "Hide layer",
+      "show": "Show layer",
+      "lock": "Lock layer",
+      "unlock": "Unlock layer",
+      "up": "Move layer up",
+      "down": "Move layer down",
+      "removeEmpty": "Remove empty layer",
+      "opacity": "Opacity",
+      "unavailable": "Show and unlock this layer to draw.",
+      "drawingOn": "Drawing on: {name}",
+      "moveSelection": "Move selection to this layer ({count})",
+      "expand": "Expand layers",
+      "collapse": "Collapse layers"
     }
   },
   "settings": {

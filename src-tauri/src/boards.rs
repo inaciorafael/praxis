@@ -207,6 +207,8 @@ pub struct BoardSketchOptions {
 pub struct BoardElement {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_id: Option<String>,
     pub kind: String,
     pub x: f64,
@@ -306,8 +308,20 @@ pub struct BoardScene {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BoardLayer {
+    pub id: String,
+    pub name: String,
+    pub visible: bool,
+    pub locked: bool,
+    pub opacity: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Board {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layers: Vec<BoardLayer>,
     pub id: String,
     #[serde(default)]
     pub locked: bool,
@@ -347,6 +361,8 @@ pub struct BoardSummary {
 #[serde(rename_all = "camelCase")]
 pub struct CreateBoardInput {
     #[serde(default)]
+    layers: Vec<BoardLayer>,
+    #[serde(default)]
     scenes: Vec<BoardScene>,
     #[serde(default)]
     kind: BoardKind,
@@ -361,6 +377,8 @@ pub struct CreateBoardInput {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveBoardInput {
+    #[serde(default)]
+    layers: Option<Vec<BoardLayer>>,
     #[serde(default)]
     scenes: Option<Vec<BoardScene>>,
     id: String,
@@ -448,6 +466,38 @@ fn validate_image(data: &str) -> Result<(), String> {
 }
 
 fn validate_board(board: &Board) -> Result<(), String> {
+    if board.layers.len() > 32 {
+        return Err("Limite de 32 camadas por Paper.".into());
+    }
+    let mut layer_ids = HashSet::new();
+    for layer in &board.layers {
+        if layer.id.trim().is_empty()
+            || layer.id.len() > 100
+            || !layer_ids.insert(layer.id.as_str())
+            || layer.name.chars().count() > 80
+            || !layer.opacity.is_finite()
+            || !(0.0..=1.0).contains(&layer.opacity)
+        {
+            return Err("Camada invalida.".into());
+        }
+    }
+    let mut group_layers = std::collections::HashMap::new();
+    for element in &board.elements {
+        let id = element.layer_id.as_deref().unwrap_or("base");
+        if (board.layers.is_empty() && id != "base")
+            || (!board.layers.is_empty() && !layer_ids.contains(id))
+        {
+            return Err("Elemento referencia camada inexistente.".into());
+        }
+        if let Some(group) = &element.group_id {
+            if group_layers
+                .insert(group, id)
+                .is_some_and(|previous| previous != id)
+            {
+                return Err("Um grupo deve pertencer a uma unica camada.".into());
+            }
+        }
+    }
     if board.format_version != FORMAT_VERSION {
         return Err("Versao do quadro nao suportada.".into());
     }
@@ -783,6 +833,7 @@ fn create_in_document(document: &mut Value, input: CreateBoardInput) -> Result<B
         revision: 1,
         elements: input.elements,
         scenes: input.scenes,
+        layers: input.layers,
         created_at: now.clone(),
         updated_at: now,
     };
@@ -801,9 +852,32 @@ fn save_in_document(document: &mut Value, input: SaveBoardInput) -> Result<Board
     let color_scheme = input.color_scheme.unwrap_or(board.color_scheme);
     let locked = input.locked.unwrap_or(board.locked);
     let scenes = input.scenes.unwrap_or_else(|| board.scenes.clone());
+    let layers = input.layers.unwrap_or_else(|| board.layers.clone());
+    for old_layer in board.layers.iter().filter(|layer| layer.locked) {
+        let remains_locked = layers
+            .iter()
+            .find(|layer| layer.id == old_layer.id)
+            .is_none_or(|layer| layer.locked);
+        if remains_locked {
+            let before: Vec<_> = board
+                .elements
+                .iter()
+                .filter(|element| element.layer_id.as_deref().unwrap_or("base") == old_layer.id)
+                .collect();
+            let after: Vec<_> = input
+                .elements
+                .iter()
+                .filter(|element| element.layer_id.as_deref().unwrap_or("base") == old_layer.id)
+                .collect();
+            if before != after {
+                return Err("Desbloqueie a camada antes de editar seus elementos.".into());
+            }
+        }
+    }
     let content_changed = board.title != input.title.trim()
         || board.elements != input.elements
         || board.scenes != scenes
+        || board.layers != layers
         || board.background != background
         || board.color_scheme != color_scheme;
     if board.locked && content_changed {
@@ -812,6 +886,7 @@ fn save_in_document(document: &mut Value, input: SaveBoardInput) -> Result<Board
     if board.title == input.title.trim()
         && board.elements == input.elements
         && board.scenes == scenes
+        && board.layers == layers
         && board.background == background
         && board.color_scheme == color_scheme
         && board.locked == locked
@@ -821,6 +896,7 @@ fn save_in_document(document: &mut Value, input: SaveBoardInput) -> Result<Board
     board.title = input.title.trim().into();
     board.elements = input.elements;
     board.scenes = scenes;
+    board.layers = layers;
     board.background = background;
     board.color_scheme = color_scheme;
     board.locked = locked;
@@ -1039,6 +1115,7 @@ fn create_paper_in_document(
     let paper = create_in_document(
         &mut staged,
         CreateBoardInput {
+            layers: vec![],
             scenes: vec![],
             background: BoardBackground::Plain,
             color_scheme: BoardColorScheme::Light,
@@ -1425,6 +1502,7 @@ mod tests {
             fill_style: None,
             sketch: None,
             group_id: None,
+            layer_id: None,
             text_highlight: BoardTextHighlight::None,
             text_annotation: None,
             text_font: BoardTextFont::Sans,
@@ -1448,6 +1526,7 @@ mod tests {
         create_in_document(
             document,
             CreateBoardInput {
+                layers: vec![],
                 scenes: vec![],
                 background: BoardBackground::Plain,
                 color_scheme: BoardColorScheme::Light,
@@ -1573,6 +1652,7 @@ mod tests {
 
     fn save_input(board: &Board, locked: Option<bool>) -> SaveBoardInput {
         SaveBoardInput {
+            layers: None,
             scenes: None,
             id: board.id.clone(),
             title: board.title.clone(),
@@ -1696,6 +1776,7 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    layers: None,
                     scenes: None,
                     locked: None,
                     background: None,
@@ -1741,6 +1822,7 @@ mod tests {
                 let saved = save_in_document(
                     &mut document,
                     SaveBoardInput {
+                        layers: None,
                         scenes: None,
                         locked: None,
                         background: None,
@@ -1759,6 +1841,104 @@ mod tests {
     }
 
     #[test]
+    fn layers_roundtrip_preserve_legacy_and_protect_locked_content() {
+        let mut document = document();
+        let board = create(&mut document);
+        let before = document.clone();
+        assert!(read_boards(&document).unwrap()[0].layers.is_empty());
+        assert_eq!(before, document);
+        let base = BoardLayer {
+            id: "base".into(),
+            name: "Sketch".into(),
+            visible: true,
+            locked: false,
+            opacity: 1.0,
+        };
+        let top = BoardLayer {
+            id: "top".into(),
+            name: "Ink".into(),
+            visible: true,
+            locked: true,
+            opacity: 0.5,
+        };
+        let mut input = save_input(&board, None);
+        input.layers = Some(vec![base.clone(), top.clone()]);
+        let mut item = element();
+        item.layer_id = Some("top".into());
+        input.elements = vec![item.clone()];
+        let saved = save_in_document(&mut document, input).unwrap();
+        assert_eq!(read_boards(&document).unwrap()[0], saved);
+        let before = document.clone();
+        let mut invalid = save_input(&saved, None);
+        invalid.elements[0].text = "Forbidden edit".into();
+        assert!(save_in_document(&mut document, invalid).is_err());
+        assert_eq!(before, document);
+        let mut visibility = save_input(&saved, None);
+        let mut hidden = top.clone();
+        hidden.visible = false;
+        visibility.layers = Some(vec![hidden.clone(), base.clone()]);
+        let hidden_board = save_in_document(&mut document, visibility).unwrap();
+        assert_eq!(hidden_board.elements, saved.elements);
+        assert_eq!(hidden_board.layers[0], hidden);
+        let noop = save_in_document(&mut document, save_input(&hidden_board, None)).unwrap();
+        assert_eq!(noop.revision, hidden_board.revision);
+        let mut unlock = save_input(&noop, None);
+        let mut unlocked = top;
+        unlocked.locked = false;
+        unlock.layers = Some(vec![base, unlocked]);
+        let unlocked = save_in_document(&mut document, unlock).unwrap();
+        let mut edit = save_input(&unlocked, None);
+        edit.elements[0].text = "Allowed edit".into();
+        assert!(save_in_document(&mut document, edit).is_ok());
+    }
+
+    #[test]
+    fn invalid_layers_and_cross_layer_groups_reject_without_writes() {
+        let mut document = document();
+        let board = create(&mut document);
+        let before = document.clone();
+        for layers in [
+            json!([{"id":"base","name":"Base","visible":true,"locked":false,"opacity":1.1}]),
+            json!([{"id":"base","name":"Base","visible":true,"locked":false,"opacity":1.0},{"id":"base","name":"Duplicate","visible":true,"locked":false,"opacity":1.0}]),
+        ] {
+            let mut input = save_input(&board, None);
+            input.layers = Some(serde_json::from_value(layers).unwrap());
+            assert!(save_in_document(&mut document, input).is_err());
+            assert_eq!(before, document);
+        }
+        let mut input = save_input(&board, None);
+        input.elements = vec![element()];
+        input.elements[0].layer_id = Some("missing".into());
+        assert!(save_in_document(&mut document, input).is_err());
+        assert_eq!(before, document);
+        let mut input = save_input(&board, None);
+        input.layers = Some(vec![
+            BoardLayer {
+                id: "base".into(),
+                name: "Base".into(),
+                visible: true,
+                locked: false,
+                opacity: 1.0,
+            },
+            BoardLayer {
+                id: "top".into(),
+                name: "Top".into(),
+                visible: true,
+                locked: false,
+                opacity: 1.0,
+            },
+        ]);
+        let mut a = element();
+        a.group_id = Some("g".into());
+        let mut b = a.clone();
+        b.id = "other".into();
+        b.layer_id = Some("top".into());
+        input.elements = vec![a, b];
+        assert!(save_in_document(&mut document, input).is_err());
+        assert_eq!(before, document);
+    }
+
+    #[test]
     fn groups_roundtrip_and_invalid_ids_never_mutate_the_document() {
         let mut document = document();
         let board = create(&mut document);
@@ -1769,6 +1949,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                layers: None,
                 scenes: None,
                 locked: None,
                 background: None,
@@ -1792,6 +1973,7 @@ mod tests {
             assert!(save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    layers: None,
                     scenes: None,
                     locked: None,
                     background: None,
@@ -1827,6 +2009,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                layers: None,
                 scenes: None,
                 locked: None,
                 background: None,
@@ -1855,6 +2038,7 @@ mod tests {
             assert!(save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    layers: None,
                     scenes: None,
                     locked: None,
                     background: None,
@@ -1895,6 +2079,7 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    layers: None,
                     scenes: None,
                     locked: None,
                     background: None,
@@ -1938,6 +2123,7 @@ mod tests {
             assert!(save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    layers: None,
                     scenes: None,
                     locked: None,
                     background: None,
@@ -1965,6 +2151,7 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    layers: None,
                     scenes: None,
                     locked: None,
                     background: None,
@@ -2019,6 +2206,7 @@ mod tests {
             assert!(save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    layers: None,
                     scenes: None,
                     locked: None,
                     background: None,
@@ -2063,6 +2251,7 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    layers: None,
                     scenes: None,
                     locked: None,
                     background: None,
@@ -2099,6 +2288,7 @@ mod tests {
             assert!(save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    layers: None,
                     scenes: None,
                     locked: None,
                     background: None,
@@ -2445,6 +2635,7 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    layers: None,
                     scenes: None,
                     locked: None,
                     background: None,
@@ -2513,6 +2704,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                layers: None,
                 scenes: None,
                 locked: None,
                 background: None,
@@ -2632,6 +2824,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                layers: None,
                 scenes: None,
                 locked: None,
                 background: None,
@@ -2732,6 +2925,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                layers: None,
                 scenes: None,
                 locked: None,
                 background: None,
@@ -2773,6 +2967,7 @@ mod tests {
             let saved = save_in_document(
                 &mut document,
                 SaveBoardInput {
+                    layers: None,
                     scenes: None,
                     locked: None,
                     background: None,
@@ -2831,6 +3026,7 @@ mod tests {
                 let saved = save_in_document(
                     &mut document,
                     SaveBoardInput {
+                        layers: None,
                         scenes: None,
                         locked: None,
                         background: None,
@@ -2914,6 +3110,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                layers: None,
                 scenes: None,
                 locked: None,
                 background: None,
@@ -2938,6 +3135,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                layers: None,
                 scenes: None,
                 locked: None,
                 background: None,
@@ -2954,6 +3152,7 @@ mod tests {
         let saved = save_in_document(
             &mut document,
             SaveBoardInput {
+                layers: None,
                 scenes: None,
                 locked: None,
                 background: None,
@@ -2969,6 +3168,7 @@ mod tests {
         assert!(save_in_document(
             &mut document,
             SaveBoardInput {
+                layers: None,
                 scenes: None,
                 locked: None,
                 background: None,
@@ -3068,6 +3268,7 @@ mod tests {
         let board = create_in_document(
             &mut document,
             CreateBoardInput {
+                layers: vec![],
                 scenes: vec![],
                 background: BoardBackground::Plain,
                 color_scheme: BoardColorScheme::Light,

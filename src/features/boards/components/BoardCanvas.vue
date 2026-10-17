@@ -57,6 +57,7 @@ import type {
   BoardDrawBrush,
   BoardScene,
   BoardFillStyle,
+  BoardLayer,
   BoardSketchOptions,
 } from '@/shared/types/board'
 import BoardSketch from './BoardSketch.vue'
@@ -69,7 +70,9 @@ import {
   applyBrushRaster,
   releaseArtisticBrushes,
 } from '../lib/artistic-brush'
-import PaperToolWheel from './PaperToolWheel.vue'
+import PaperToolRail from './PaperToolRail.vue'
+import PaperContextBar from './PaperContextBar.vue'
+import '../paper-editor.css'
 import BoardLabel from './BoardLabel.vue'
 import BoardRichLabel from './BoardRichLabel.vue'
 import BoardRichTextEditor from './BoardRichTextEditor.vue'
@@ -126,10 +129,20 @@ import { resizeTextElement } from '../lib/resize-text'
 import { elementFill, elementLabelScheme } from '../lib/element-style'
 import { eraseStrokes } from '../lib/eraser'
 import { expandGroups, groupBox, transformGroup } from '../lib/groups'
+import PaperLayersPanel from './PaperLayersPanel.vue'
+import {
+  copyLayers,
+  elementLayerId,
+  editableInLayers,
+  layerFor,
+  orderedLayerElements,
+  MAX_LAYERS,
+} from '../lib/layers'
 
 const props = defineProps<{
   elements: BoardElement[]
   scenes?: BoardScene[]
+  layers?: BoardLayer[]
   title?: string
   taskTitles?: Record<string, { title: string; status: string }>
   distractionFree?: boolean
@@ -139,7 +152,9 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   change: [elements: BoardElement[]]
-  contentChange: [content: { elements: BoardElement[]; scenes: BoardScene[] }]
+  contentChange: [
+    content: { elements: BoardElement[]; scenes: BoardScene[]; layers: BoardLayer[] },
+  ]
   presentation: [active: boolean]
   select: [id: string | null]
   lockPaper: []
@@ -152,6 +167,30 @@ const imageInput = ref<HTMLInputElement>()
 const textInput = ref<HTMLTextAreaElement>()
 const local = ref(copyElements(props.elements))
 const localScenes = ref(copyScenes(props.scenes ?? []))
+const localLayers = ref(copyLayers(props.layers))
+const activeLayerId = ref(
+  localLayers.value.find((layer) => layer.visible && !layer.locked)?.id ??
+    localLayers.value[0]!.id
+)
+const layersCollapsed = ref(true)
+const renderedElements = computed(() =>
+  orderedLayerElements(local.value, localLayers.value)
+)
+const editableElements = computed(() =>
+  renderedElements.value.filter((element) => editableInLayers(element, localLayers.value))
+)
+const activeLayer = computed(() =>
+  localLayers.value.find((layer) => layer.id === activeLayerId.value)
+)
+const activeLayerEditable = computed(
+  () =>
+    activeLayer.value?.visible &&
+    !activeLayer.value.locked &&
+    activeLayer.value.opacity > 0
+)
+function isEditable(element: BoardElement) {
+  return editableInLayers(element, localLayers.value)
+}
 const editorRoot = ref<HTMLDivElement>()
 const contentId = `paper-content-${crypto.randomUUID()}`
 const scenesOpen = ref(false)
@@ -245,9 +284,14 @@ const customColor = ref<string | null>(null)
 const shapeFill = ref<string | null>(null)
 const shapeFillStyle = ref<BoardFillStyle>()
 const shapeSketch = ref<BoardSketchOptions>()
-const selectionPropertiesOpen = ref(true)
+const selectionPropertiesOpen = ref(false)
 const activeWheelTool = computed(() =>
-  tool.value === 'draw' && strokeStyle.value === 'pen' ? 'pen' : tool.value
+  tool.value === 'draw' &&
+  (drawBrush.value
+    ? ['fountain', 'ink'].includes(drawBrush.value)
+    : strokeStyle.value === 'pen')
+    ? 'pen'
+    : tool.value
 )
 const styleElement = computed(() =>
   tool.value === 'select' ? selectedElement.value : undefined
@@ -268,16 +312,6 @@ const wheelWidth = computed(
       : brushWidth.value)
 )
 const wheelOpacity = computed(() => styleElement.value?.opacity ?? brushOpacity.value)
-const penColorsAvailable = computed(() => {
-  const element = styleElement.value
-  if (element ? element.kind !== 'draw' : tool.value !== 'draw') return false
-  const material = element?.drawBrush ?? drawBrush.value
-  return (
-    material === 'ink' ||
-    material === 'fountain' ||
-    (!material && (element?.strokeStyle ?? strokeStyle.value) === 'pen')
-  )
-})
 const textFont = ref<BoardTextFont>('handwritten')
 const textHighlight = ref<BoardTextHighlight>('none')
 const textAnnotation = ref<BoardTextAnnotation | null>(null)
@@ -662,6 +696,17 @@ function closeSettings() {
   settingsOpen.value = false
   brushLibraryOpen.value = false
 }
+function settingsKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeSettings()
+  }
+}
+function toggleLayersPanel() {
+  layersCollapsed.value = !layersCollapsed.value
+  closeSettings()
+  selectionPropertiesOpen.value = false
+}
 function dismissOutside(event: PointerEvent) {
   if (!(event.target as Element).closest?.('.paper-context-menu'))
     contextMenu.value = null
@@ -707,6 +752,25 @@ const instrumentBase = computed(() => {
 function chooseWheelTool(id: string) {
   const item = tools.find((tool) => tool.id === id)
   if (item) chooseTool(item.id)
+}
+function chooseContextInstrument(id: string) {
+  if (id === 'library') {
+    toggleBrushLibrary()
+    return
+  }
+  if (id === 'pencil' || id === 'pen')
+    chooseBaseInstrument(id === 'pencil' ? 'draw' : 'pen')
+  else if (id === 'graphite' || id === 'fountain' || id === 'ink') setDrawingBrush(id)
+}
+function toggleContextSettings() {
+  layersCollapsed.value = true
+  if (
+    tool.value === 'select' &&
+    selected.value.length &&
+    selectedElement.value?.kind !== 'draw'
+  )
+    toggleSelectionProperties()
+  else toggleBrushSettings()
 }
 function toggleBrushLibrary() {
   finishEditing()
@@ -778,23 +842,28 @@ const sceneTransform = computed(
   () => `translate(${camera.value.x} ${camera.value.y}) scale(${camera.value.zoom})`
 )
 watch(
-  () => [props.elements, props.scenes] as const,
-  ([elements, scenes]) => {
+  () => [props.elements, props.scenes, props.layers] as const,
+  ([elements, scenes, layers]) => {
     if (gesture.value) return
     if (sceneGesture.value) return
     if (textCreationBefore && sameElements(elements, textCreationBefore)) return
     if (
       !sameElements(elements, local.value) ||
-      !sameValue(scenes ?? [], localScenes.value)
+      !sameValue(scenes ?? [], localScenes.value) ||
+      !sameValue(copyLayers(layers), localLayers.value)
     ) {
       local.value = copyElements(elements)
       localScenes.value = copyScenes(scenes ?? [])
+      localLayers.value = copyLayers(layers)
+      ensureActiveLayer()
       editing.value = null
       richDraft.value = null
       textCreationBefore = null
       history.clear()
       historyVersion.value++
-      selected.value = selected.value.filter((id) => elements.some((e) => e.id === id))
+      selected.value = selected.value.filter((id) =>
+        elements.some((e) => e.id === id && isEditable(e))
+      )
     }
   },
   { deep: true }
@@ -818,8 +887,9 @@ watch(
   { immediate: true }
 )
 function select(ids: string[]) {
-  ids = expandGroups(local.value, ids)
-  if (ids.join(',') !== selected.value.join(',')) selectionPropertiesOpen.value = true
+  const editableIds = new Set(editableElements.value.map((element) => element.id))
+  ids = expandGroups(local.value, ids).filter((id) => editableIds.has(id))
+  if (ids.join(',') !== selected.value.join(',')) selectionPropertiesOpen.value = false
   selected.value = ids
   if (ids.length === 1) {
     const element = local.value.find((e) => e.id === ids[0])
@@ -848,6 +918,78 @@ function select(ids: string[]) {
   }
   emit('select', ids.length === 1 ? ids[0]! : null)
 }
+function ensureActiveLayer() {
+  if (!localLayers.value.some((layer) => layer.id === activeLayerId.value))
+    activeLayerId.value = localLayers.value[localLayers.value.length - 1]!.id
+}
+function activateLayer(id: string) {
+  finishEditing()
+  cancelGesture()
+  if (localLayers.value.some((layer) => layer.id === id)) activeLayerId.value = id
+}
+function changeLayers(action: () => void) {
+  if (interactionLocked.value) return
+  finishEditing()
+  cancelGesture()
+  const before = copyElements(local.value),
+    layers = copyLayers(localLayers.value)
+  action()
+  ensureActiveLayer()
+  select(selected.value)
+  commit(before, localScenes.value, layers)
+}
+function addLayer() {
+  if (localLayers.value.length >= MAX_LAYERS) return
+  changeLayers(() => {
+    const layer: BoardLayer = {
+      id: crypto.randomUUID(),
+      name: t('boards.layers.newName', { number: localLayers.value.length + 1 }),
+      visible: true,
+      locked: false,
+      opacity: 1,
+    }
+    localLayers.value.push(layer)
+    activeLayerId.value = layer.id
+  })
+}
+function patchLayer(id: string, patch: Partial<BoardLayer>) {
+  changeLayers(() => {
+    const layer = localLayers.value.find((layer) => layer.id === id)
+    if (!layer) return
+    if (patch.name !== undefined) layer.name = patch.name.trim().slice(0, 80)
+    if (patch.visible !== undefined) layer.visible = patch.visible
+    if (patch.locked !== undefined) layer.locked = patch.locked
+    if (patch.opacity !== undefined && Number.isFinite(patch.opacity))
+      layer.opacity = Math.max(0, Math.min(1, patch.opacity))
+  })
+}
+function reorderLayer(id: string, direction: number) {
+  changeLayers(() => {
+    const index = localLayers.value.findIndex((layer) => layer.id === id),
+      next = index + direction
+    if (index < 0 || next < 0 || next >= localLayers.value.length) return
+    const layer = localLayers.value.splice(index, 1)[0]!
+    localLayers.value.splice(next, 0, layer)
+  })
+}
+function removeLayer(id: string) {
+  if (
+    localLayers.value.length < 2 ||
+    local.value.some((element) => elementLayerId(element) === id)
+  )
+    return
+  changeLayers(() => {
+    localLayers.value = localLayers.value.filter((layer) => layer.id !== id)
+  })
+}
+function moveSelectionToLayer(id: string) {
+  const target = localLayers.value.find((layer) => layer.id === id)
+  if (!target || target.locked || !target.visible || target.opacity === 0) return
+  changeLayers(() => {
+    for (const element of local.value)
+      if (selected.value.includes(element.id) && isEditable(element)) element.layerId = id
+  })
+}
 function screen(event: { clientX: number; clientY: number }): BoardPoint {
   const rect = viewport.value!.getBoundingClientRect()
   return { x: event.clientX - rect.left, y: event.clientY - rect.top }
@@ -864,19 +1006,29 @@ function publishContent() {
   emit('contentChange', {
     elements: copyElements(local.value),
     scenes: copyScenes(localScenes.value),
+    layers: copyLayers(localLayers.value),
   })
 }
-function commit(before: BoardElement[], beforeScenes = localScenes.value) {
+function commit(
+  before: BoardElement[],
+  beforeScenes = localScenes.value,
+  beforeLayers = localLayers.value
+) {
   if (interactionLocked.value) return
-  if (sameElements(before, local.value) && sameValue(beforeScenes, localScenes.value))
+  if (
+    sameElements(before, local.value) &&
+    sameValue(beforeScenes, localScenes.value) &&
+    sameValue(beforeLayers, localLayers.value)
+  )
     return
-  history.push({ elements: before, scenes: beforeScenes })
+  history.push({ elements: before, scenes: beforeScenes, layers: beforeLayers })
   historyVersion.value++
   publishContent()
 }
 function newElement(kind: BoardElementKind, position: BoardPoint): BoardElement {
   return {
     id: crypto.randomUUID(),
+    layerId: activeLayerId.value,
     kind,
     x: position.x,
     y: position.y,
@@ -922,8 +1074,12 @@ function newElement(kind: BoardElementKind, position: BoardPoint): BoardElement 
     imageData: null,
   }
 }
-function hit(position: BoardPoint, exclude?: string): BoardElement | undefined {
-  return [...local.value]
+function hit(
+  position: BoardPoint,
+  exclude?: string,
+  tolerance = 0
+): BoardElement | undefined {
+  return [...editableElements.value]
     .reverse()
     .find(
       (e) =>
@@ -931,7 +1087,7 @@ function hit(position: BoardPoint, exclude?: string): BoardElement | undefined {
         e.kind !== 'arrow' &&
         e.kind !== 'line' &&
         e.kind !== 'draw' &&
-        pointInElement(e, position)
+        pointInElement(e, position, tolerance)
     )
 }
 function pointerDown(event: PointerEvent) {
@@ -989,6 +1145,13 @@ function pointerDown(event: PointerEvent) {
     }
   }
   const base = { pointer: event.pointerId, start: p, before, camera: { ...camera.value } }
+  if (
+    !['select', 'pan', 'eraser'].includes(tool.value) &&
+    !activeLayerEditable.value &&
+    event.button !== 1 &&
+    !space.value
+  )
+    return
   if (event.button === 1 || space.value || tool.value === 'pan') {
     gesture.value = { ...base, mode: 'pan', start: screen(event) }
   } else if (tool.value === 'eraser') {
@@ -997,7 +1160,9 @@ function pointerDown(event: PointerEvent) {
       local.value,
       p,
       p,
-      eraserSize.value / camera.value.zoom / 2
+      eraserSize.value / camera.value.zoom / 2,
+      undefined,
+      isEditable
     )
     gesture.value = { ...base, mode: 'erase', end: p }
   } else if (
@@ -1039,7 +1204,10 @@ function pointerDown(event: PointerEvent) {
   } else {
     const element = newElement(tool.value, p)
     if (element.kind === 'arrow' || element.kind === 'line') {
-      element.startId = element.kind === 'arrow' ? (hit(p)?.id ?? null) : null
+      element.startId =
+        element.kind === 'arrow'
+          ? (hit(p, undefined, 6 / camera.value.zoom)?.id ?? null)
+          : null
       element.width = 0
       element.height = 0
     }
@@ -1056,7 +1224,12 @@ function groupSelection() {
   const before = copyElements(local.value)
   const id = crypto.randomUUID()
   for (const element of local.value)
-    if (selected.value.includes(element.id)) element.groupId = id
+    if (selected.value.includes(element.id)) {
+      element.groupId = id
+      element.layerId = elementLayerId(
+        local.value.find((item) => selected.value.includes(item.id))!
+      )
+    }
   commit(before)
 }
 function ungroupSelection() {
@@ -1140,7 +1313,9 @@ function pointerMove(event: PointerEvent) {
       local.value,
       g.end ?? g.start,
       p,
-      eraserSize.value / camera.value.zoom / 2
+      eraserSize.value / camera.value.zoom / 2,
+      undefined,
+      isEditable
     )
     g.end = p
   } else if (g.mode === 'pan') {
@@ -1225,7 +1400,7 @@ function pointerMove(event: PointerEvent) {
         element.height = p.y - element.y
         if (event.shiftKey)
           Object.assign(element, constrainedArrow(element.width, element.height))
-        element.endId = hit(p, element.id)?.id ?? null
+        element.endId = hit(p, element.id, 6 / camera.value.zoom)?.id ?? null
         return
       }
       const original = g.before.find((item) => item.id === element.id)!
@@ -1280,7 +1455,10 @@ function pointerMove(event: PointerEvent) {
       element.height = p.y - g.start.y
       if (event.shiftKey)
         Object.assign(element, constrainedArrow(element.width, element.height))
-      element.endId = element.kind === 'arrow' ? (hit(p, element.id)?.id ?? null) : null
+      element.endId =
+        element.kind === 'arrow'
+          ? (hit(p, element.id, 6 / camera.value.zoom)?.id ?? null)
+          : null
     } else {
       element.x = Math.min(g.start.x, p.x)
       element.y = Math.min(g.start.y, p.y)
@@ -1341,7 +1519,9 @@ function pointerUp(event: PointerEvent) {
       local.value,
       g.end ?? g.start,
       end,
-      eraserSize.value / camera.value.zoom / 2
+      eraserSize.value / camera.value.zoom / 2,
+      undefined,
+      isEditable
     )
   }
   const box = marquee.value
@@ -1467,9 +1647,12 @@ function zoom(factor: number) {
   )
 }
 function fitContent() {
-  let box = bounds(local.value)
+  let box = bounds(renderedElements.value)
   if (showScenes.value && localScenes.value.length) {
-    const regions = [...(local.value.length ? [box] : []), ...localScenes.value]
+    const regions = [
+      ...(renderedElements.value.length ? [box] : []),
+      ...localScenes.value,
+    ]
     const x = Math.min(...regions.map((region) => region.x)),
       y = Math.min(...regions.map((region) => region.y))
     box = {
@@ -1481,20 +1664,25 @@ function fitContent() {
   }
   const width = viewport.value?.clientWidth || 640
   const height = viewport.value?.clientHeight || 480
+  const left =
+    hideTools.value || !viewport.value?.clientWidth
+      ? 0
+      : Math.min(width <= 650 ? 80 : 120, width * 0.4)
+  const top =
+    hideTools.value || !viewport.value?.clientHeight ? 0 : width <= 1000 ? 104 : 64
   if (showScenes.value && localScenes.value.length) {
-    const left = hideTools.value ? 0 : Math.min(220, width / 3)
-    camera.value = sceneCamera(box, { width: width - left, height: height - 70 }, 40)
+    camera.value = sceneCamera(box, { width: width - left, height: height - top }, 40)
     camera.value.x += left
-    camera.value.y += 70
+    camera.value.y += top
     return
   }
   const zoom = Math.max(
     0.1,
-    Math.min(2, (width - 80) / box.width, (height - 80) / box.height)
+    Math.min(2, (width - left - 80) / box.width, (height - top - 80) / box.height)
   )
   camera.value = {
-    x: (width - box.width * zoom) / 2 - box.x * zoom,
-    y: (height - box.height * zoom) / 2 - box.y * zoom,
+    x: left + (width - left - box.width * zoom) / 2 - box.x * zoom,
+    y: top + (height - top - box.height * zoom) / 2 - box.y * zoom,
     zoom,
   }
 }
@@ -1585,11 +1773,17 @@ function moveSelection(dx: number, dy: number) {
 function undo() {
   if (interactionLocked.value) return
   cancelGesture()
-  const snapshot = history.undo({ elements: local.value, scenes: localScenes.value })
+  const snapshot = history.undo({
+    elements: local.value,
+    scenes: localScenes.value,
+    layers: localLayers.value,
+  })
   historyVersion.value++
   if (snapshot) {
     local.value = snapshot.elements
     localScenes.value = snapshot.scenes
+    localLayers.value = copyLayers(snapshot.layers)
+    ensureActiveLayer()
     if (!activeScene.value) {
       activeSceneId.value = null
       sceneMode.value = null
@@ -1602,11 +1796,17 @@ function undo() {
 function redo() {
   if (interactionLocked.value) return
   cancelGesture()
-  const snapshot = history.redo({ elements: local.value, scenes: localScenes.value })
+  const snapshot = history.redo({
+    elements: local.value,
+    scenes: localScenes.value,
+    layers: localLayers.value,
+  })
   historyVersion.value++
   if (snapshot) {
     local.value = snapshot.elements
     localScenes.value = snapshot.scenes
+    localLayers.value = copyLayers(snapshot.layers)
+    ensureActiveLayer()
     if (!activeScene.value) {
       activeSceneId.value = null
       sceneMode.value = null
@@ -1726,7 +1926,7 @@ function startEditing(id: string) {
   closeSettings()
   if (editing.value && editing.value !== id) finishEditing()
   const element = local.value.find((e) => e.id === id)
-  if (!element || !canEditText(element)) return
+  if (!element || !canEditText(element) || !isEditable(element)) return
   select([id])
   editing.value = id
   draft.value = element.text
@@ -2038,10 +2238,10 @@ function setTextAlignment(patch: {
   commit(before)
 }
 async function addImage(file: File, position?: BoardPoint) {
-  if (interactionLocked.value) return
+  if (interactionLocked.value || !activeLayerEditable.value) return
   try {
     const image = await boardImage(file)
-    if (disposed || interactionLocked.value) return
+    if (disposed || interactionLocked.value || !activeLayerEditable.value) return
     insertImage(image, file.name, position)
   } catch {
     error.value = t('boards.imageRejected')
@@ -2052,6 +2252,7 @@ function insertImage(
   name: string,
   position?: BoardPoint
 ) {
+  if (interactionLocked.value || !activeLayerEditable.value) return
   const p =
     position ??
     worldPoint(
@@ -2133,7 +2334,7 @@ async function renderPaperImage(
   const clone = svg.value.cloneNode(true) as SVGSVGElement
   await embedBoardFont(clone)
   clone.querySelectorAll('[data-editor-only]').forEach((node) => node.remove())
-  for (const element of local.value.filter(
+  for (const element of renderedElements.value.filter(
     (element) => element.kind === 'draw' && element.drawBrush && !isWritingBrush(element)
   )) {
     const group = [...clone.querySelectorAll('[data-artistic-brush]')].find(
@@ -2143,14 +2344,14 @@ async function renderPaperImage(
     if (group && raster) applyBrushRaster(group, raster)
   }
   finishNotationExport(clone)
-  const box = bounds(local.value)
+  const box = bounds(renderedElements.value)
   // Include anchored connector endpoints, which may extend beyond their original boxes.
-  const endpoints = local.value
+  const endpoints = renderedElements.value
     .filter((e) => e.kind === 'arrow')
     .flatMap((e) => connectorPoints(e, local.value))
   const margin = Math.max(
     hasAnnotations.value ? 64 : 32,
-    ...local.value
+    ...renderedElements.value
       .filter((element) => element.drawBrush)
       .map((element) => (element.strokeWidth ?? 2) * 3 + 4)
   )
@@ -2647,22 +2848,62 @@ defineExpose({
           {{ t('boards.redo') }} <kbd>Ctrl+Shift+Z</kbd>
         </button>
       </div>
-      <PaperToolWheel
+      <PaperLayersPanel
+        v-if="!hideTools"
+        :layers="localLayers"
+        :elements="local"
+        :active-id="activeLayerId"
+        :selected-count="selected.length"
+        :read-only="!!interactionLocked"
+        :collapsed="layersCollapsed"
+        @collapse="toggleLayersPanel"
+        @active="activateLayer"
+        @add="addLayer"
+        @patch="patchLayer"
+        @order="reorderLayer"
+        @remove="removeLayer"
+        @move-selection="moveSelectionToLayer"
+      />
+      <PaperToolRail
         v-if="!hideTools && !interactionLocked"
         :tools="[...tools]"
         :active-tool="activeWheelTool"
-        :color="wheelColor"
-        :width="tool === 'eraser' ? eraserSize : wheelWidth"
-        :opacity="wheelOpacity"
-        :settings-open="settingsOpen"
-        :active-brush="tool === 'draw' ? drawBrush : undefined"
-        :brush-library-open="settingsOpen && brushLibraryOpen"
-        :pen-colors="penColorsAvailable"
-        @color="setBrush({ strokeColor: $event })"
         @choose="chooseWheelTool"
-        @toggle-settings="toggleBrushSettings"
-        @toggle-brush-library="toggleBrushLibrary"
-        @lock-paper="emit('lockPaper')"
+        @undo="undo"
+        @redo="redo"
+      />
+      <PaperContextBar
+        v-if="!hideTools && !interactionLocked && !editing && tool !== 'eraser'"
+        :tool="activeWheelTool"
+        :brush="instrumentBrush"
+        :drawing-selection="tool === 'select' && selectedElement?.kind === 'draw'"
+        :base-instrument="instrumentBase"
+        :color="wheelColor"
+        :width="wheelWidth"
+        :selection="tool === 'select' && selected.length > 0"
+        :text="
+          tool === 'select' &&
+          local.some((element) => selected.includes(element.id) && canEditText(element))
+        "
+        :edit-available="!!editableSelection"
+        :fill="fillAvailable"
+        :font-size="selectedFontSize"
+        :font="selectedTextFont"
+        :text-color="selectedTextColor"
+        :fill-color="selectedFill"
+        :align="selectedTextAlign"
+        :settings-open="settingsOpen || selectionPropertiesOpen"
+        @brush="setBrush"
+        @instrument="chooseContextInstrument"
+        @font-size="setElementText({ fontSize: $event })"
+        @font="setTextStyle({ textFont: $event })"
+        @text-color="setElementText({ color: $event })"
+        @fill-color="setFillColor"
+        @align="setTextAlignment({ textAlign: $event })"
+        @settings="toggleContextSettings"
+        @edit="editableSelection && startEditing(editableSelection.id)"
+        @duplicate="duplicateSelection"
+        @remove="removeSelection"
       />
       <PaperScenesPanel
         v-if="scenesOpen && !presenting"
@@ -2707,11 +2948,13 @@ defineExpose({
         v-if="showStyle && !hideTools && !interactionLocked"
         v-show="settingsOpen"
         class="board-style-panel board-floating"
+        :style="{
+          left: `${Math.max(12, Math.min(layersCollapsed ? 264 : 444, viewportSize.width - 300))}px`,
+        }"
         :class="{ 'board-instruments-panel': brushLibraryOpen }"
         @pointerdown.stop
         @wheel.stop
-        @keydown.esc.stop.prevent="closeSettings"
-        @keydown.stop
+        @keydown.stop="settingsKeydown"
       >
         <div class="paper-settings-heading">
           <strong>{{
@@ -3203,50 +3446,6 @@ defineExpose({
           />
         </button>
       </div>
-      <div
-        v-if="
-          tool === 'select' &&
-          selected.length &&
-          !hideTools &&
-          !editing &&
-          !interactionLocked
-        "
-        class="paper-selection-bar board-floating"
-        @pointerdown.stop
-        @wheel.stop
-      >
-        <button
-          v-if="editableSelection"
-          data-edit-text
-          type="button"
-          :aria-label="t('boards.editText')"
-          @click="startEditing(editableSelection.id)"
-        >
-          <Type :size="16" /><span>{{ t('boards.editText') }}</span>
-        </button>
-        <button
-          type="button"
-          :aria-label="t('boards.usability.properties')"
-          :aria-pressed="selectionPropertiesOpen"
-          @click="toggleSelectionProperties"
-        >
-          <Pencil :size="16" /><span>{{ t('boards.usability.properties') }}</span>
-        </button>
-        <button
-          type="button"
-          :aria-label="t('boards.duplicateSelection')"
-          @click="duplicateSelection"
-        >
-          <Copy :size="16" />
-        </button>
-        <button
-          type="button"
-          :aria-label="t('boards.deleteSelection')"
-          @click="removeSelection"
-        >
-          <Trash2 :size="16" />
-        </button>
-      </div>
       <details
         v-if="!hideTools && !selected.length && !editing && tool !== 'eraser'"
         class="board-shortcuts board-floating"
@@ -3322,11 +3521,14 @@ defineExpose({
         >
           <g :id="contentId">
             <g
-              v-for="element in local"
+              v-for="element in renderedElements"
               :key="element.id"
               :data-element-id="element.id"
               :transform="rotationTransform(element)"
-              :opacity="element.opacity ?? 1"
+              :opacity="
+                (element.opacity ?? 1) * (layerFor(element, localLayers)?.opacity ?? 1)
+              "
+              :pointer-events="isEditable(element) ? undefined : 'none'"
               @dblclick.stop="tool !== 'eraser' && startEditing(element.id)"
             >
               <image
@@ -3538,10 +3740,11 @@ defineExpose({
             :transform="rotationTransform(rotatableElement)"
           >
             <rect
-              :x="selectionBox.x - 4"
-              :y="selectionBox.y - 4"
-              :width="selectionBox.width + 8"
-              :height="selectionBox.height + 8"
+              data-selection-outline
+              :x="selectionBox.x"
+              :y="selectionBox.y"
+              :width="selectionBox.width"
+              :height="selectionBox.height"
               fill="none"
               stroke="var(--accent)"
               :stroke-width="1.5 / camera.zoom"
@@ -3588,7 +3791,7 @@ defineExpose({
               v-if="rotatableElement"
               :x1="selectionBox.x + selectionBox.width / 2"
               :x2="selectionBox.x + selectionBox.width / 2"
-              :y1="selectionBox.y - 4"
+              :y1="selectionBox.y"
               :y2="selectionBox.y - 26 / camera.zoom"
               stroke="var(--accent)"
               :stroke-width="1 / camera.zoom"
@@ -3972,8 +4175,8 @@ defineExpose({
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 0;
+  border-radius: 0;
 }
 .board-editor.board-distraction-free {
   border: 0;
