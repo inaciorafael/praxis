@@ -33,6 +33,7 @@ export function sameValue(left: unknown, right: unknown): boolean {
 const comparableElement = (element: BoardElement) => ({
   ...element,
   angle: element.angle ?? 0,
+  connectorStyle: element.connectorStyle ?? 'straight',
   opacity: element.opacity ?? 1,
   strokeStyle: element.strokeStyle ?? 'clean',
   textFont: element.textFont ?? 'sans',
@@ -83,16 +84,23 @@ export function createSnapshotHistory<T>(
   limit = 100,
   byteBudget = 20 * 1024 * 1024
 ) {
-  const undo: T[] = []
-  const redo: T[] = []
+  type Entry = { snapshot: T; bytes: number }
+  const undo: Entry[] = []
+  const redo: Entry[] = []
+  let totalBytes = 0
+  function append(stack: Entry[], snapshot: T) {
+    const isolated = copy(snapshot)
+    const entry = { snapshot: isolated, bytes: bytes(isolated) }
+    stack.push(entry)
+    totalBytes += entry.bytes
+  }
   function trim() {
-    let total = [...undo, ...redo].reduce((sum, snapshot) => sum + bytes(snapshot), 0)
     while (
-      (total > byteBudget || undo.length + redo.length > limit) &&
+      (totalBytes > byteBudget || undo.length + redo.length > limit) &&
       (undo.length || redo.length)
     ) {
       const removed = undo.length ? undo.shift()! : redo.shift()!
-      total -= bytes(removed)
+      totalBytes -= removed.bytes
     }
   }
   return {
@@ -103,27 +111,31 @@ export function createSnapshotHistory<T>(
       return redo.length > 0
     },
     push(snapshot: T) {
-      undo.push(copy(snapshot))
+      for (const entry of redo) totalBytes -= entry.bytes
       redo.length = 0
+      append(undo, snapshot)
       trim()
     },
     undo(current: T) {
       const previous = undo.pop()
       if (!previous) return null
-      redo.push(copy(current))
+      totalBytes -= previous.bytes
+      append(redo, current)
       trim()
-      return previous
+      return previous.snapshot
     },
     redo(current: T) {
       const next = redo.pop()
       if (!next) return null
-      undo.push(copy(current))
+      totalBytes -= next.bytes
+      append(undo, current)
       trim()
-      return next
+      return next.snapshot
     },
     clear() {
       undo.length = 0
       redo.length = 0
+      totalBytes = 0
     },
   }
 }

@@ -32,6 +32,33 @@ const element = (values: Partial<BoardElement>): BoardElement => ({
   ...values,
 })
 describe('board geometry', () => {
+  it.each(['rectangle', 'ellipse', 'triangle', 'hexagon', 'text'] as const)(
+    'indexed %s connectors preserve exact attachment geometry and follow live mutations',
+    (kind) => {
+      const start = element({
+        id: 'start',
+        kind,
+        angle: 0.4,
+        textBackground: kind === 'text' ? 'ellipse' : undefined,
+      })
+      const end = element({ id: 'end', kind, x: 400, y: 100, angle: -0.3 })
+      const arrow = element({
+        id: 'arrow',
+        kind: 'arrow',
+        startId: 'start',
+        endId: 'end',
+      })
+      const scene = [start, end, arrow]
+      const index = new Map(scene.map((item) => [item.id, item]))
+      expect(connectorPoints(arrow, index)).toEqual(connectorPoints(arrow, scene))
+      start.x = 200
+      end.angle = 0.7
+      expect(connectorPoints(arrow, index)).toEqual(connectorPoints(arrow, scene))
+      arrow.startId = 'missing'
+      arrow.endId = 'arrow'
+      expect(connectorPoints(arrow, index)).toEqual(connectorPoints(arrow, scene))
+    }
+  )
   it('hits the actual ellipse outline and only expands attachment tolerance when requested', () => {
     const oval = element({ kind: 'ellipse', width: 100, height: 100 })
     expect(pointInElement(oval, { x: 0, y: 0 })).toBe(false)

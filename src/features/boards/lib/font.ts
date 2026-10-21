@@ -1,14 +1,20 @@
 import fontUrl from '@fontsource/caveat/files/caveat-latin-400-normal.woff2?url'
+import boldFontUrl from '@fontsource/caveat/files/caveat-latin-700-normal.woff2?url'
+
+const faces = [{ url: fontUrl, weight: '400' }, { url: boldFontUrl, weight: '700' }]
 
 let fontLoad: Promise<void> | undefined
-let fontData: Promise<string> | undefined
+let fontData: Promise<string[]> | undefined
 
 export function loadBoardFont(): Promise<void> {
   if (typeof FontFace === 'undefined' || !document.fonts) return Promise.resolve()
   fontLoad ??= (async () => {
-    const font = new FontFace('Praxis Caveat', `url("${fontUrl}")`, { weight: '400' })
-    await font.load()
-    document.fonts.add(font)
+    const loaded = await Promise.all(faces.map(async ({ url, weight }) => {
+      const font = new FontFace('Praxis Caveat', `url("${url}")`, { weight, style: 'normal' })
+      await font.load()
+      return font
+    }))
+    for (const font of loaded) document.fonts.add(font)
   })().catch((error) => {
     fontLoad = undefined
     throw error
@@ -20,8 +26,8 @@ export function loadBoardFont(): Promise<void> {
 export async function embedBoardFont(svg: SVGSVGElement): Promise<void> {
   if (!svg.querySelector('[data-handwritten]')) return
   await loadBoardFont()
-  fontData ??= (async () => {
-    const response = await fetch(fontUrl)
+  fontData ??= Promise.all(faces.map(async ({ url }) => {
+    const response = await fetch(url)
     if (!response.ok) throw new Error('Board font unavailable')
     const blob = await response.blob()
     return new Promise<string>((resolve, reject) => {
@@ -30,11 +36,12 @@ export async function embedBoardFont(svg: SVGSVGElement): Promise<void> {
       reader.onerror = () => reject(new Error('Board font unavailable'))
       reader.readAsDataURL(blob)
     })
-  })().catch((error) => {
+  })).catch((error) => {
     fontData = undefined
     throw error
   })
   const style = document.createElementNS('http://www.w3.org/2000/svg', 'style')
-  style.textContent = `@font-face{font-family:'Praxis Caveat';src:url('${await fontData}') format('woff2');font-weight:400;font-style:normal;}`
+  const data = await fontData
+  style.textContent = faces.map((face, index) => `@font-face{font-family:'Praxis Caveat';src:url('${data[index]}') format('woff2');font-weight:${face.weight};font-style:normal;}`).join('')
   svg.insertBefore(style, svg.firstChild)
 }

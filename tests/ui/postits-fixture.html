@@ -1,0 +1,70 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Praxis · Post-its de teste</title></head><body><div id="app"></div>
+
+<script type="module">
+
+import { createApp, defineComponent, h } from 'vue'
+
+import { createPinia } from 'pinia'
+
+import { createRouter, createMemoryHistory } from 'vue-router'
+
+import { i18n } from '/src/shared/lib/i18n/i18n.ts'
+
+import { applyTheme } from '/src/shared/lib/theme/theme.service.ts'
+
+import '/src/app/styles/main.css'
+import '/src/app/styles/theme.css'
+
+import PostitsPage from '/src/pages/postits/PostitsPage.vue'
+
+import PostitWindow from '/src/features/postits/components/PostitWindow.vue'
+
+import AppAside from '/src/app/shell/AppAside.vue'
+
+const notes=[
+
+{record:{id:'fixture-ideas',title:'Ideias para amanhã',body:'Rever o desenho da tela.\nExperimentar uma solução mais simples.',revision:1,pinned:true,collapsed:false,archived:false,color:'yellow'},title:'Ideias para amanhã'},
+
+{record:{id:'fixture-books',title:'Para ler',body:'Anotar referências sobre desenho e criatividade.',revision:1,pinned:false,collapsed:false,archived:false,color:'pink'},title:'Para ler'}]
+
+window.__TAURI_INTERNALS__={transformCallback:()=>1,invoke:async(command,args={})=>{
+
+  if(command==='list_postits')return structuredClone({notes})
+
+  if(command==='get_postit_window')return structuredClone([notes[0],{language:'pt-BR',theme:'light'}])
+
+  if(command==='change_postit'){
+
+    const {id,expectedRevision,...patch}=args.change;
+
+    let note=notes.find(n=>n.record.id===id);
+
+    if(!note){note={record:{id,revision:0,pinned:false,collapsed:false,archived:false,color:'yellow',title:'',body:''},title:''};notes.push(note)}
+
+    if(note.record.revision!==expectedRevision)throw 'O post-it mudou.';
+
+    if(patch.completed!==undefined){note.record.archived=patch.completed;note.record.completedAt=patch.completed?Date.now():null;delete patch.completed} Object.assign(note.record,patch);if(note.record.archived)note.record.pinned=false;
+
+    note.title=note.record.title;note.record.revision++;return
+
+  }
+
+  if(command==='sync_postits'||command==='open_postit'||command==='drag_postit')return
+
+  if(command.startsWith('plugin:event|'))return 1
+
+  throw Error('Unmocked fixture command: '+command)
+
+}}
+
+i18n.global.locale.value='pt-BR';applyTheme('light')
+
+const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',name:'postits',component:PostitsPage}]})
+
+const preview=new URLSearchParams(location.search).has('note')
+
+const Root=defineComponent({render:()=>preview?h('div',{style:'width:248px;height:210px;margin:40px'},[h(PostitWindow)]):h('div',{class:'grid grid-cols-12 min-h-screen bg-paper text-ink'},[h('aside',{class:'col-span-2 border-r border-border bg-surface'},[h(AppAside)]),h('main',{class:'col-span-10 p-8'},[h(PostitsPage)])])})
+
+createApp(Root).use(createPinia()).use(i18n).use(router).mount('#app')
+
+</script></body></html>

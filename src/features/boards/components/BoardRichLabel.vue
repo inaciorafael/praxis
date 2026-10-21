@@ -80,6 +80,7 @@ const annotations = computed(() => {
           :x="run.x"
           :y="run.y"
           :font-family="run.fontFamily"
+          style="font-synthesis: style"
           :font-size="run.fontSize"
           :font-weight="run.bold ? 700 : 400"
           :font-style="run.italic ? 'italic' : 'normal'"

@@ -12,12 +12,16 @@ use crate::{
     vault::{self, read_active_document, VaultStore},
 };
 
+static CONFIG_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 const APP_CONFIG_FILE: &str = "app-config.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
 pub struct AppConfig {
+    pub postit_positions: Vec<PostitPosition>,
+    pub favorite_paper_pens: Vec<FavoritePaperPen>,
     pub language: AppLanguage,
     pub theme: AppTheme,
     pub start_with_windows: bool,
@@ -26,6 +30,39 @@ pub struct AppConfig {
     pub notifications_enabled: bool,
     pub badge_enabled: bool,
     pub completed_task_retention_days: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FavoritePaperPen {
+    instrument: String,
+    width: f64,
+    opacity: f64,
+    color: String,
+    custom_color: Option<String>,
+}
+fn validate_favorite_pens(pens: &[FavoritePaperPen]) -> Result<(), String> {
+    if pens.len() > 6 {
+        return Err("No more than six favorite pens are allowed.".into());
+    }
+    for pen in pens {
+        let valid_color = pen.custom_color.as_ref().is_none_or(|color| {
+            color.len() == 7
+                && color.starts_with('#')
+                && color[1..].bytes().all(|byte| byte.is_ascii_hexdigit())
+        });
+        if !["pencil", "pen", "graphite", "fountain", "ink"].contains(&pen.instrument.as_str())
+            || !["neutral", "amber", "sage", "blue", "rose", "purple"].contains(&pen.color.as_str())
+            || !pen.width.is_finite()
+            || !(0.1..=64.0).contains(&pen.width)
+            || !pen.opacity.is_finite()
+            || !(0.0..=1.0).contains(&pen.opacity)
+            || !valid_color
+        {
+            return Err("Invalid favorite pen.".into());
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,6 +86,8 @@ pub enum AppLanguage {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            postit_positions: Vec::new(),
+            favorite_paper_pens: Vec::new(),
             language: AppLanguage::En,
             theme: AppTheme::Light,
             start_with_windows: false,
@@ -64,6 +103,7 @@ impl Default for AppConfig {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfigPatch {
+    favorite_paper_pens: Option<Vec<FavoritePaperPen>>,
     language: Option<AppLanguage>,
     theme: Option<AppTheme>,
     start_with_windows: Option<bool>,
@@ -134,7 +174,14 @@ pub fn get_app_config(app: AppHandle) -> Result<AppConfig, String> {
 
 #[tauri::command]
 pub fn update_app_config(app: AppHandle, patch: AppConfigPatch) -> Result<AppConfig, String> {
+    let _guard = CONFIG_MUTEX
+        .lock()
+        .map_err(|_| "Configuracoes indisponiveis.")?;
     let mut config = load_app_config(&app)?;
+    if let Some(pens) = patch.favorite_paper_pens {
+        validate_favorite_pens(&pens)?;
+        config.favorite_paper_pens = pens;
+    }
 
     if let Some(value) = patch.language {
         config.language = value;
@@ -381,4 +428,71 @@ mod tests {
         assert!(serde_json::from_value::<AppConfig>(config.clone()).is_err());
         assert!(serde_json::from_value::<AppConfigPatch>(config).is_err());
     }
+}
+
+#[cfg(test)]
+mod favorite_pen_tests {
+    use super::*;
+    #[test]
+    fn favorite_pens_are_bounded_and_backwards_compatible() {
+        let pen = FavoritePaperPen {
+            instrument: "ink".into(),
+            width: 2.0,
+            opacity: 0.8,
+            color: "neutral".into(),
+            custom_color: Some("#202124".into()),
+        };
+        assert!(validate_favorite_pens(&[pen.clone()]).is_ok());
+        assert!(validate_favorite_pens(&vec![pen.clone(); 7]).is_err());
+        let mut invalid = pen.clone();
+        invalid.width = f64::NAN;
+        assert!(validate_favorite_pens(&[invalid]).is_err());
+        let mut invalid = pen;
+        invalid.custom_color = Some("red".into());
+        assert!(validate_favorite_pens(&[invalid]).is_err());
+        let old: AppConfig = serde_json::from_str("{}").unwrap();
+        assert!(old.favorite_paper_pens.is_empty());
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PostitPosition {
+    key: String,
+    x: f64,
+    y: f64,
+}
+pub(crate) fn postit_position(app: &AppHandle, key: &str) -> Result<Option<(f64, f64)>, String> {
+    let _guard = CONFIG_MUTEX
+        .lock()
+        .map_err(|_| "Configuracoes indisponiveis.")?;
+    Ok(load_app_config(app)?
+        .postit_positions
+        .iter()
+        .find(|p| p.key == key && p.x.is_finite() && p.y.is_finite())
+        .map(|p| (p.x, p.y)))
+}
+pub(crate) fn save_postit_position(
+    app: &AppHandle,
+    key: &str,
+    x: f64,
+    y: f64,
+) -> Result<(), String> {
+    if !x.is_finite() || !y.is_finite() {
+        return Err("Posicao invalida.".into());
+    }
+    let _guard = CONFIG_MUTEX
+        .lock()
+        .map_err(|_| "Configuracoes indisponiveis.")?;
+    let mut config = load_app_config(app)?;
+    config.postit_positions.retain(|p| p.key != key);
+    if config.postit_positions.len() >= 500 {
+        config.postit_positions.remove(0);
+    }
+    config.postit_positions.push(PostitPosition {
+        key: key.into(),
+        x,
+        y,
+    });
+    save_app_config(app, &config)
 }

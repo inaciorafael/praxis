@@ -2,12 +2,14 @@ import { RoughGenerator } from 'roughjs/bin/generator'
 import type { Drawable, Options } from 'roughjs/bin/core'
 import type { BoardElement, BoardPoint } from '@/shared/types/board'
 import { writingPaths } from './writing'
+import { connectorRoute, localConnectorEndpoints } from './connector-path'
 import { polygonVertices } from './geometry'
 import { elementFillStyle } from './element-style'
 import { DEFAULT_SKETCH_OPTIONS } from './sketch-options'
 
 export type SketchPath = {
   d: string
+  ink?: boolean
   stroke: string
   strokeWidth: number
   fill: string
@@ -101,8 +103,12 @@ export function sketchSeed(id: string): number {
   return ((hash >>> 0) % 2147483646) + 1
 }
 
-export function arrowHead(start: BoardPoint, end: BoardPoint): BoardPoint[] {
-  const distance = Math.hypot(end.x - start.x, end.y - start.y)
+export function arrowHead(
+  start: BoardPoint,
+  end: BoardPoint,
+  length?: number
+): BoardPoint[] {
+  const distance = length ?? Math.hypot(end.x - start.x, end.y - start.y)
   if (distance < 0.001) return []
   const size = Math.min(16, distance * 0.3)
   const angle = Math.atan2(end.y - start.y, end.x - start.x)
@@ -175,6 +181,7 @@ export function sketchPaths(
   }
   const path = (d: string, pathFill = 'none'): SketchPath => ({
     d,
+    ink: true,
     stroke,
     strokeWidth: element.strokeWidth ?? 2,
     fill: pathFill,
@@ -224,6 +231,7 @@ export function sketchPaths(
   const rough = (drawable: ReturnType<RoughGenerator['rectangle']>): SketchPath[] => {
     const paths = generator.toPaths(drawable).map((info) => ({
       ...info,
+      ink: info.stroke !== 'none',
       fill: info.fill ?? 'none',
       opacity: info.stroke === 'none' ? 1 : opacity,
       dash: info.stroke === 'none' ? undefined : dash,
@@ -242,28 +250,29 @@ export function sketchPaths(
     )
   }
   if (element.kind === 'arrow') {
-    const [start, end] = endpoints
-      ? (endpoints.map((point) => ({
-          x: point.x - element.x,
-          y: point.y - element.y,
-        })) as [BoardPoint, BoardPoint])
-      : [
+    const local = endpoints
+      ? localConnectorEndpoints(endpoints, element)
+      : ([
           { x: 0, y: 0 },
           { x: element.width, y: element.height },
-        ]
-    const head = arrowHead(start, end)
+        ] as [BoardPoint, BoardPoint])
+    const [start, end] = local
+    const route = connectorRoute(local, element.connectorStyle)
+    const head = arrowHead(
+      route.tangent,
+      end,
+      Math.hypot(end.x - start.x, end.y - start.y)
+    )
     if (!head.length) return []
     if (clean)
       return [
-        path(`M${start.x} ${start.y} L${end.x} ${end.y}`),
+        path(route.d),
         path(
           `M${head[0]!.x} ${head[0]!.y} L${end.x} ${end.y} L${head[2]!.x} ${head[2]!.y}`
         ),
       ]
     return [
-      ...rough(
-        generator.line(start.x, start.y, end.x, end.y, { ...options, fill: undefined })
-      ),
+      ...rough(generator.path(route.d, { ...options, fill: undefined })),
       ...rough(
         generator.linearPath(
           head.map((point) => [point.x, point.y]),

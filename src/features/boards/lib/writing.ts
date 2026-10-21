@@ -50,7 +50,7 @@ export function writingPaths(
     strokeWidth = width,
     fill = 'none',
     stroke = color
-  ): SketchPath => ({ d, opacity, strokeWidth, fill, stroke })
+  ): SketchPath => ({ d, opacity, strokeWidth, fill, stroke, ink: true })
   const pressure = (point: BoardPoint) =>
     Math.max(0.05, Math.min(1, point.pressure ?? 0.6))
   if (element.drawBrush === 'ink' && !pencil) {

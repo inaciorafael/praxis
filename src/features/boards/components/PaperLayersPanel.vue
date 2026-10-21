@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Layers,
@@ -13,6 +13,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Trash2,
+  Ellipsis,
 } from '@lucide/vue'
 import type { BoardElement, BoardLayer } from '@/shared/types/board'
 import { elementLayerId, MAX_LAYERS } from '../lib/layers'
@@ -44,7 +45,33 @@ const counts = computed(() => {
   return result
 })
 const renaming = ref<string | null>(null)
+const options = ref<string | null>(null)
 const panel = ref<HTMLElement>()
+function add() {
+  closeOptions()
+  emit('add')
+}
+function toggleOptions(id: string) {
+  options.value = options.value === id ? null : id
+  renaming.value = null
+}
+function closeOptions() {
+  options.value = null
+  renaming.value = null
+}
+watch(() => [props.collapsed, props.activeId, props.readOnly], closeOptions)
+function selectLayer(id: string) {
+  if (id === props.activeId) options.value = options.value === id ? null : id
+  else {
+    closeOptions()
+    emit('active', id)
+  }
+}
+function outside(event: PointerEvent) {
+  if (event.target instanceof Node && !panel.value?.contains(event.target)) closeOptions()
+}
+onMounted(() => document.addEventListener('pointerdown', outside, true))
+onUnmounted(() => document.removeEventListener('pointerdown', outside, true))
 watch(renaming, async (id) => {
   if (!id) return
   await nextTick()
@@ -53,9 +80,10 @@ watch(renaming, async (id) => {
   input?.select()
 })
 function rename(layer: BoardLayer, event: Event) {
+  if (props.readOnly || renaming.value !== layer.id) return
   const name = (event.target as HTMLInputElement).value.trim().slice(0, 80)
-  if (name) emit('patch', layer.id, { name })
   renaming.value = null
+  if (name && name !== layer.name) emit('patch', layer.id, { name })
 }
 </script>
 <template>
@@ -68,10 +96,19 @@ function rename(layer: BoardLayer, event: Event) {
     @wheel.stop
     @contextmenu.stop.prevent
     @keydown.stop
+    @keydown.esc.prevent="options ? closeOptions() : emit('collapse')"
   >
     <header>
-      <strong
-        ><Layers :size="16" />{{ t('boards.layers.title') }}</strong
+      <strong><Layers :size="16" />{{ t('boards.layers.title') }}</strong
+      ><button
+        v-if="!collapsed"
+        data-add-layer
+        :disabled="readOnly || layers.length >= MAX_LAYERS"
+        :aria-label="t('boards.layers.add')"
+        :title="t('boards.layers.add')"
+        @click="add"
+      >
+        <Plus :size="17" /></button
       ><button
         :aria-label="t(collapsed ? 'boards.layers.expand' : 'boards.layers.collapse')"
         :title="t('boards.layers.title')"
@@ -87,15 +124,6 @@ function rename(layer: BoardLayer, event: Event) {
       </button>
     </header>
     <template v-if="!collapsed">
-      <p class="layer-hint">{{ t('boards.layers.hint') }}</p>
-      <button
-        class="add-layer"
-        data-add-layer
-        :disabled="readOnly || layers.length >= MAX_LAYERS"
-        @click="emit('add')"
-      >
-        <Plus :size="16" />{{ t('boards.layers.add') }}
-      </button>
       <ol
         :aria-label="t('boards.layers.title')"
         class="layer-list"
@@ -111,14 +139,18 @@ function rename(layer: BoardLayer, event: Event) {
               class="layer-select"
               :data-layer-select="layer.id"
               :aria-pressed="layer.id === activeId"
-              @click="emit('active', layer.id)"
+              @click="selectLayer(layer.id)"
             >
               <span class="layer-dot" /><span
                 >{{ layer.name || t('boards.layers.default')
-                }}<small>{{
-                  t('boards.layers.items', { count: counts.get(layer.id) ?? 0 })
-                }}</small></span
-              >
+                }}<small
+                  >{{
+                    `${Math.round(layer.opacity * 100)}% · ${counts.get(layer.id) ?? 0}`
+                  }}
+                  <LockKeyhole
+                    v-if="layer.locked"
+                    :size="10" /></small
+              ></span>
             </button>
             <button
               :disabled="readOnly"
@@ -136,36 +168,47 @@ function rename(layer: BoardLayer, event: Event) {
               />
             </button>
             <button
-              :disabled="readOnly"
+              :data-layer-options="layer.id"
               :aria-label="
-                t(layer.locked ? 'boards.layers.unlock' : 'boards.layers.lock')
+                t('boards.layers.options', {
+                  name: layer.name || t('boards.layers.default'),
+                })
               "
-              :aria-pressed="layer.locked"
-              :data-layer-lock="layer.id"
-              @click="emit('patch', layer.id, { locked: !layer.locked })"
+              :aria-expanded="options === layer.id"
+              @click="toggleOptions(layer.id)"
             >
-              <LockKeyhole
-                v-if="layer.locked"
-                :size="15"
-              /><LockKeyholeOpen
-                v-else
-                :size="15"
-              />
+              <Ellipsis :size="16" />
             </button>
           </div>
-          <template v-if="layer.id === activeId">
+          <template v-if="options === layer.id">
             <input
               v-if="renaming === layer.id"
               autofocus
               :value="layer.name || t('boards.layers.default')"
               maxlength="80"
               :aria-label="t('boards.layers.name')"
-              @change="rename(layer, $event)"
               @keydown.enter.prevent="rename(layer, $event)"
-              @keydown.esc="renaming = null"
-              @blur="renaming = null"
+              @keydown.esc.stop.prevent="renaming = null"
+              @blur="rename(layer, $event)"
             />
             <div class="layer-actions">
+              <button
+                :disabled="readOnly"
+                :data-layer-lock="layer.id"
+                :aria-label="
+                  t(layer.locked ? 'boards.layers.unlock' : 'boards.layers.lock')
+                "
+                :aria-pressed="layer.locked"
+                @click="emit('patch', layer.id, { locked: !layer.locked })"
+              >
+                <LockKeyhole
+                  v-if="layer.locked"
+                  :size="15"
+                /><LockKeyholeOpen
+                  v-else
+                  :size="15"
+                />
+              </button>
               <button
                 :disabled="readOnly"
                 @click="renaming = layer.id"
@@ -212,19 +255,17 @@ function rename(layer: BoardLayer, event: Event) {
           </template>
         </li>
       </ol>
-      <footer v-if="active">
+      <footer
+        v-if="
+          active &&
+          (selectedCount || active.locked || !active.visible || active.opacity === 0)
+        "
+      >
         <p
           v-if="active.locked || !active.visible || active.opacity === 0"
           role="status"
         >
           {{ t('boards.layers.unavailable') }}
-        </p>
-        <p v-else>
-          {{
-            t('boards.layers.drawingOn', {
-              name: active.name || t('boards.layers.default'),
-            })
-          }}
         </p>
         <button
           v-if="selectedCount"
@@ -249,10 +290,10 @@ function rename(layer: BoardLayer, event: Event) {
   width: 220px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: 4px;
+  padding: 4px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--pe-radius);
   background: var(--surface);
   color: var(--ink);
   font-size: 12px;
@@ -309,7 +350,7 @@ footer p {
   margin: 0;
 }
 .layer-list {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   overflow: auto;
   list-style: none;
@@ -317,15 +358,14 @@ footer p {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
 }
 li {
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 2px;
+  border-top: 1px solid var(--border);
 }
 li.active {
-  border-color: var(--ink);
+  background: var(--pe-active);
 }
 .layer-select {
   flex: 1;
@@ -360,8 +400,10 @@ small {
   margin-top: 5px;
 }
 .layer-actions button:first-child {
-  margin-right: auto;
   font-size: 10px;
+}
+.layer-actions button:nth-child(2) {
+  margin-right: auto;
 }
 .layer-opacity {
   display: flex;

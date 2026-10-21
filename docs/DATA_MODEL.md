@@ -790,3 +790,21 @@ String opcional, nao vazia, com ate 100 bytes. Elementos com o mesmo groupId per
 
 Board.layers e opcional (ausencia ou lista vazia representa a camada virtual base). BoardLayer: id (1 a 100 bytes, unico), name (ate 80 caracteres), visible, locked e opacity (0 a 1). Ordem da lista: fundo para topo. Limite 32. BoardElement.layerId e opcional e usa base quando ausente. Referencias devem existir; grupos nao podem atravessar camadas. SaveBoardInput.layers omitido preserva as camadas atuais. Rust rejeita alteracoes nos elementos de uma camada que permanece bloqueada. O salvamento e o historico incluem elementos, cenas e camadas juntos. Miniaturas sao projecoes visiveis, ordenadas e com opacidade composta, sem alterar dados originais.
 
+
+### Personal Paper library
+
+Optional paperLibrary stores id, name, revision and elements snapshots in the encrypted document. Items are independent of Papers and task attachments. Missing collections read as empty without hydration writes. Library deletion preserves all inserted copies. See PAPER_PERSONAL_LIBRARY.md for limits and insertion semantics.
+
+
+### Independent desktop Post-its
+
+desktopPostits is an optional encrypted collection of independent notes: id, title, body, revision, pinned, collapsed, archived, completedAt and color.
+Creating notes requires no task, reminder or date. Pin/unpin, complete/reopen and editing never modify tasks or notifications.
+Title is optional when body contains text. Limits: 500 notes, 200 title characters, 10,000 body characters.
+Revisions guard mutations. Reading older vaults does not create records or write.
+Legacy task-linked notes copy the task title on read; the next Post-it mutation materializes independent records while preserving original tasks.
+Native windows are capped at three and scoped to the active vault. Lock/switch destroys their contents.
+Device geometry contains opaque keys and coordinates only, through AppConfig. No title or body is copied there.
+Colors approximate familiar adhesive paper (classic yellow and soft pink/green/blue), not certified brand color values.
+
+Completed Post-its use archived as their compatibility status and completedAt as a UTC epoch-millisecond timestamp. Seven days after completion they are removed from the active vault; reopen clears the timestamp. Native synchronization performs atomic cleanup and the frontend schedules one timeout for the next expiry. Closed vaults are cleaned on next open. Legacy archived notes receive a deadline on first sync. Existing encrypted safety copies retain their separate policy.

@@ -34,7 +34,7 @@ import {
 import BoardAnnotationControls from './BoardAnnotationControls.vue'
 import BoardNotation from './BoardNotation.vue'
 import BoardColorPresets from './BoardColorPresets.vue'
-import { PEN_COLORS, HIGHLIGHT_COLORS } from '../lib/ink-colors'
+import { DEFAULT_PEN_COLOR, PEN_COLORS, HIGHLIGHT_COLORS } from '../lib/ink-colors'
 
 const props = defineProps<{
   modelValue: BoardRichText
@@ -359,7 +359,7 @@ function setAnnotation(annotation: BoardTextAnnotation | null) {
 const annotationInkColor = ref<string>()
 const highlightColor = ref<string>()
 const notationColor = computed(
-  () => currentAnnotation.value?.color ?? annotationInkColor.value ?? PEN_COLORS[0].color
+  () => currentAnnotation.value?.color ?? annotationInkColor.value ?? DEFAULT_PEN_COLOR
 )
 function chooseNotationColor(color: string) {
   if (currentAnnotation.value?.type === 'highlight') highlightColor.value = color
@@ -376,7 +376,7 @@ function chooseQuickAnnotation(type: BoardAnnotationType) {
     color: sameFamily
       ? current.color
       : (preferred ??
-        (type === 'highlight' ? HIGHLIGHT_COLORS[0].color : PEN_COLORS[0].color)),
+        (type === 'highlight' ? HIGHLIGHT_COLORS[0].color : DEFAULT_PEN_COLOR)),
   })
 }
 function toolbarHistory(event: KeyboardEvent) {
@@ -1045,6 +1045,17 @@ defineExpose({
     22px/1.2 'Praxis Caveat',
     cursive;
   overflow-wrap: anywhere;
+}
+:deep(.tiptap strong),
+:deep(.tiptap b) {
+  font-weight: 700;
+}
+:deep(.tiptap em),
+:deep(.tiptap i) {
+  font-style: italic;
+}
+:deep(.tiptap) {
+  font-synthesis: style;
 }
 :deep(.tiptap p) {
   margin: 0;

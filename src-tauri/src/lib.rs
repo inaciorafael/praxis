@@ -10,6 +10,8 @@ mod lifecycle;
 mod native_reminders;
 mod notification_launch;
 mod paper_books;
+mod paper_library;
+mod postits;
 mod recurrence;
 mod reminders;
 mod showcase;
@@ -34,6 +36,7 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .manage(postits::PostitRuntime::default())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(request) = app_navigation::parse_navigation_request(_argv.iter()) {
                 let state = app.state::<AppNavigationStore>();
@@ -98,6 +101,25 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label().starts_with(postits::PREFIX) {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    if !window.app_handle().state::<AppLifecycle>().is_quitting() {
+                        api.prevent_close();
+                        if let Some(note) = window.app_handle().get_webview_window(window.label()) {
+                            postits::retire_window(window.app_handle().clone(), note);
+                        }
+                    }
+                }
+                if let tauri::WindowEvent::Moved(position) = event {
+                    postits::remember_position(
+                        window.app_handle(),
+                        window.label(),
+                        position.x,
+                        position.y,
+                    );
+                }
+                return;
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();
                 let lifecycle = app.state::<AppLifecycle>();
@@ -126,11 +148,21 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            postits::list_postits,
+            postits::get_postit_window,
+            postits::change_postit,
+            postits::open_postit,
+            postits::sync_postits,
+            postits::drag_postit,
             app_config::get_app_config,
             app_config::update_app_config,
             app_config::get_app_health,
             tray::finish_quit,
+            boards::validate_paper_clipboard,
             boards::list_boards,
+            paper_library::list_paper_library,
+            paper_library::get_paper_library_item,
+            paper_library::change_paper_library,
             paper_books::list_paper_books,
             paper_books::change_paper_books,
             boards::get_board,

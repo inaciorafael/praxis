@@ -1,15 +1,34 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch, type Component } from 'vue'
-import { Shapes, Plus } from '@lucide/vue'
+import {
+  Shapes,
+  Plus,
+  Library,
+  ChevronDown,
+  LassoSelect,
+  MousePointer2,
+} from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 const props = defineProps<{
   tools: { id: string; icon: Component; shortcut?: string }[]
   activeTool: string
+  selectionMode?: 'rectangle' | 'lasso'
 }>()
-const emit = defineEmits<{ choose: [id: string]; undo: []; redo: [] }>()
+const emit = defineEmits<{
+  choose: [id: string]
+  undo: []
+  redo: []
+  menuOpen: []
+  library: []
+}>()
 const { t } = useI18n()
 const root = ref<HTMLElement>()
-const menu = ref<'shapes' | 'insert' | null>(null)
+const menuTop = ref(0)
+let menuTrigger: HTMLButtonElement | undefined
+const menu = ref<'shapes' | 'insert' | 'selection' | null>(null)
+watch(menu, (value) => {
+  if (value) emit('menuOpen')
+})
 const primary = computed(() =>
   ['select', 'pan', 'pen', 'draw', 'eraser', 'arrow', 'text', 'note'].flatMap((id) => {
     const tool = props.tools.find((tool) => tool.id === id)
@@ -21,6 +40,30 @@ const entries = computed(() =>
   props.tools.filter((tool) => [...shapeIds, 'image', 'frame'].includes(tool.id))
 )
 const isShape = computed(() => shapeIds.includes(props.activeTool))
+const lassoActive = computed(
+  () => props.activeTool === 'select' && props.selectionMode === 'lasso'
+)
+function primaryLabel(tool: { id: string; shortcut?: string }) {
+  return tool.id === 'select' && lassoActive.value
+    ? `${t('boards.tools.lasso')} (Q)`
+    : `${t(`boards.tools.${tool.id}`)}${tool.shortcut ? ` (${tool.shortcut})` : ''}`
+}
+function toggleMenu(next: 'shapes' | 'insert' | 'selection', event: MouseEvent) {
+  if (menu.value === next) {
+    menu.value = null
+    return
+  }
+  menuTrigger = event.currentTarget as HTMLButtonElement
+  menuTop.value = Math.max(
+    0,
+    Math.min(menuTrigger.offsetTop, (root.value?.clientHeight ?? 480) - 260)
+  )
+  menu.value = next
+}
+function openLibrary() {
+  menu.value = null
+  emit('library')
+}
 function choose(id: string) {
   menu.value = null
   emit('choose', id)
@@ -32,6 +75,7 @@ function outside(event: PointerEvent) {
 function keydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
     menu.value = null
+    menuTrigger?.focus()
     event.preventDefault()
     return
   }
@@ -42,6 +86,11 @@ function keydown(event: KeyboardEvent) {
     return
   }
   if (event.ctrlKey || event.metaKey || event.altKey) return
+  if (event.key.toLowerCase() === 'q') {
+    event.preventDefault()
+    choose('lasso')
+    return
+  }
   const tool = props.tools.find(
     (tool) => tool.shortcut && tool.shortcut.toLowerCase() === event.key.toLowerCase()
   )
@@ -51,13 +100,13 @@ function keydown(event: KeyboardEvent) {
   }
 }
 watch(
-  () => props.activeTool,
+  () => [props.activeTool, props.selectionMode],
   () => {
     menu.value = null
   }
 )
-onMounted(() => window.addEventListener('pointerdown', outside))
-onUnmounted(() => window.removeEventListener('pointerdown', outside))
+onMounted(() => document.addEventListener('pointerdown', outside, true))
+onUnmounted(() => document.removeEventListener('pointerdown', outside, true))
 </script>
 <template>
   <nav
@@ -79,37 +128,61 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside))
         :key="tool.id"
         :data-tool="tool.id"
         :aria-pressed="activeTool === tool.id"
-        :aria-label="`${t(`boards.tools.${tool.id}`)}${tool.shortcut ? ` (${tool.shortcut})` : ''}`"
-        :title="`${t(`boards.tools.${tool.id}`)}${tool.shortcut ? ` (${tool.shortcut})` : ''}`"
-        @click="choose(tool.id)"
+        :aria-label="primaryLabel(tool)"
+        :title="primaryLabel(tool)"
+        @click="choose(tool.id === 'select' && lassoActive ? 'lasso' : tool.id)"
       >
         <component
-          :is="tool.icon"
+          :is="tool.id === 'select' && lassoActive ? LassoSelect : tool.icon"
           :size="18"
           aria-hidden="true"
-        /><span>{{ t(`boards.tools.${tool.id}`) }}</span
-        ><kbd v-if="tool.shortcut">{{ tool.shortcut }}</kbd>
+        /><span>{{
+          t(
+            tool.id === 'select' && lassoActive
+              ? 'boards.tools.lasso'
+              : `boards.tools.${tool.id}`
+          )
+        }}</span
+        ><kbd v-if="tool.shortcut">{{
+          tool.id === 'select' && lassoActive ? 'Q' : tool.shortcut
+        }}</kbd>
+      </button>
+      <button
+        data-selection-options
+        class="paper-selection-options"
+        :aria-label="t('boards.atelier.selection')"
+        :aria-expanded="menu === 'selection'"
+        @click="toggleMenu('selection', $event)"
+      >
+        <ChevronDown :size="13" />
       </button>
       <button
         data-more-tools
         :aria-expanded="menu === 'shapes'"
         :aria-pressed="isShape"
         :aria-label="t('boards.studio.shapesLabel')"
-        @click="menu = menu === 'shapes' ? null : 'shapes'"
+        @click="toggleMenu('shapes', $event)"
       >
         <Shapes :size="18" /><span>{{ t('boards.studio.shapesLabel') }}</span>
       </button>
       <button
         :aria-expanded="menu === 'insert'"
         :aria-label="t('boards.atelier.insert')"
-        @click="menu = menu === 'insert' ? null : 'insert'"
+        @click="toggleMenu('insert', $event)"
       >
         <Plus :size="18" /><span>{{ t('boards.atelier.insert') }}</span>
       </button>
+      <button
+        data-personal-library
+        @click="openLibrary"
+      >
+        <Library :size="18" /><span>{{ t('boards.library.short') }}</span>
+      </button>
     </div>
     <div
-      v-show="menu"
+      v-show="menu && menu !== 'selection'"
       class="paper-rail-menu"
+      :style="{ top: menuTop + 'px', maxHeight: 'calc(100% - ' + menuTop + 'px)' }"
       role="toolbar"
       :aria-label="
         t(menu === 'shapes' ? 'boards.studio.shapesLabel' : 'boards.atelier.insert')
@@ -134,6 +207,31 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside))
         ><kbd v-if="tool.shortcut">{{ tool.shortcut }}</kbd>
       </button>
     </div>
+    <div
+      v-if="menu === 'selection'"
+      class="paper-rail-menu"
+      :style="{ top: menuTop + 'px', maxHeight: 'calc(100% - ' + menuTop + 'px)' }"
+      role="toolbar"
+      :aria-label="t('boards.atelier.selection')"
+    >
+      <button
+        data-selection-mode="rectangle"
+        :aria-pressed="activeTool === 'select' && !lassoActive"
+        @click="choose('select')"
+      >
+        <MousePointer2 :size="18" /><span>{{ t('boards.tools.select') }}</span
+        ><kbd>V</kbd>
+      </button>
+      <button
+        data-selection-mode="lasso"
+        data-tool="lasso"
+        :aria-pressed="lassoActive"
+        @click="choose('lasso')"
+      >
+        <LassoSelect :size="18" /><span>{{ t('boards.tools.lasso') }}</span
+        ><kbd>Q</kbd>
+      </button>
+    </div>
   </nav>
 </template>
 <style scoped>
@@ -156,6 +254,18 @@ onUnmounted(() => window.removeEventListener('pointerdown', outside))
   padding: 4px;
   background: var(--pe-surface);
   border-right: 1px solid var(--pe-border);
+}
+.paper-rail-list > button[data-tool='select'] {
+  padding-right: 20px;
+}
+.paper-rail-list .paper-selection-options {
+  position: absolute;
+  top: 8px;
+  right: 4px;
+  min-height: 32px;
+  width: 18px;
+  min-width: 18px;
+  padding: 2px;
 }
 button {
   display: flex;

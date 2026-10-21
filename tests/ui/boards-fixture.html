@@ -69,6 +69,15 @@ if(shapesFixture){
   const elements=[{...base,id:'shape-title',kind:'text',x:280,y:120,width:800,height:70,text:'Ideias em novas formas',strokeColor:'#1739b7'}, {...base,id:'shape-triangle',kind:'triangle',x:300,y:280,width:260,height:240,text:'Explorar',fillColor:'#fff0b3'}, {...base,id:'shape-hexagon',kind:'hexagon',x:700,y:280,width:290,height:240,text:'Conectar',fillColor:'#d8eaff'}, {...base,id:'shape-line',kind:'line',x:570,y:400,width:120,height:0,text:'',strokeStyle:'pen',strokeWidth:2}]
   boards.push({id:'fixture-shapes',kind:'paper',title:'Novas formas no Paper',background:'grid',colorScheme:'light',revision:1,formatVersion:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),elements})
 }
+if (new URLSearchParams(location.search).has('connectors')) {
+  const base={color:'neutral',strokeStyle:'pen',textFont:'handwritten',textBackground:'none',resolved:false,points:[],startId:null,endId:null,taskId:null,imageData:null,textAlign:'center',textVerticalAlign:'middle',strokeWidth:2}
+  const elements=['straight','elbow','curve'].flatMap((connectorStyle,i)=>[
+    {...base,id:'source-'+i,kind:'rectangle',x:300,y:160+i*230,width:180,height:100,text:['Ideia','Decisão','Explorar'][i],fillColor:'#fff0b3'},
+    {...base,id:'target-'+i,kind:'rectangle',x:860,y:235+i*230,width:180,height:100,text:['Próximo passo','Implementar','Experimentar'][i],fillColor:'#d8eaff'},
+    {...base,id:'connection-'+i,kind:'arrow',x:480,y:210+i*230,width:380,height:75,startId:'source-'+i,endId:'target-'+i,connectorStyle,text:['Continua','Sim','Alternativa'][i],strokeColor:'#1739b7'}
+  ])
+  boards.push({id:'fixture-connectors',kind:'paper',title:'Conexões entre ideias',background:'grid',colorScheme:'light',revision:1,formatVersion:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),elements})
+}
 const tasks = []
 if (new URLSearchParams(location.search).has('contrast')) {
   for (const board of boards) for (const element of board.elements) {
@@ -82,7 +91,23 @@ let paperBooks = []
 const paperFixture = new URLSearchParams(location.search).has('papers')
 const now = () => new Date().toISOString()
 if (paperFixture) tasks.push({id:'fixture-task',title:'Organizar ideias do projeto',notes:'Anotações de teste',status:'pending',plannedFor:null,dueAt:null,reminderAt:now(),recurrenceId:null,occurrenceDate:null,completedAt:null,archivedAt:null,createdAt:now(),updatedAt:now(),isOverdue:false,progress:{total:0,completed:0,percentage:0}})
+let personalLibrary = []
+let fixtureConfig = {language:'pt-BR',theme:'light',favoritePaperPens:[],startWithWindows:false,startMinimized:false,minimizeToTrayWhenUnlocked:true,notificationsEnabled:true,badgeEnabled:true,completedTaskRetentionDays:730}
 window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
+  if(command === 'get_app_config') return structuredClone(fixtureConfig)
+  if(command === 'update_app_config') { Object.assign(fixtureConfig,args.patch);return structuredClone(fixtureConfig) }
+  const librarySummary = item => ({id:item.id,name:item.name,revision:item.revision,elementCount:item.elements.length})
+  if(command === 'validate_paper_clipboard') return structuredClone(args.elements);
+      if(command === 'list_paper_library') return structuredClone(personalLibrary.map(librarySummary))
+  if(command === 'get_paper_library_item') return structuredClone(personalLibrary.find(item=>item.id===args.id))
+  if(command === 'change_paper_library') {
+    const change=args.change
+    if(change.type==='add') personalLibrary.push({id:change.id,name:change.name,revision:1,elements:structuredClone(change.elements)})
+    if(change.type==='rename') {const item=personalLibrary.find(item=>item.id===change.id);item.name=change.name;item.revision++}
+    if(change.type==='remove') personalLibrary=personalLibrary.filter(item=>item.id!==change.id)
+    return structuredClone(personalLibrary.map(librarySummary))
+  }
+
   if (command === 'list_paper_books') return structuredClone(paperBooks)
   if (command === 'change_paper_books') {
     const change=args.change

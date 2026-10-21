@@ -165,7 +165,8 @@
     "mainNavigation": "Main navigation",
     "vaultOnline": "Vault online",
     "lastSynced": "last synced",
-    "lockVault": "Lock vault"
+    "lockVault": "Lock vault",
+    "postits": "Post-its"
   },
   "vault": {
     "heading": "Access your private planning",
@@ -362,6 +363,8 @@
   },
   "boards": {
     "atelier": {
+      "selection": "Selection tools",
+      "lassoHint": "Outline the elements. Shift adds to selection · Esc cancels.",
       "tools": "Paper tools",
       "context": "Tool and selection settings",
       "insert": "Insert",
@@ -543,6 +546,7 @@
     },
     "exportFailed": "Unable to export the image.",
     "tools": {
+      "lasso": "Lasso selection",
       "select": "Select",
       "pan": "Pan",
       "text": "Text",
@@ -720,7 +724,96 @@
       "drawingOn": "Drawing on: {name}",
       "moveSelection": "Move selection to this layer ({count})",
       "expand": "Expand layers",
-      "collapse": "Collapse layers"
+      "collapse": "Collapse layers",
+      "options": "Layer options: {name}"
+    },
+    "web": {
+      "retired": "Web content discontinued"
+    },
+    "connectors": {
+      "path": "Arrow path",
+      "straight": "Straight",
+      "elbow": "Elbow",
+      "curve": "Curve",
+      "label": "Connection label"
+    },
+    "recognition": {
+      "toggle": "Hold to shape",
+      "hint": "Draw a line, ellipse, rectangle or triangle and hold at the end to turn it into a shape. Continue drawing to cancel."
+    },
+    "guides": {
+      "title": "Smart guides",
+      "snap": "Snap",
+      "hint": "Snap to guides while moving. Hold Alt to move freely."
+    },
+    "library": {
+      "title": "Personal library",
+      "short": "Library",
+      "hint": "Your reusable drawings, saved in this vault.",
+      "saveSelection": "Save selection ({count})",
+      "name": "Component name",
+      "save": "Save to library",
+      "search": "Search components",
+      "retry": "Try again",
+      "loading": "Loading…",
+      "empty": "Select Paper elements and save your first component.",
+      "elements": "{count} elements",
+      "insert": "Insert into Paper",
+      "rename": "Rename",
+      "remove": "Remove from library",
+      "removeHint": "Remove this component? Copies in Papers will remain.",
+      "cancel": "Cancel",
+      "insertBlocked": "Unlock a visible layer and check the 2000-element limit before inserting.",
+      "element": "1 element"
+    },
+    "toolReview": {
+      "arrange": "Arrange",
+      "autoWidth": "Auto width",
+      "pattern": "Border pattern",
+      "patterns": {
+        "solid": "Solid",
+        "dashed": "Dashed",
+        "dotted": "Dotted"
+      },
+      "hatchAngle": "Hatch angle",
+      "hatchGap": "Spacing",
+      "arrangements": {
+        "left": "Align left",
+        "center": "Align centers",
+        "right": "Align right",
+        "top": "Align top",
+        "middle": "Align middles",
+        "bottom": "Align bottom",
+        "horizontal": "Distribute horizontally",
+        "vertical": "Distribute vertically"
+      }
+    },
+    "clipboard": {
+      "copyFailed": "Could not copy these elements. Check the 20 MiB limit.",
+      "pasteFailed": "Could not paste these elements. The content is invalid or incompatible.",
+      "limit": "A Paper supports up to 2000 elements.",
+      "lockedLayer": "Unlock a visible layer to paste elements."
+    },
+    "ribbon": {
+      "sections": "Settings groups",
+      "stroke": "Drawing",
+      "text": "Text",
+      "arrange": "Arrange",
+      "continuous": "Keep tool",
+      "continuousHint": "Keep creating with the same tool. Esc returns to selection.",
+      "fill": "Fill"
+    },
+    "favorites": {
+      "title": "Favorites",
+      "save": "+ Save pen",
+      "use": "Use {instrument}, {width} px",
+      "remove": "Remove favorite {number}"
+    },
+    "navigation": {
+      "map": "Map",
+      "back": "Previous position",
+      "title": "Navigate Paper",
+      "close": "Close map"
     }
   },
   "settings": {
@@ -992,5 +1085,58 @@
     "planning": "Planning",
     "name": "Name",
     "removed": "{label} removed"
+  },
+  "postits": {
+    "title": "Post-its",
+    "subtitle": "Remember, resolve, and mark as done.",
+    "note": "Post-it: {title}",
+    "reminder": "Reminder",
+    "pinReminder": "Pin reminder",
+    "choose": "Choose a reminder",
+    "pin": "Pin to screen",
+    "cancel": "Cancel",
+    "noReminders": "Create a task with a reminder to pin it here.",
+    "hint": "Create a note and pin it on your desktop. Mark it Done when finished. Removing it from the screen keeps it active.",
+    "empty": "No Post-its here. Create a note in your own words.",
+    "pinned": "On screen",
+    "offscreen": "Stored",
+    "collapsed": "Pinned · collapsed",
+    "completed": "Task completed",
+    "unavailable": "No active reminder",
+    "unpin": "Remove from screen",
+    "complete": "Done",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "open": "Open task",
+    "checklist": "Open checklist",
+    "remove": "Remove post-it",
+    "color": "Note color",
+    "manage": "Manage reminder Post-its",
+    "colors": {
+      "yellow": "Classic yellow",
+      "pink": "Soft pink",
+      "green": "Soft green",
+      "blue": "Soft blue"
+    },
+    "create": "New Post-it",
+    "name": "Title (optional)",
+    "content": "What do you want to remember?",
+    "save": "Save",
+    "edit": "Edit",
+    "archive": "Archive",
+    "restore": "Reopen",
+    "active": "Active",
+    "archived": "Completed",
+    "filter": "Show Post-its",
+    "untitled": "Untitled",
+    "queued": "Waiting to appear",
+    "reveal": "Open Post-it: {title}",
+    "retention": "Completed notes remain available for 7 days, then are automatically removed from the active vault.",
+    "expires": "Available until {date}",
+    "search": "Search Post-its",
+    "location": "Post-it location",
+    "everywhere": "All active",
+    "fixed": "Pinned on desktop",
+    "saveShortcut": "Save · Ctrl+Enter"
   }
 }

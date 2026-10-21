@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   // Archive,
   Bell,
+  StickyNote,
   BookOpen,
   FilePenLine,
   Settings,
@@ -67,6 +68,9 @@ export const appNavigationItems: AppNavigationItem[] = [
   // 	icon: Archive,
   // },
   {
+    labelKey: 'nav.postits', to: '/app/postits', icon: StickyNote,
+  },
+  {
     labelKey: 'nav.settings',
     to: '/app/settings',
     icon: Settings,
@@ -83,11 +87,11 @@ export const appNavigationGroups = [
     labelKey: 'nav.thinking',
     items: appNavigationItems.filter((item) => item.to === '/app/papers'),
   },
-  { labelKey: 'nav.doing', items: appNavigationItems.filter((item) => item.badgeKey) },
+  { labelKey: 'nav.doing', items: appNavigationItems.filter((item) => item.badgeKey || item.to === '/app/postits') },
   {
     labelKey: 'nav.application',
     items: appNavigationItems.filter(
-      (item) => !item.badgeKey && item.to !== '/app/papers'
+      (item) => !item.badgeKey && item.to !== '/app/papers' && item.to !== '/app/postits'
     ),
   },
 ]

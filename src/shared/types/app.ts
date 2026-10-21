@@ -1,7 +1,15 @@
 export type AppTheme = "light" | "dark" | "sepia" | "forest" | "midnight";
 export type AppLanguage = "en" | "pt-BR";
 
+export type FavoritePaperPen = {
+  instrument: 'pencil' | 'pen' | 'graphite' | 'fountain' | 'ink';
+  width: number;
+  opacity: number;
+  color: 'neutral' | 'amber' | 'sage' | 'blue' | 'rose' | 'purple';
+  customColor: string | null;
+};
 export type AppConfig = {
+  favoritePaperPens?: FavoritePaperPen[];
 	language: AppLanguage;
 	theme: AppTheme;
 	startWithWindows: boolean;

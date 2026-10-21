@@ -4,6 +4,7 @@ import { isTauri, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { prepareBoardExit } from '@/shared/lib/boards/board-lifecycle.service';
 
+import PostitRuntime from "@/features/postits/components/PostitRuntime.vue";
 import OverlayHost from "@/shared/ui/OverlayHost.vue";
 import { useAppStore } from "@/stores/app.store";
 import { useVaultStore } from "@/stores/vault.store";
@@ -69,6 +70,7 @@ async function handleNavigationRequest(request: AppNavigationRequest) {
 </script>
 
 <template>
+  <PostitRuntime />
   <RouterView />
   <OverlayHost />
 </template>

@@ -669,9 +669,20 @@ pub fn set_task_completed(
     completed: bool,
     today: String,
 ) -> Result<TaskCollection, String> {
-    let mut document = read_active_document(&vault)?;
-    let mut tasks = read_tasks_from_document(&document)?;
-    let mut checklist_items = checklist::read_checklist_items_from_document(&document)?;
+    let (tasks, reminders) = crate::vault::mutate_active_document(&vault, |document| {
+        set_task_completed_in_document(document, id, completed)
+    })?;
+    native_reminders::reconcile_native_reminders(&app, &reminders);
+    finish_task_collection(app, badge_state, tasks, reminders, &today)
+}
+
+pub(crate) fn set_task_completed_in_document(
+    document: &mut Value,
+    id: String,
+    completed: bool,
+) -> Result<(Vec<Task>, Vec<Reminder>), String> {
+    let mut tasks = read_tasks_from_document(document)?;
+    let mut checklist_items = checklist::read_checklist_items_from_document(document)?;
     let now = now_iso()?;
     let task_has_checklist = checklist_items.iter().any(|item| item.task_id == id);
 
@@ -712,19 +723,17 @@ pub fn set_task_completed(
             });
         }
 
-        checklist::write_checklist_items_to_document(&mut document, &checklist_items)?;
+        checklist::write_checklist_items_to_document(document, &checklist_items)?;
         events.extend(checklist::sync_parent_task_status_from_checklist(
             &mut tasks,
             &checklist_items,
             &id,
             LifecycleActor::system(),
         )?);
-        lifecycle::append_events(&mut document, events)?;
-        write_tasks_to_document(&mut document, &tasks)?;
-        let reminder_sync = reminders::sync_task_reminders_in_document(&mut document, &tasks)?;
-        write_active_document(&vault, &mut document)?;
-        native_reminders::reconcile_native_reminders(&app, &reminder_sync.reminders);
-        return finish_task_collection(app, badge_state, tasks, reminder_sync.reminders, &today);
+        lifecycle::append_events(document, events)?;
+        write_tasks_to_document(document, &tasks)?;
+        let reminder_sync = reminders::sync_task_reminders_in_document(document, &tasks)?;
+        return Ok((tasks, reminder_sync.reminders));
     }
 
     let mut found = false;
@@ -772,14 +781,12 @@ pub fn set_task_completed(
     }
 
     if let Some(event) = event {
-        lifecycle::append_event(&mut document, event)?;
+        lifecycle::append_event(document, event)?;
     }
 
-    write_tasks_to_document(&mut document, &tasks)?;
-    let reminder_sync = reminders::sync_task_reminders_in_document(&mut document, &tasks)?;
-    write_active_document(&vault, &mut document)?;
-    native_reminders::reconcile_native_reminders(&app, &reminder_sync.reminders);
-    finish_task_collection(app, badge_state, tasks, reminder_sync.reminders, &today)
+    write_tasks_to_document(document, &tasks)?;
+    let reminder_sync = reminders::sync_task_reminders_in_document(document, &tasks)?;
+    Ok((tasks, reminder_sync.reminders))
 }
 
 #[tauri::command]

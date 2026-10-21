@@ -24,6 +24,29 @@ const item = (
   ...patch,
 })
 describe('Paper groups', () => {
+  it('can transform just the affected members with identical external connector geometry', () => {
+    const elements = [
+      item('a', 0),
+      item('b', 200),
+      item('outside', 500, { groupId: null }),
+      item('arrow', 0, { kind: 'arrow', startId: 'a', endId: 'outside' }),
+    ]
+    const ids = ['a', 'b', 'arrow']
+    const origin = groupBox(elements, ids)!
+    const target = {
+      ...origin,
+      x: 20,
+      y: 30,
+      width: origin.width * 2,
+      height: origin.height * 2,
+    }
+    const complete = transformGroup(elements, ids, origin, target, 0.3)
+    const changed = transformGroup(elements, ids, origin, target, 0.3, true)
+    expect(changed).toEqual(complete.filter((element) => ids.includes(element.id)))
+    expect(changed.map((element) => element.id)).not.toContain('outside')
+    changed[0]!.x = 900
+    expect(elements[0]!.x).toBe(0)
+  })
   it('expands only groups touched by selection and creates one group bounding box', () => {
     const elements = [item('a', 0), item('b', 200), item('c', 400, { groupId: 'other' })]
     expect(expandGroups(elements, ['b'])).toEqual(['a', 'b'])

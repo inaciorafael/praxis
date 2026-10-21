@@ -165,7 +165,8 @@
     "mainNavigation": "Navegação principal",
     "vaultOnline": "Cofre online",
     "lastSynced": "última sincronização",
-    "lockVault": "Bloquear cofre"
+    "lockVault": "Bloquear cofre",
+    "postits": "Post-its"
   },
   "vault": {
     "heading": "Acesse seu planejamento privado",
@@ -362,6 +363,8 @@
   },
   "boards": {
     "atelier": {
+      "selection": "Tipos de seleção",
+      "lassoHint": "Contorne os elementos. Shift adiciona à seleção · Esc cancela.",
       "tools": "Ferramentas do Paper",
       "context": "Ajustes da ferramenta e seleção",
       "insert": "Inserir",
@@ -543,6 +546,7 @@
     },
     "exportFailed": "Não foi possível exportar a imagem.",
     "tools": {
+      "lasso": "Seleção livre",
       "select": "Selecionar",
       "pan": "Mover câmera",
       "text": "Texto",
@@ -720,7 +724,96 @@
       "drawingOn": "Desenhando em: {name}",
       "moveSelection": "Mover seleção para esta camada ({count})",
       "expand": "Expandir camadas",
-      "collapse": "Recolher camadas"
+      "collapse": "Recolher camadas",
+      "options": "Opções da camada: {name}"
+    },
+    "web": {
+      "retired": "Conteúdo web descontinuado"
+    },
+    "connectors": {
+      "path": "Caminho da seta",
+      "straight": "Reta",
+      "elbow": "Cotovelos",
+      "curve": "Curva",
+      "label": "Rótulo da conexão"
+    },
+    "recognition": {
+      "toggle": "Corrigir ao segurar",
+      "hint": "Desenhe uma linha, elipse, retângulo ou triângulo e segure no fim para transformar em uma forma. Continue o traço para cancelar."
+    },
+    "guides": {
+      "title": "Guias inteligentes",
+      "snap": "Encaixar",
+      "hint": "Encaixar nas guias ao mover. Segure Alt para mover livremente."
+    },
+    "library": {
+      "title": "Biblioteca pessoal",
+      "short": "Biblioteca",
+      "hint": "Seus desenhos reutilizáveis, guardados neste cofre.",
+      "saveSelection": "Salvar seleção ({count})",
+      "name": "Nome do componente",
+      "save": "Salvar na biblioteca",
+      "search": "Buscar componentes",
+      "retry": "Tentar novamente",
+      "loading": "Carregando…",
+      "empty": "Selecione elementos do Paper e salve seu primeiro componente.",
+      "elements": "{count} elementos",
+      "insert": "Inserir no Paper",
+      "rename": "Renomear",
+      "remove": "Remover da biblioteca",
+      "removeHint": "Remover este componente? As cópias nos Papers serão mantidas.",
+      "cancel": "Cancelar",
+      "insertBlocked": "Desbloqueie uma camada visível e confira o limite de 2000 elementos para inserir.",
+      "element": "1 elemento"
+    },
+    "toolReview": {
+      "arrange": "Organizar",
+      "autoWidth": "Largura automática",
+      "pattern": "Tipo de contorno",
+      "patterns": {
+        "solid": "Contínuo",
+        "dashed": "Tracejado",
+        "dotted": "Pontilhado"
+      },
+      "hatchAngle": "Ângulo da hachura",
+      "hatchGap": "Espaçamento",
+      "arrangements": {
+        "left": "Alinhar à esquerda",
+        "center": "Centralizar horizontalmente",
+        "right": "Alinhar à direita",
+        "top": "Alinhar ao topo",
+        "middle": "Centralizar verticalmente",
+        "bottom": "Alinhar à base",
+        "horizontal": "Distribuir horizontalmente",
+        "vertical": "Distribuir verticalmente"
+      }
+    },
+    "clipboard": {
+      "copyFailed": "Não foi possível copiar estes elementos. Confira o limite de 20 MiB.",
+      "pasteFailed": "Não foi possível colar estes elementos. O conteúdo é inválido ou incompatível.",
+      "limit": "O Paper aceita até 2000 elementos.",
+      "lockedLayer": "Desbloqueie uma camada visível para colar elementos."
+    },
+    "ribbon": {
+      "sections": "Grupos de ajustes",
+      "stroke": "Desenho",
+      "text": "Texto",
+      "arrange": "Organizar",
+      "continuous": "Manter ferramenta",
+      "continuousHint": "Continue criando com a mesma ferramenta. Esc volta à seleção.",
+      "fill": "Fundo"
+    },
+    "favorites": {
+      "title": "Favoritas",
+      "save": "+ Salvar caneta",
+      "use": "Usar {instrument}, {width} px",
+      "remove": "Remover favorita {number}"
+    },
+    "navigation": {
+      "map": "Mapa",
+      "back": "Voltar ao ponto",
+      "title": "Navegar pelo Paper",
+      "close": "Fechar mapa"
     }
   },
   "settings": {
@@ -992,5 +1085,58 @@
     "planning": "Planejamento",
     "name": "Nome",
     "removed": "{label} removido"
+  },
+  "postits": {
+    "title": "Post-its",
+    "subtitle": "Lembre, resolva e marque como concluído.",
+    "note": "Post-it: {title}",
+    "reminder": "Lembrete",
+    "pinReminder": "Fixar lembrete",
+    "choose": "Escolha um lembrete",
+    "pin": "Fixar na tela",
+    "cancel": "Cancelar",
+    "noReminders": "Crie uma tarefa com lembrete para fixá-la aqui.",
+    "hint": "Crie uma nota e fixe no desktop. Quando resolver, clique em Concluído. Retirar da tela apenas guarda a nota entre os ativos.",
+    "empty": "Nenhum Post-it aqui. Crie uma nota com suas próprias palavras.",
+    "pinned": "Na tela",
+    "offscreen": "Guardado",
+    "collapsed": "Fixado · recolhido",
+    "completed": "Tarefa concluída",
+    "unavailable": "Sem lembrete ativo",
+    "unpin": "Retirar da tela",
+    "complete": "Concluído",
+    "collapse": "Recolher",
+    "expand": "Expandir",
+    "open": "Abrir tarefa",
+    "checklist": "Abrir checklist",
+    "remove": "Remover post-it",
+    "color": "Cor do post-it",
+    "manage": "Gerenciar Post-its dos lembretes",
+    "colors": {
+      "yellow": "Amarelo clássico",
+      "pink": "Rosa suave",
+      "green": "Verde suave",
+      "blue": "Azul suave"
+    },
+    "create": "Novo Post-it",
+    "name": "Título (opcional)",
+    "content": "O que você quer lembrar?",
+    "save": "Salvar",
+    "edit": "Editar",
+    "archive": "Arquivar",
+    "restore": "Reabrir",
+    "active": "Ativos",
+    "archived": "Concluídos",
+    "filter": "Exibir Post-its",
+    "untitled": "Sem título",
+    "queued": "Na fila para aparecer",
+    "reveal": "Abrir Post-it: {title}",
+    "retention": "Concluídos ficam disponíveis por 7 dias. Depois são removidos automaticamente do cofre ativo.",
+    "expires": "Disponível até {date}",
+    "search": "Buscar nos Post-its",
+    "location": "Local dos Post-its",
+    "everywhere": "Todos os ativos",
+    "fixed": "Fixados no desktop",
+    "saveShortcut": "Salvar · Ctrl+Enter"
   }
 }

@@ -24,6 +24,15 @@ pub struct BoardPoint {
     pub pressure: Option<f64>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardConnectorStyle {
+    #[default]
+    Straight,
+    Elbow,
+    Curve,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BoardDrawBrush {
@@ -253,6 +262,8 @@ pub struct BoardElement {
     pub rich_text: Option<BoardRichText>,
     pub resolved: bool,
     pub points: Vec<BoardPoint>,
+    #[serde(default)]
+    pub connector_style: BoardConnectorStyle,
     pub start_id: Option<String>,
     pub end_id: Option<String>,
     pub task_id: Option<String>,
@@ -465,7 +476,7 @@ fn validate_image(data: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_board(board: &Board) -> Result<(), String> {
+pub(crate) fn validate_board(board: &Board) -> Result<(), String> {
     if board.layers.len() > 32 {
         return Err("Limite de 32 camadas por Paper.".into());
     }
@@ -624,6 +635,7 @@ fn validate_board(board: &Board) -> Result<(), String> {
             "decision",
             "task",
             "image",
+            "iframe",
         ]
         .contains(&element.kind.as_str())
         {
@@ -643,6 +655,15 @@ fn validate_board(board: &Board) -> Result<(), String> {
         }
         if element.kind == "line" && (element.start_id.is_some() || element.end_id.is_some()) {
             return Err("Linha reta nao pode possuir conexoes ancoradas.".into());
+        }
+        if element.kind == "iframe" {
+            let url = tauri::Url::parse(&element.text)
+                .map_err(|_| "Endereco web invalido.".to_string())?;
+            if element.text.len() > 2048 || url.scheme() != "https"
+                || url.host_str().is_none() || !url.username().is_empty() || url.password().is_some()
+            {
+                return Err("Conteudo web exige uma URL HTTPS sem credenciais.".into());
+            }
         }
         if element.text.len() > 100_000
             || element.points.len() > 20_000
@@ -688,6 +709,23 @@ fn validate_board(board: &Board) -> Result<(), String> {
         return Err("Quadro excede 20 MiB.".into());
     }
     Ok(())
+}
+
+/// Validate clipboard geometry without reading or writing the vault.
+#[tauri::command]
+pub fn validate_paper_clipboard(elements: Vec<BoardElement>) -> Result<Vec<BoardElement>, String> {
+    if elements.is_empty() || elements.iter().any(|e| e.task_id.is_some() || e.kind == "iframe") {
+        return Err("Conteudo da area de transferencia invalido.".into());
+    }
+    let board = Board {
+        id: "clipboard".into(), title: "Clipboard".into(), revision: 1,
+        format_version: FORMAT_VERSION, locked: false, kind: BoardKind::Paper,
+        background: BoardBackground::Plain, color_scheme: BoardColorScheme::Light,
+        created_at: String::new(), updated_at: String::new(),
+        layers: vec![], scenes: vec![], elements,
+    };
+    validate_board(&board)?;
+    Ok(board.elements)
 }
 
 fn validate_text_annotation(annotation: &BoardTextAnnotation) -> Result<(), String> {
@@ -1513,12 +1551,48 @@ mod tests {
             rich_text: None,
             resolved: false,
             points: vec![],
+            connector_style: BoardConnectorStyle::Straight,
             start_id: None,
             end_id: None,
             task_id: None,
             image_data: None,
         }
     }
+    #[test]
+    fn clipboard_validates_without_accessing_a_vault() {
+        let original = element();
+        assert_eq!(validate_paper_clipboard(vec![original.clone()]).unwrap(), vec![original]);
+        assert!(validate_paper_clipboard(vec![]).is_err());
+        let mut invalid = element();
+        invalid.kind = "unknown".into();
+        assert!(validate_paper_clipboard(vec![invalid]).is_err());
+        let mut task = element();
+        task.task_id = Some("external-task".into());
+        assert!(validate_paper_clipboard(vec![task]).is_err());
+        let mut arrow = element();
+        arrow.kind = "arrow".into();
+        arrow.start_id = Some("missing".into());
+        assert!(validate_paper_clipboard(vec![arrow]).is_err());
+    }
+
+    #[test]
+    fn connector_styles_roundtrip_and_legacy_defaults_to_straight() {
+        for style in [BoardConnectorStyle::Straight, BoardConnectorStyle::Elbow, BoardConnectorStyle::Curve] {
+            let mut e = element();
+            e.kind = "arrow".into();
+            e.connector_style = style;
+            e.text = "Sim".into();
+            let value = serde_json::to_value(&e).unwrap();
+            assert_eq!(serde_json::from_value::<BoardElement>(value).unwrap(), e);
+        }
+        let mut value = serde_json::to_value(element()).unwrap();
+        value.as_object_mut().unwrap().remove("connectorStyle");
+        assert_eq!(serde_json::from_value::<BoardElement>(value).unwrap().connector_style, BoardConnectorStyle::Straight);
+        let mut value = serde_json::to_value(element()).unwrap();
+        value["connectorStyle"] = json!("unknown");
+        assert!(serde_json::from_value::<BoardElement>(value).is_err());
+    }
+
     fn document() -> Value {
         json!({"schemaVersion": 1, "tasks": [], "lifecycleEvents": []})
     }

@@ -11,9 +11,10 @@ import {
 import { boardInkColor } from '../lib/label'
 import { elementFill, elementLabelScheme } from '../lib/element-style'
 import { paperPalette } from '../lib/background'
-import { connectorPoints, normalizeAngle } from '../lib/geometry'
+import { bounds, connectorPoints, normalizeAngle } from '../lib/geometry'
 import { loadBoardFont } from '../lib/font'
 import { isWritingBrush } from '../lib/writing'
+import BoardConnectorLabel from './BoardConnectorLabel.vue'
 import BoardSketch from './BoardSketch.vue'
 import BoardArtisticBrush from './BoardArtisticBrush.vue'
 import BoardRichLabel from './BoardRichLabel.vue'
@@ -38,7 +39,24 @@ const colors = computed(() => ({
   '--board-purple': '#7846ac',
 }))
 const viewBox = computed(() => {
-  const box = preview.value?.bounds
+  const original = preview.value?.bounds
+  const labels = preview.value?.elements.filter(
+    (e) => e.kind === 'arrow' && e.text.trim()
+  )
+  const extra = labels?.length ? bounds(labels, preview.value!.elements) : undefined
+  const box =
+    original && extra
+      ? {
+          x: Math.min(original.x, extra.x),
+          y: Math.min(original.y, extra.y),
+          width:
+            Math.max(original.x + original.width, extra.x + extra.width) -
+            Math.min(original.x, extra.x),
+          height:
+            Math.max(original.y + original.height, extra.y + extra.height) -
+            Math.min(original.y, extra.y),
+        }
+      : original
   if (!box) return '0 0 240 160'
   const margin = Math.max(box.width, box.height) * 0.06 + 4
   return `${box.x - margin} ${box.y - margin} ${box.width + margin * 2} ${box.height + margin * 2}`
@@ -160,6 +178,12 @@ onBeforeUnmount(() => {
               ? connectorPoints(element, preview.elements)
               : undefined
           "
+        />
+        <BoardConnectorLabel
+          v-if="element.kind === 'arrow'"
+          :element="element"
+          :endpoints="connectorPoints(element, preview.elements)"
+          :color-scheme="paper.colorScheme"
         />
         <BoardRichLabel
           v-if="

@@ -23,7 +23,9 @@ export function groupBox(
   elements: BoardElement[],
   ids: string[]
 ): BoardElement | undefined {
-  const chosen = elements.filter((e) => ids.includes(e.id))
+  if (ids.length < 2) return undefined
+  const selected = new Set(ids)
+  const chosen = elements.filter((e) => selected.has(e.id))
   if (
     chosen.length < 2 ||
     !chosen[0]!.groupId ||
@@ -45,7 +47,8 @@ export function transformGroup(
   ids: string[],
   origin: { x: number; y: number; width: number; height: number },
   target: { x: number; y: number; width: number; height: number },
-  angle = 0
+  angle = 0,
+  onlySelected = false
 ): BoardElement[] {
   const scale = target.width / Math.max(1, origin.width)
   const center = { x: origin.x + origin.width / 2, y: origin.y + origin.height / 2 }
@@ -57,7 +60,11 @@ export function transformGroup(
     }
   }
   const chosen = new Set(ids)
-  return copyElements(elements).map((element) => {
+  // Interactive transforms only need isolated copies of the affected elements.
+  const source = onlySelected
+    ? elements.filter((element) => chosen.has(element.id))
+    : elements
+  return copyElements(source).map((element) => {
     if (!chosen.has(element.id)) return element
     if (
       element.text &&

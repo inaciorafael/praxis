@@ -3,8 +3,8 @@ import type { Camera } from './geometry'
 
 export const paperPalette = (scheme: PaperColorScheme = 'light') =>
   scheme === 'dark'
-    ? { paper: '#20242c', guide: '#3d4654', ink: '#e8edf5', muted: '#abb7c9' }
-    : { paper: '#ffffff', guide: '#dce3eb', ink: '#252a34', muted: '#646d7b' }
+    ? { paper: '#20242c', guide: '#39423f', ink: '#e8edf5', muted: '#abb7c9' }
+    : { paper: '#ffffff', guide: '#e0e6df', ink: '#252a34', muted: '#646d7b' }
 
 export function paperBackgroundStyle(
   background: PaperBackground = 'plain',

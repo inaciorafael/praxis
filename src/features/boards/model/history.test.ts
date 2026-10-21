@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BoardElement } from '@/shared/types/board'
-import { createHistory, sameElements } from './history'
+import { createHistory, createSnapshotHistory, sameElements } from './history'
 import { plainToRich } from '../lib/rich-text'
 import { defaultAnnotation } from '../lib/notation'
 const item = (text: string): BoardElement[] => [
@@ -22,6 +22,33 @@ const item = (text: string): BoardElement[] => [
   },
 ]
 describe('bounded board history', () => {
+  it('measures each isolated entry once and preserves budgets across undo, redo, branching and clear', () => {
+    let calls = 0
+    const history = createSnapshotHistory(
+      (value: string) => value,
+      (value) => {
+        calls++
+        return value.length
+      },
+      100,
+      10
+    )
+    for (let i = 0; i < 4; i++) history.push('123')
+    expect(calls).toBe(4)
+    expect(history.undo('456')).toBe('123')
+    expect(history.redo('789')).toBe('456')
+    expect(calls).toBe(6)
+    history.undo('abc')
+    history.push('def')
+    expect(history.canRedo).toBe(false)
+    expect(calls).toBe(8)
+    history.clear()
+    history.push('1234567890')
+    expect(history.canUndo).toBe(true)
+    history.push('x')
+    expect(history.undo('y')).toBe('x')
+    expect(history.canUndo).toBe(false)
+  })
   it('ignores numeric representation noise without hiding actual geometry or text edits', () => {
     const original = item('initial')
     original[0]!.x = 123.456789
@@ -89,4 +116,19 @@ describe('bounded board history', () => {
     small.push(item('a'.repeat(1000)))
     expect(small.undo(item('current'))).toBeNull()
   })
+})
+
+it('treats backend connector defaults as the same state for every element kind', () => {
+  const original = item('text')
+  const saved = original.map((element) => ({
+    ...element,
+    connectorStyle: 'straight' as const,
+  }))
+  expect(sameElements(original, saved)).toBe(true)
+  expect(
+    sameElements(
+      original,
+      saved.map((element) => ({ ...element, connectorStyle: 'curve' as const }))
+    )
+  ).toBe(false)
 })

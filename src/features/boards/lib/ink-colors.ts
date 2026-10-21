@@ -1,6 +1,7 @@
+export const DEFAULT_PEN_COLOR = '#202124'
 export const PEN_COLORS = [
+  { id: 'black', color: DEFAULT_PEN_COLOR },
   { id: 'blue', color: '#1739b7' },
-  { id: 'black', color: '#202124' },
   { id: 'red', color: '#c52e36' },
   { id: 'green', color: '#13734b' },
 ] as const

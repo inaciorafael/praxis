@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { nextTick } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
@@ -6,11 +6,23 @@ import BoardCanvas from './BoardCanvas.vue'
 import BoardRichTextEditor from './BoardRichTextEditor.vue'
 import PaperScenesPanel from './PaperScenesPanel.vue'
 import PaperLayersPanel from './PaperLayersPanel.vue'
+import PaperLibraryPanel from './PaperLibraryPanel.vue'
+import PaperContextBar from './PaperContextBar.vue'
+import PaperNavigator from './PaperNavigator.vue'
+import PaperToolRail from './PaperToolRail.vue'
 import BoardSketch from './BoardSketch.vue'
 import { defaultLayers } from '../lib/layers'
 import { plainToRich } from '../lib/rich-text'
 import { defaultAnnotation } from '../lib/notation'
 import type { BoardElement } from '@/shared/types/board'
+vi.mock('@/shared/lib/boards/paper-library.service', () => ({
+  listPaperLibrary: vi.fn(async () => []),
+  getPaperLibraryItem: vi.fn(),
+  changePaperLibrary: vi.fn(),
+}))
+vi.mock('@/shared/lib/boards/board-clipboard.service', () => ({
+  validatePaperClipboard: vi.fn(async (elements) => elements),
+}))
 vi.mock('@/shared/lib/boards/board-export.service', () => ({ saveBoardPng: vi.fn() }))
 vi.mock('../lib/artistic-brush', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/artistic-brush')>()),
@@ -77,7 +89,573 @@ const note: BoardElement = {
   taskId: null,
   imageData: null,
 }
+
+async function guidePointer(
+  wrapper: ReturnType<typeof mountCanvas>,
+  element: Element,
+  type: string,
+  id: number,
+  x: number,
+  y: number,
+  modifiers: MouseEventInit = {}
+) {
+  await nextTick()
+  await nextTick()
+  const numbers = wrapper
+    .get('[data-scene]')
+    .attributes('transform')!
+    .match(/-?\d+(?:\.\d+)?/g)!
+    .map(Number)
+  return pointer(
+    element,
+    type,
+    id,
+    numbers[0]! + x * numbers[2]!,
+    numbers[1]! + y * numbers[2]!,
+    modifiers
+  )
+}
 describe('board canvas interactions', () => {
+  it.each(['#202124', '#1739b7'])(
+    'keeps the chosen creation ink %s when inspecting other colored elements',
+    async (ink) => {
+      const blue = {
+        ...note,
+        id: 'blue-shape',
+        kind: 'rectangle' as const,
+        text: '',
+        strokeColor: '#1739b7',
+      }
+      const wrapper = mountCanvas([blue])
+      const rail = wrapper.getComponent(PaperToolRail)
+      rail.vm.$emit('choose', 'pen')
+      await nextTick()
+      expect(
+        wrapper.get('[data-color-preset="#202124"]').attributes('aria-pressed')
+      ).toBe('true')
+      if (ink !== '#202124')
+        await wrapper.get('[data-color-preset="' + ink + '"]').trigger('click')
+      rail.vm.$emit('choose', 'select')
+      await nextTick()
+      await pointer(
+        wrapper.get('[data-element-id="blue-shape"] rect').element,
+        'pointerdown',
+        125,
+        70,
+        70
+      )
+      await pointer(wrapper.get('.board-viewport').element, 'pointerup', 125, 70, 70)
+      expect(
+        wrapper.get('[data-color-preset="#1739b7"]').attributes('aria-pressed')
+      ).toBe('true')
+      rail.vm.$emit('choose', 'pen')
+      await nextTick()
+      expect(
+        wrapper.get('[data-color-preset="' + ink + '"]').attributes('aria-pressed')
+      ).toBe('true')
+      const viewport = wrapper.get('.board-viewport')
+      await pointer(viewport.element, 'pointerdown', 126, 300, 200)
+      await pointer(viewport.element, 'pointermove', 126, 350, 230)
+      await pointer(viewport.element, 'pointerup', 126, 380, 250)
+      const changes = wrapper.emitted('change')!
+      const elements = changes[changes.length - 1]![0] as BoardElement[]
+      expect(elements.find((e) => e.id === 'blue-shape')!.strokeColor).toBe('#1739b7')
+      expect(elements.find((e) => e.kind === 'draw')!.strokeColor).toBe(ink)
+      wrapper.unmount()
+    }
+  )
+
+  it('inserts library copies as one undoable action and closes the library', async () => {
+    const wrapper = mountCanvas([note])
+    await wrapper.get('[data-personal-library]').trigger('click')
+    const panel = wrapper.findComponent(PaperLibraryPanel)
+    expect(panel.exists()).toBe(true)
+    panel.vm.$emit('insert', [{ ...note, id: 'library-card' }])
+    await nextTick()
+    expect(wrapper.findComponent(PaperLibraryPanel).exists()).toBe(false)
+    expect(wrapper.findAll('[data-element-id]')).toHaveLength(2)
+    await wrapper.get('button[aria-label="boards.undo"]').trigger('click')
+    expect(wrapper.findAll('[data-element-id]')).toHaveLength(1)
+    await wrapper.get('button[aria-label="boards.redo"]').trigger('click')
+    expect(wrapper.findAll('[data-element-id]')).toHaveLength(2)
+    wrapper.unmount()
+  })
+  it('exposes text controls on empty shapes and edits border patterns without a settings panel', async () => {
+    const wrapper = mountCanvas([
+      { ...note, id: 'empty-shape', kind: 'rectangle', text: '' },
+    ])
+    await pointer(
+      wrapper.get('[data-element-id="empty-shape"] rect').element,
+      'pointerdown',
+      120,
+      60,
+      60
+    )
+    await pointer(wrapper.get('.board-viewport').element, 'pointerup', 120, 60, 60)
+    expect(wrapper.findComponent(PaperContextBar).props('text')).toBe(true)
+    await wrapper.get('[data-context-pattern]').setValue('dashed')
+    const changes = wrapper.emitted('change')!
+    expect(
+      (changes[changes.length - 1]![0] as BoardElement[])[0]!.sketch!.strokePattern
+    ).toBe('dashed')
+    expect(wrapper.find('.paper-element-controls').exists()).toBe(false)
+    await wrapper.get('[data-save-library]').trigger('click')
+    expect(wrapper.findComponent(PaperLibraryPanel).props('selection')).toHaveLength(1)
+    await wrapper.get('[data-tool="draw"]').trigger('click')
+    expect(wrapper.findComponent(PaperLibraryPanel).exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('snaps a group as a single box and preserves the distance between its elements', async () => {
+    const first = {
+      ...note,
+      id: 'first',
+      x: 10,
+      y: 10,
+      width: 100,
+      height: 100,
+      text: '',
+      groupId: 'pair',
+    }
+    const second = { ...first, id: 'second', x: 130 }
+    const reference = { ...first, id: 'reference', groupId: null, x: 500, y: 300 }
+    const wrapper = mountCanvas([first, second, reference])
+    await wrapper.get('[data-snap-toggle]').trigger('click')
+    const viewport = wrapper.get('.board-viewport')
+    await guidePointer(
+      wrapper,
+      wrapper.get('[data-element-id="first"] rect').element,
+      'pointerdown',
+      95,
+      50,
+      50
+    )
+    await guidePointer(wrapper, viewport.element, 'pointermove', 95, 484, 90)
+    const values = wrapper.findAllComponents(BoardSketch).map((c) => c.props('element'))
+    expect(values.find((e) => e.id === 'first')!.x).toBeCloseTo(440)
+    expect(values.find((e) => e.id === 'second')!.x).toBeCloseTo(560)
+    expect(wrapper.find('[data-smart-guides]').exists()).toBe(true)
+    await guidePointer(wrapper, viewport.element, 'pointerup', 95, 484, 90)
+    wrapper.unmount()
+  })
+
+  it('shows guides without moving to them by default, snaps optionally, and undoes the whole drag', async () => {
+    const reference = {
+      ...note,
+      id: 'reference',
+      x: 300,
+      y: 200,
+      width: 100,
+      height: 100,
+      text: '',
+    }
+    const moving = { ...reference, id: 'moving', x: 10, y: 10 }
+    const wrapper = mountCanvas([moving, reference])
+    const viewport = wrapper.get('.board-viewport')
+    const target = () => wrapper.get('[data-element-id="moving"] rect').element
+    const element = () =>
+      wrapper
+        .findAllComponents(BoardSketch)
+        .find((c) => c.props('element').id === 'moving')!
+        .props('element')
+    await guidePointer(wrapper, target(), 'pointerdown', 91, 50, 50)
+    await guidePointer(wrapper, viewport.element, 'pointermove', 91, 344, 100)
+    expect(element().x).toBe(304)
+    expect(wrapper.find('[data-smart-guides]').exists()).toBe(true)
+    await guidePointer(wrapper, viewport.element, 'pointerup', 91, 344, 100)
+    expect(wrapper.find('[data-smart-guides]').exists()).toBe(false)
+    await wrapper.get('button[aria-label="boards.undo"]').trigger('click')
+    expect(element().x).toBe(10)
+    await wrapper.get('[data-snap-toggle]').trigger('click')
+    await guidePointer(wrapper, target(), 'pointerdown', 92, 50, 50)
+    await guidePointer(wrapper, viewport.element, 'pointermove', 92, 344, 100)
+    expect(element().x).toBe(300)
+    await guidePointer(wrapper, viewport.element, 'pointerup', 92, 344, 100)
+    await wrapper.get('button[aria-label="boards.undo"]').trigger('click')
+    expect(element().x).toBe(10)
+    await wrapper.get('button[aria-label="boards.redo"]').trigger('click')
+    expect(element().x).toBe(300)
+    wrapper.unmount()
+  })
+  it('bypasses snapping with Alt and hides guides when disabled or cancelled', async () => {
+    const reference = {
+      ...note,
+      id: 'reference',
+      x: 300,
+      y: 200,
+      width: 100,
+      height: 100,
+      text: '',
+    }
+    const wrapper = mountCanvas([{ ...reference, id: 'moving', x: 10, y: 10 }, reference])
+    const viewport = wrapper.get('.board-viewport')
+    await wrapper.get('[data-snap-toggle]').trigger('click')
+    await guidePointer(
+      wrapper,
+      wrapper.get('[data-element-id="moving"] rect').element,
+      'pointerdown',
+      93,
+      50,
+      50
+    )
+    await guidePointer(wrapper, viewport.element, 'pointermove', 93, 344, 100, {
+      altKey: true,
+    })
+    const element = wrapper
+      .findAllComponents(BoardSketch)
+      .find((c) => c.props('element').id === 'moving')!
+      .props('element')
+    expect(element.x).toBe(304)
+    expect(wrapper.find('[data-smart-guides]').exists()).toBe(true)
+    await viewport.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('[data-smart-guides]').exists()).toBe(false)
+    await wrapper.get('[data-guides-toggle]').trigger('click')
+    expect(wrapper.get('[data-snap-toggle]').attributes('disabled')).toBeDefined()
+    await guidePointer(
+      wrapper,
+      wrapper.get('[data-element-id="moving"] rect').element,
+      'pointerdown',
+      94,
+      50,
+      50
+    )
+    await guidePointer(wrapper, viewport.element, 'pointermove', 94, 344, 100)
+    expect(wrapper.find('[data-smart-guides]').exists()).toBe(false)
+    await guidePointer(wrapper, viewport.element, 'pointerup', 94, 344, 100)
+    wrapper.unmount()
+  })
+
+  it('leaves writing untouched when hold correction is disabled or the gesture is cancelled', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountCanvas()
+    try {
+      const viewport = wrapper.get('.board-viewport')
+      await viewport.trigger('keydown', { key: 'p' })
+      await wrapper.get('[data-shape-recognition]').trigger('click')
+      expect(wrapper.get('[data-shape-recognition]').attributes('aria-pressed')).toBe(
+        'false'
+      )
+      await pointer(viewport.element, 'pointerdown', 83, 200, 200)
+      for (let i = 1; i <= 30; i++)
+        await pointer(viewport.element, 'pointermove', 83, 200 + i * 5, 200)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(wrapper.findComponent(BoardSketch).props('element').kind).toBe('draw')
+      await viewport.trigger('keydown', { key: 'Escape' })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(wrapper.findAll('[data-element-id]')).toHaveLength(0)
+      expect(wrapper.emitted('change')).toBeUndefined()
+    } finally {
+      wrapper.unmount()
+      vi.useRealTimers()
+    }
+  })
+
+  it('converts a held freehand stroke into an editable shape with one undo entry', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountCanvas()
+    try {
+      const viewport = wrapper.get('.board-viewport')
+      await viewport.trigger('keydown', { key: 'p' })
+      await pointer(viewport.element, 'pointerdown', 81, 200, 200)
+      for (let i = 1; i <= 30; i++)
+        await pointer(viewport.element, 'pointermove', 81, 200 + i * 5, 200)
+      expect(wrapper.findComponent(BoardSketch).props('element').kind).toBe('draw')
+      await vi.advanceTimersByTimeAsync(650)
+      await nextTick()
+      expect(wrapper.findComponent(BoardSketch).props('element').kind).toBe('line')
+      expect(wrapper.findComponent(BoardSketch).props('element').fillColor).toBeNull()
+      await pointer(viewport.element, 'pointerup', 81, 350, 200)
+      expect(wrapper.emitted('change')!.length).toBe(1)
+      await wrapper.get('button[aria-label="boards.undo"]').trigger('click')
+      expect(wrapper.findAll('[data-element-id]')).toHaveLength(0)
+      await wrapper.get('button[aria-label="boards.redo"]').trigger('click')
+      expect(wrapper.findComponent(BoardSketch).props('element').kind).toBe('line')
+    } finally {
+      wrapper.unmount()
+      vi.useRealTimers()
+    }
+  })
+  it('restores freehand on movement after a hold and cancels delayed conversion on release', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountCanvas()
+    try {
+      const viewport = wrapper.get('.board-viewport')
+      await viewport.trigger('keydown', { key: 'p' })
+      await pointer(viewport.element, 'pointerdown', 82, 200, 200)
+      for (let i = 1; i <= 30; i++)
+        await pointer(viewport.element, 'pointermove', 82, 200 + i * 5, 200)
+      await vi.advanceTimersByTimeAsync(650)
+      await nextTick()
+      expect(wrapper.findComponent(BoardSketch).props('element').kind).toBe('line')
+      await pointer(viewport.element, 'pointermove', 82, 370, 230)
+      expect(wrapper.findComponent(BoardSketch).props('element').kind).toBe('draw')
+      await pointer(viewport.element, 'pointerup', 82, 370, 230)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(wrapper.findComponent(BoardSketch).props('element').kind).toBe('draw')
+    } finally {
+      wrapper.unmount()
+      vi.useRealTimers()
+    }
+  })
+
+  it('changes connector routes and labels with independent undo/redo steps', async () => {
+    const arrow: BoardElement = {
+      ...note,
+      id: 'link',
+      kind: 'arrow',
+      text: '',
+      width: 300,
+      height: 160,
+      strokeStyle: 'clean',
+    }
+    const wrapper = mountCanvas([arrow])
+    const target = wrapper.get('[data-element-id="link"] path').element
+    await pointer(target, 'pointerdown', 1, 130, 90)
+    await pointer(target, 'pointerup', 1, 130, 90)
+    await wrapper.get('[data-connector-style]').setValue('elbow')
+    const last = () => {
+      const changes = wrapper.emitted('change')!
+      return changes[changes.length - 1]![0] as BoardElement[]
+    }
+    expect(last()[0]!.connectorStyle).toBe('elbow')
+    await wrapper.get('[data-connector-label-input]').setValue('Sim')
+    expect(last()[0]!.text).toBe('Sim')
+    expect(wrapper.get('[data-connector-label]').text()).toBe('Sim')
+    await wrapper.get('button[aria-label="boards.undo"]').trigger('click')
+    expect(last()[0]!.text).toBe('')
+    expect(last()[0]!.connectorStyle).toBe('elbow')
+    await wrapper.get('button[aria-label="boards.undo"]').trigger('click')
+    expect(last()[0]!.connectorStyle).toBeUndefined()
+    await wrapper.get('button[aria-label="boards.redo"]').trigger('click')
+    await wrapper.get('button[aria-label="boards.redo"]').trigger('click')
+    expect(last()[0]!.text).toBe('Sim')
+    expect(last()[0]!.connectorStyle).toBe('elbow')
+    wrapper.unmount()
+  })
+
+  it('pans and zooms without altering local ink paths, losing offscreen content or adding undo entries', async () => {
+    const wrapper = mountCanvas()
+    const drawing = {
+      ...note,
+      id: 'ink',
+      kind: 'draw' as const,
+      text: '',
+      points: [
+        { x: 0, y: 0, pressure: 0.3 },
+        { x: 80, y: 40, pressure: 0.8 },
+      ],
+    }
+    const distant = {
+      ...note,
+      id: 'distant',
+      x: 100000,
+      y: 100000,
+      richText: plainToRich(note.text, note),
+    }
+    await wrapper.setProps({ elements: [drawing, distant] })
+    const before = wrapper
+      .findAll('[data-element-id] path')
+      .map((path) => path.attributes('d'))
+    const viewport = wrapper.get('.board-viewport')
+    await viewport.trigger('keydown', { key: 'h' })
+    const camera = wrapper.get('[data-scene]').attributes('transform')
+    await pointer(viewport.element, 'pointerdown', 1, 300, 200)
+    await pointer(viewport.element, 'pointermove', 1, 420, 250)
+    await pointer(viewport.element, 'pointerup', 1, 420, 250)
+    expect(wrapper.get('[data-scene]').attributes('transform')).not.toBe(camera)
+    await wrapper.get('button[aria-label="boards.zoomIn"]').trigger('click')
+    expect(
+      wrapper.findAll('[data-element-id] path').map((path) => path.attributes('d'))
+    ).toEqual(before)
+    expect(wrapper.get('[data-element-id="distant"]').text()).toBe('Before')
+    expect(wrapper.emitted('change')).toBeUndefined()
+    expect(wrapper.get('[data-board-undo]').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+  it('does not reopen an old properties panel after finishing text editing', async () => {
+    const wrapper = mountCanvas()
+    await wrapper.setProps({ elements: [note] })
+    const viewport = wrapper.get('.board-viewport')
+    await viewport.trigger('keydown', { key: 'v' })
+    await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 70, 70)
+    await pointer(viewport.element, 'pointerup', 1, 70, 70)
+    await wrapper.get('[data-context-settings]').trigger('click')
+    await wrapper.get('[data-properties-edit]').trigger('click')
+    wrapper.getComponent(BoardRichTextEditor).vm.$emit('finish')
+    await nextTick()
+    expect(wrapper.find('.paper-element-controls').exists()).toBe(false)
+    expect(wrapper.getComponent(PaperContextBar).props('settingsOpen')).toBe(false)
+    wrapper.unmount()
+  })
+  it.each(['rectangle', 'ellipse', 'triangle', 'hexagon', 'line', 'arrow', 'frame'])(
+    'creates %s with configured stroke, then undoes and redoes the complete gesture',
+    async (id) => {
+      const wrapper = mountCanvas()
+      wrapper.getComponent(PaperToolRail).vm.$emit('choose', id)
+      await nextTick()
+      wrapper
+        .getComponent(PaperContextBar)
+        .vm.$emit('brush', { strokeColor: '#1739b7', strokeWidth: 4, opacity: 0.5 })
+      await nextTick()
+      const viewport = wrapper.get('.board-viewport')
+      await pointer(viewport.element, 'pointerdown', 1, 300, 200)
+      await pointer(viewport.element, 'pointermove', 1, 450, 300)
+      await pointer(viewport.element, 'pointerup', 1, 450, 300)
+      const elements = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+      expect(elements).toHaveLength(1)
+      expect(elements[0]).toMatchObject({
+        kind: id,
+        strokeColor: '#1739b7',
+        strokeWidth: 4,
+        opacity: 0.5,
+      })
+      await wrapper.get('[data-board-undo]').trigger('click')
+      expect(wrapper.find('[data-element-id]').exists()).toBe(false)
+      await wrapper.get('[data-board-redo]').trigger('click')
+      expect(wrapper.findAll('[data-element-id]')).toHaveLength(1)
+      wrapper.unmount()
+    }
+  )
+  it.each(['pencil', 'graphite', 'pen', 'fountain', 'ink'])(
+    'writes with %s using the same context controls and one history entry',
+    async (instrument) => {
+      const wrapper = mountCanvas()
+      wrapper.getComponent(PaperToolRail).vm.$emit('choose', 'draw')
+      await nextTick()
+      wrapper.getComponent(PaperContextBar).vm.$emit('instrument', instrument)
+      await nextTick()
+      wrapper
+        .getComponent(PaperContextBar)
+        .vm.$emit('brush', { strokeColor: '#1739b7', strokeWidth: 2 })
+      const viewport = wrapper.get('.board-viewport')
+      await pointer(viewport.element, 'pointerdown', 1, 300, 200)
+      await pointer(viewport.element, 'pointermove', 1, 330, 220)
+      await pointer(viewport.element, 'pointermove', 1, 360, 230)
+      await pointer(viewport.element, 'pointerup', 1, 390, 240)
+      const elements = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+      expect(elements[0]).toMatchObject({
+        kind: 'draw',
+        strokeColor: '#1739b7',
+        strokeWidth: 2,
+      })
+      expect(elements[0]!.drawBrush ?? null).toBe(
+        ['graphite', 'fountain', 'ink'].includes(instrument) ? instrument : null
+      )
+      await wrapper.get('[data-board-undo]').trigger('click')
+      expect(wrapper.find('[data-element-id]').exists()).toBe(false)
+      expect(wrapper.get('[data-board-undo]').attributes('disabled')).toBeDefined()
+      wrapper.unmount()
+    }
+  )
+  it.each([
+    ['select', false, false, false],
+    ['pan', false, false, false],
+    ['pen', true, false, false],
+    ['draw', true, false, false],
+    ['eraser', false, false, false],
+    ['arrow', true, false, false],
+    ['line', true, false, false],
+    ['rectangle', true, true, true],
+    ['ellipse', true, true, true],
+    ['triangle', true, true, true],
+    ['hexagon', true, true, true],
+    ['frame', true, true, true],
+    ['text', false, false, true],
+    ['note', true, true, true],
+    ['image', false, false, false],
+  ])('provides relevant top controls for %s', async (id, stroke, fill, text) => {
+    const wrapper = mountCanvas()
+    wrapper.getComponent(PaperToolRail).vm.$emit('choose', id)
+    await nextTick()
+    expect(wrapper.getComponent(PaperContextBar).props()).toMatchObject({
+      stroke,
+      fill,
+      text,
+    })
+    if (id === 'eraser') {
+      expect(wrapper.find('.paper-eraser-options').exists()).toBe(false)
+      expect(wrapper.findAll('[data-eraser-size]')).toHaveLength(3)
+      await wrapper.get('[data-eraser-size="48"]').trigger('click')
+      expect(wrapper.getComponent(PaperContextBar).props('eraserSize')).toBe(48)
+    }
+    wrapper.unmount()
+  })
+  it('shows shape stroke controls, applies transparent fill with undo, and clears stale selection on tool change', async () => {
+    const wrapper = mountCanvas()
+    await wrapper.setProps({ elements: [{ ...note, kind: 'rectangle', text: '' }] })
+    const viewport = wrapper.get('.board-viewport')
+    await viewport.trigger('keydown', { key: 'v' })
+    await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 70, 70)
+    await pointer(viewport.element, 'pointerup', 1, 70, 70)
+    const bar = wrapper.getComponent(PaperContextBar)
+    expect(bar.props()).toMatchObject({
+      stroke: true,
+      fill: true,
+      text: true,
+      selection: true,
+    })
+    bar.vm.$emit('fillColor', 'transparent')
+    await nextTick()
+    expect(
+      (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!.fillColor
+    ).toBe('transparent')
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(
+      (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!.fillColor
+    ).toBeUndefined()
+    await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 2, 70, 70)
+    await pointer(viewport.element, 'pointerup', 2, 70, 70)
+    await wrapper.get('[data-context-settings]').trigger('click')
+    expect(wrapper.find('.paper-element-controls').exists()).toBe(true)
+    wrapper.getComponent(PaperToolRail).vm.$emit('choose', 'line')
+    await nextTick()
+    expect(bar.props()).toMatchObject({
+      selection: false,
+      text: false,
+      fill: false,
+      stroke: true,
+    })
+    expect(wrapper.find('.paper-element-controls').exists()).toBe(false)
+    expect(wrapper.find('[data-selection-outline]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+  it('uses font size and text color selected before creation in the new text document', async () => {
+    const wrapper = mountCanvas()
+    wrapper.getComponent(PaperToolRail).vm.$emit('choose', 'text')
+    await nextTick()
+    const bar = wrapper.getComponent(PaperContextBar)
+    bar.vm.$emit('fontSize', 36)
+    bar.vm.$emit('textColor', '#1739b7')
+    await nextTick()
+    const viewport = wrapper.get('.board-viewport')
+    await pointer(viewport.element, 'pointerdown', 1, 200, 180)
+    await pointer(viewport.element, 'pointerup', 1, 200, 180)
+    const document = wrapper.getComponent(BoardRichTextEditor).props('modelValue')
+    expect(document.paragraphs[0]!.runs[0]).toMatchObject({
+      fontSize: 36,
+      color: '#1739b7',
+    })
+    wrapper.unmount()
+  })
+  it('keeps legacy web references readable and removable without an iframe or insertion tool', async () => {
+    const wrapper = mountCanvas()
+    await wrapper.setProps({
+      elements: [{ ...note, kind: 'iframe', text: 'https://example.com/' }],
+    })
+    expect(wrapper.find('iframe').exists()).toBe(false)
+    expect(wrapper.find('[data-tool="iframe"]').exists()).toBe(false)
+    expect(wrapper.find('[data-element-id]').text()).toContain('https://example.com/')
+    const viewport = wrapper.get('.board-viewport')
+    await viewport.trigger('keydown', { key: 'v' })
+    await pointer(wrapper.get('[data-element-id]').element, 'pointerdown', 1, 70, 70)
+    await pointer(viewport.element, 'pointerup', 1, 70, 70)
+    expect(wrapper.find('[data-edit-web]').exists()).toBe(false)
+    await viewport.trigger('keydown', { key: 'Delete' })
+    expect(wrapper.find('[data-element-id]').exists()).toBe(false)
+    await wrapper.get('[data-board-undo]').trigger('click')
+    expect(wrapper.find('[data-element-id]').text()).toContain('https://example.com/')
+    wrapper.unmount()
+  })
   it('uses exact shape dimensions for the selection outline without padding', async () => {
     const wrapper = mountCanvas()
     await wrapper.setProps({
@@ -172,6 +750,7 @@ describe('board canvas interactions', () => {
     await wrapper.setProps({ elements: [drawing], layers: defaultLayers() })
     wrapper.getComponent(PaperLayersPanel).vm.$emit('collapse')
     await nextTick()
+    await wrapper.get('[data-layer-options="base"]').trigger('click')
     await wrapper.get('[data-layer-lock="base"]').trigger('click')
     const changes = wrapper.emitted('change')!.length
     await wrapper.get('[data-tool="pen"]').trigger('click')
@@ -182,6 +761,8 @@ describe('board canvas interactions', () => {
     await pointer(viewport.element, 'pointerdown', 2, 90, 50)
     await pointer(viewport.element, 'pointerup', 2, 90, 50)
     expect(wrapper.emitted('change')).toHaveLength(changes)
+    wrapper.getComponent(PaperLayersPanel).vm.$emit('collapse')
+    await nextTick()
     await wrapper.get('[data-layer-visibility="base"]').trigger('click')
     expect(wrapper.find('[data-element-id]').exists()).toBe(false)
     await wrapper.get('[data-board-undo]').trigger('click')
@@ -719,12 +1300,24 @@ describe('board canvas interactions', () => {
           textAlign: 'left' as const,
           textVerticalAlign: 'top' as const,
           textAutoWidth: false,
+          connectorStyle: 'straight' as const,
           ...Object.fromEntries(Object.entries(element).reverse()),
         }) as BoardElement
     )
     await wrapper.setProps({ elements: saved })
     expect(wrapper.get('[data-board-undo]').attributes('disabled')).toBeUndefined()
     await wrapper.get('[data-board-undo]').trigger('click')
+    expect(
+      (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!.fillColor
+    ).toBeUndefined()
+    const undone = wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]
+    await wrapper.setProps({
+      elements: undone.map((element) => ({ ...element, connectorStyle: 'straight' })),
+    })
+    expect(wrapper.get('[data-board-redo]').attributes('disabled')).toBeUndefined()
+    await viewport.trigger('keydown', { key: 'z', ctrlKey: true, shiftKey: true })
+    await wrapper.setProps({ elements: saved })
+    await viewport.trigger('keydown', { key: 'z', ctrlKey: true })
     expect(
       (wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[])[0]!.fillColor
     ).toBeUndefined()
@@ -1835,4 +2428,170 @@ describe('board canvas interactions', () => {
     expect(moved[1]?.x).toBe(44)
     wrapper.unmount()
   })
+})
+
+describe('Paper system clipboard', () => {
+  function clipboard(target: Element, type: string, data: Map<string, string>) {
+    const event = new Event(type, { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'clipboardData', {
+      value: {
+        setData: (type: string, value: string) => data.set(type, value),
+        getData: (type: string) => data.get(type) ?? '',
+        items: [],
+      },
+    })
+    target.dispatchEvent(event)
+    return event
+  }
+  it('copies across Papers and creates separate undoable pastes', async () => {
+    const source = mountCanvas([note])
+    await source.get('.board-viewport').trigger('keydown', { key: 'a', ctrlKey: true })
+    const data = new Map<string, string>()
+    expect(
+      clipboard(source.get('.board-viewport').element, 'copy', data).defaultPrevented
+    ).toBe(true)
+    const target = mountCanvas()
+    const viewport = target.get('.board-viewport')
+    clipboard(viewport.element, 'paste', data)
+    await flushPromises()
+    clipboard(viewport.element, 'paste', data)
+    await flushPromises()
+    const updates = target.emitted('change')!
+    const result = updates[updates.length - 1]![0] as BoardElement[]
+    expect(result).toHaveLength(2)
+    expect(result[0]!.id).not.toBe(note.id)
+    expect(result[1]!.id).not.toBe(result[0]!.id)
+    expect(result[1]!.x).not.toBe(result[0]!.x)
+    expect(result[0]!.text).toBe(note.text)
+    await viewport.trigger('keydown', { key: 'z', ctrlKey: true })
+    const undone = target.emitted('change')!
+    expect(undone[undone.length - 1]![0]).toHaveLength(1)
+    await viewport.trigger('keydown', { key: 'z', ctrlKey: true, shiftKey: true })
+    const redone = target.emitted('change')!
+    expect(redone[redone.length - 1]![0]).toHaveLength(2)
+    source.unmount()
+    target.unmount()
+  })
+  it('does not paste into a locked Paper or intercept editable fields', async () => {
+    const target = mountCanvas([note])
+    await target.get('.board-viewport').trigger('keydown', { key: 'a', ctrlKey: true })
+    const data = new Map<string, string>()
+    clipboard(target.get('.board-viewport').element, 'copy', data)
+    await target.setProps({ readOnly: true })
+    expect(
+      clipboard(target.get('.board-viewport').element, 'paste', data).defaultPrevented
+    ).toBe(false)
+    expect(target.emitted('change')).toBeUndefined()
+    await target.setProps({ readOnly: false })
+    const input = document.createElement('input')
+    target.element.append(input)
+    expect(clipboard(input, 'paste', data).defaultPrevented).toBe(false)
+    expect(clipboard(input, 'copy', data).defaultPrevented).toBe(false)
+    target.unmount()
+  })
+  it('leaves ordinary text clipboard untouched', () => {
+    const target = mountCanvas()
+    const data = new Map([['text/plain', 'A normal sentence']])
+    expect(
+      clipboard(target.get('.board-viewport').element, 'paste', data).defaultPrevented
+    ).toBe(false)
+    expect(target.emitted('change')).toBeUndefined()
+    target.unmount()
+  })
+})
+
+describe('predictable writing tools', () => {
+  it('retains separate ink, width and opacity for each of the five instruments', async () => {
+    const wrapper = mountCanvas()
+    const bar = wrapper.getComponent(PaperContextBar)
+    const instruments = ['pencil', 'graphite', 'pen', 'fountain', 'ink']
+    for (const [index, id] of instruments.entries()) {
+      await bar.get('[data-context-instrument]').setValue(id)
+      bar.vm.$emit('brush', {
+        strokeWidth: index + 3,
+        opacity: 0.5,
+        strokeColor: index % 2 ? '#1739b7' : '#202124',
+      })
+      await nextTick()
+      await wrapper.get('[data-tool="select"]').trigger('click')
+      await wrapper.get('[data-tool="pen"]').trigger('click')
+    }
+    for (const [index, id] of instruments.entries()) {
+      await bar.get('[data-context-instrument]').setValue(id)
+      expect(bar.props('width')).toBe(index + 3)
+      expect(bar.props('opacity')).toBe(0.5)
+      expect(bar.props('color')).toBe(index % 2 ? '#1739b7' : '#202124')
+    }
+    wrapper.unmount()
+  })
+  it('allows repeated shapes with Keep tool and Escape returns to selection', async () => {
+    const wrapper = mountCanvas()
+    await wrapper.getComponent(PaperToolRail).vm.$emit('choose', 'rectangle')
+    await nextTick()
+    const bar = wrapper.getComponent(PaperContextBar)
+    await bar.get('[data-keep-tool]').trigger('click')
+    const viewport = wrapper.get('.board-viewport')
+    for (const id of [1, 2]) {
+      await pointer(viewport.element, 'pointerdown', id, 300 + id * 80, 300)
+      await pointer(viewport.element, 'pointermove', id, 350 + id * 80, 350)
+      await pointer(viewport.element, 'pointerup', id, 350 + id * 80, 350)
+    }
+    expect(wrapper.emitted('change')!.slice(-1)[0]![0] as BoardElement[]).toHaveLength(2)
+    expect(bar.props('tool')).toBe('rectangle')
+    await viewport.trigger('keydown', { key: 'Escape' })
+    expect(bar.props('tool')).toBe('select')
+    wrapper.unmount()
+  })
+})
+
+describe('favorite pens and navigation', () => {
+  it('stores a pen without duplicating it and reapplies its settings without editing the paper', async () => {
+    const wrapper = mountCanvas()
+    const ribbon = wrapper.getComponent(PaperContextBar)
+    ribbon.vm.$emit('brush', { strokeWidth: 4, opacity: 0.7 })
+    await nextTick()
+    await wrapper.get('.paper-favorites > button').trigger('click')
+    await wrapper.get('.paper-favorites > button').trigger('click')
+    expect(wrapper.findAll('.paper-favorite')).toHaveLength(1)
+    ribbon.vm.$emit('brush', { strokeWidth: 1, opacity: 1 })
+    await nextTick()
+    await wrapper.get('.paper-favorite button').trigger('click')
+    expect(wrapper.getComponent(PaperContextBar).props('width')).toBe(4)
+    expect(wrapper.emitted('change')).toBeUndefined()
+    await wrapper.get('.paper-favorite button + button').trigger('click')
+    expect(wrapper.findAll('.paper-favorite')).toHaveLength(0)
+    wrapper.unmount()
+  })
+  it('opens and closes the minimap without changing content', async () => {
+    const wrapper = mountCanvas([note])
+    const mapButton = wrapper.findAll('.board-zoom button').find(button => button.text() === 'boards.navigation.map')!
+    await mapButton.trigger('click')
+    expect(wrapper.find('.paper-navigator').exists()).toBe(true)
+    await wrapper.get('.paper-navigator button').trigger('click')
+    expect(wrapper.find('.paper-navigator').exists()).toBe(false)
+    expect(wrapper.emitted('change')).toBeUndefined()
+    wrapper.unmount()
+  })
+})
+
+it('returns to the previous camera after using the map and supports keyboard navigation', async () => {
+  const wrapper = mountCanvas([note])
+  await nextTick()
+  await wrapper.findAll('.board-zoom button').find(button => button.text() === 'boards.navigation.map')!.trigger('click')
+  const map = wrapper.getComponent(PaperNavigator)
+  const before = { ...map.props('camera') }
+  await map.get('svg').trigger('keydown', { key: 'ArrowRight' })
+  expect(map.props('camera').x).not.toBe(before.x)
+  await wrapper.findAll('.board-zoom button').find(button => button.text() === 'boards.navigation.back')!.trigger('click')
+  expect(map.props('camera')).toEqual(before)
+  wrapper.unmount()
+})
+
+it('keeps editor colors aligned with the Paper scheme without changing its elements', async () => {
+  const wrapper = mountCanvas([note])
+  expect(wrapper.get('.board-editor').attributes('data-paper-scheme')).toBe('light')
+  await wrapper.setProps({ colorScheme: 'dark' })
+  expect(wrapper.get('.board-editor').attributes('data-paper-scheme')).toBe('dark')
+  expect(wrapper.emitted('change')).toBeUndefined()
+  wrapper.unmount()
 })

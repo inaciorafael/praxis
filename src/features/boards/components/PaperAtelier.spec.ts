@@ -86,3 +86,96 @@ describe('Paper atelier', () => {
     wrapper.unmount()
   })
 })
+
+describe('unified context ribbon', () => {
+  it('separates shape, typography and arrangement controls without losing access', async () => {
+    const wrapper = mount(PaperContextBar, {
+      attachTo: document.body,
+      props: {
+        tool: 'select',
+        selectionKey: 'shape',
+        selection: true,
+        text: true,
+        fill: true,
+        stroke: true,
+        color: '#202124',
+        width: 2,
+        settingsOpen: false,
+      },
+      global: { plugins: [i18n] },
+    })
+    expect(wrapper.get('[data-context-page="stroke"]').isVisible()).toBe(true)
+    expect(wrapper.get('[data-context-page="text"]').isVisible()).toBe(false)
+    await wrapper.get('[data-context-section="text"]').trigger('click')
+    expect(wrapper.get('[data-context-font-size="22"]').isVisible()).toBe(true)
+    expect(wrapper.get('[data-context-stroke]').isVisible()).toBe(false)
+    await wrapper.get('[data-context-section="arrange"]').trigger('click')
+    expect(wrapper.get('[data-save-library]').isVisible()).toBe(true)
+    await wrapper.setProps({ tool: 'text', selection: false, stroke: false, fill: false })
+    expect(wrapper.get('[data-context-page="text"]').isVisible()).toBe(true)
+    wrapper.unmount()
+  })
+  it('offers direct thickness and fill presets, and a consistent dismiss action', async () => {
+    const wrapper = mount(PaperContextBar, {
+      attachTo: document.body,
+      props: {
+        tool: 'rectangle',
+        selection: false,
+        text: true,
+        fill: true,
+        stroke: true,
+        color: '#202124',
+        width: 2,
+        settingsOpen: true,
+      },
+      global: { plugins: [i18n] },
+    })
+    await wrapper.get('[data-context-width="4"]').trigger('click')
+    expect(wrapper.emitted('brush')).toEqual([[{ strokeWidth: 4 }]])
+    await wrapper.get('[data-context-section="fill"]').trigger('click')
+    await wrapper.get('[data-context-fill="#fff0b3"]').trigger('click')
+    expect(wrapper.emitted('fillColor')).toEqual([['#fff0b3']])
+    await wrapper.get('[data-context-section="text"]').trigger('click')
+    expect(wrapper.emitted('dismiss')).toHaveLength(2)
+    await wrapper.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('dismiss')).toHaveLength(3)
+    wrapper.unmount()
+  })
+  it('closes rail menus even when an outside control stops pointer propagation', async () => {
+    const wrapper = mount(PaperToolRail, {
+      props: { tools, activeTool: 'pen' },
+      global: { plugins: [i18n] },
+      attachTo: document.body,
+    })
+    await wrapper.get('[data-more-tools]').trigger('click')
+    const outside = document.createElement('button')
+    document.body.append(outside)
+    outside.addEventListener('pointerdown', (event) => event.stopPropagation())
+    outside.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('.paper-rail-menu').isVisible()).toBe(false)
+    outside.remove()
+    wrapper.unmount()
+  })
+})
+
+it('keeps typography open when enabling a background adds shape controls', async () => {
+  const wrapper = mount(PaperContextBar, {
+    attachTo: document.body,
+    props: {
+      tool: 'text',
+      selection: false,
+      text: true,
+      fill: false,
+      stroke: false,
+      color: '#202124',
+      width: 2,
+      settingsOpen: false,
+    },
+    global: { plugins: [i18n] },
+  })
+  await wrapper.setProps({ fill: true, stroke: true })
+  expect(wrapper.get('[data-context-page="text"]').isVisible()).toBe(true)
+  expect(wrapper.find('[data-context-section="fill"]').exists()).toBe(true)
+  wrapper.unmount()
+})

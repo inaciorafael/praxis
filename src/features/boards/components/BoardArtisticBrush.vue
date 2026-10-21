@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { BoardElement } from '@/shared/types/board'
+import BoardZoomInk from './BoardZoomInk.vue'
 import BoardSketch from './BoardSketch.vue'
 import { isWritingBrush, writingPaths } from '../lib/writing'
 import {
@@ -12,6 +13,7 @@ import {
 const props = withDefaults(
   defineProps<{
     element: BoardElement
+    zoom?: number
     stroke: string
     preview?: boolean
     visible?: boolean
@@ -72,7 +74,10 @@ onBeforeUnmount(() => request++)
         :opacity="path.opacity"
         :stroke-dasharray="path.dash"
         stroke-linecap="round"
-        stroke-linejoin="round"
+        stroke-linejoin="round" /><BoardZoomInk
+        :paths="ink"
+        :zoom="zoom ?? 1"
+        :width="element.strokeWidth ?? 1.8"
     /></template>
     <image
       v-else-if="raster"
@@ -91,6 +96,7 @@ onBeforeUnmount(() => request++)
       "
       ><BoardSketch
         :element="fallback"
+        :zoom="zoom"
         :stroke="stroke"
         fill="transparent"
     /></g>

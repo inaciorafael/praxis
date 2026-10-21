@@ -13,7 +13,9 @@ export type BoardElementKind =
   | 'decision'
   | 'task'
   | 'image'
+  | 'iframe' // Legacy reference only; embedding and insertion were discontinued.
 
+export type BoardConnectorStyle = 'straight' | 'elbow' | 'curve'
 export type BoardColor = 'neutral' | 'amber' | 'sage' | 'blue' | 'rose' | 'purple'
 export type BoardStrokeStyle = 'clean' | 'pencil' | 'pen'
 export type BoardSketchOptions = {
@@ -108,6 +110,7 @@ export type BoardElement = {
   richText?: BoardRichText | null
   resolved: boolean
   points: BoardPoint[]
+  connectorStyle?: BoardConnectorStyle
   startId: string | null
   endId: string | null
   taskId: string | null

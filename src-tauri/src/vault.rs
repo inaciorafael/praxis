@@ -253,7 +253,7 @@ pub fn get_safety_copies_dir(app: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn reload_active_data_file(
+pub async fn reload_active_data_file(
     app: AppHandle,
     state: tauri::State<'_, VaultStore>,
 ) -> Result<VaultStatus, String> {
@@ -281,11 +281,13 @@ pub fn reload_active_data_file(
         active.file_fingerprint = file_fingerprint(&active.path)?;
     }
 
+    crate::postits::close_all(&app);
+    crate::postits::schedule_sync(&app);
     vault_status(&app, &state)
 }
 
 #[tauri::command]
-pub fn create_data_file(
+pub async fn create_data_file(
     app: AppHandle,
     state: tauri::State<'_, VaultStore>,
     path: String,
@@ -340,11 +342,13 @@ pub fn create_data_file(
         });
     }
 
+    crate::postits::close_all(&app);
+    crate::postits::schedule_sync(&app);
     vault_status(&app, &state)
 }
 
 #[tauri::command]
-pub fn open_data_file(
+pub async fn open_data_file(
     app: AppHandle,
     state: tauri::State<'_, VaultStore>,
     path: String,
@@ -361,11 +365,13 @@ pub fn open_data_file(
         state.active = Some(active);
     }
 
+    crate::postits::close_all(&app);
+    crate::postits::schedule_sync(&app);
     vault_status(&app, &state)
 }
 
 #[tauri::command]
-pub fn close_data_file(
+pub async fn close_data_file(
     app: AppHandle,
     state: tauri::State<'_, VaultStore>,
 ) -> Result<VaultStatus, String> {
@@ -377,6 +383,8 @@ pub fn close_data_file(
         state.active = None;
     }
 
+    crate::postits::close_all(&app);
+    crate::postits::schedule_sync(&app);
     vault_status(&app, &state)
 }
 
@@ -487,6 +495,18 @@ fn initial_plaintext(now: &str) -> Value {
     })
 }
 
+pub(crate) fn active_file_id(state: &VaultStore) -> Result<String, String> {
+    let state = state
+        .0
+        .lock()
+        .map_err(|_| "Nao foi possivel acessar o cofre.")?;
+    state
+        .active
+        .as_ref()
+        .map(|active| active.header.file_id.clone())
+        .ok_or_else(|| "Cofre fechado.".into())
+}
+
 pub fn read_active_document(state: &VaultStore) -> Result<Value, String> {
     let state = state
         .0
@@ -531,6 +551,20 @@ pub(crate) fn mutate_active_document<T>(
     state: &VaultStore,
     mutate: impl FnOnce(&mut Value) -> Result<T, String>,
 ) -> Result<T, String> {
+    mutate_document(state, None, mutate)
+}
+pub(crate) fn mutate_matching_document<T>(
+    state: &VaultStore,
+    file_id: &str,
+    mutate: impl FnOnce(&mut Value) -> Result<T, String>,
+) -> Result<T, String> {
+    mutate_document(state, Some(file_id), mutate)
+}
+fn mutate_document<T>(
+    state: &VaultStore,
+    file_id: Option<&str>,
+    mutate: impl FnOnce(&mut Value) -> Result<T, String>,
+) -> Result<T, String> {
     let mut state = state
         .0
         .lock()
@@ -539,6 +573,9 @@ pub(crate) fn mutate_active_document<T>(
         .active
         .as_mut()
         .ok_or("Abra um arquivo .praxis antes de continuar.")?;
+    if file_id.is_some_and(|id| id != active.header.file_id) {
+        return Err("O cofre mudou. Abra o lembrete novamente.".into());
+    }
     ensure_file_was_not_changed_externally(active)?;
     let mut document = read_document(active)?;
     let before = document.clone();

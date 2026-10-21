@@ -72,6 +72,11 @@ export const router = createRouter({
         },
 
         {
+          path: 'postits',
+          name: 'postits',
+          component: () => import('@/pages/postits/PostitsPage.vue'),
+        },
+        {
           path: 'reminders',
           name: 'reminders',
           component: RemindersPage,

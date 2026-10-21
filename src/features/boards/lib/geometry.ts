@@ -1,4 +1,5 @@
 import type { BoardElement, BoardPoint } from '@/shared/types/board'
+import { connectorRoute, connectorLabel, type ConnectorEndpoints } from './connector-path'
 
 export type Camera = { x: number; y: number; zoom: number }
 export const MIN_ZOOM = 0.1
@@ -157,7 +158,7 @@ export function bounds(elements: BoardElement[], scene: BoardElement[] = element
   if (!elements.length) return { x: 0, y: 0, width: 640, height: 480 }
   const points = elements.flatMap((element) =>
     element.kind === 'arrow'
-      ? connectorPoints(element, scene)
+      ? connectorOutline(element, scene)
       : element.kind === 'line'
         ? linePoints(element)
         : elementCorners(element)
@@ -173,14 +174,21 @@ export function bounds(elements: BoardElement[], scene: BoardElement[] = element
 }
 export function connectorPoints(
   element: BoardElement,
-  elements: BoardElement[]
-): [BoardPoint, BoardPoint] {
-  const start = elements.find(
-    (e) => e.id === element.startId && e.kind !== 'arrow' && e.kind !== 'line'
-  )
-  const end = elements.find(
-    (e) => e.id === element.endId && e.kind !== 'arrow' && e.kind !== 'line'
-  )
+  elements: BoardElement[] | ReadonlyMap<string, BoardElement>
+): ConnectorEndpoints {
+  const target = (id: string | null) => {
+    const candidate =
+      id == null
+        ? undefined
+        : Array.isArray(elements)
+          ? elements.find((e) => e.id === id)
+          : elements.get(id)
+    return candidate && candidate.kind !== 'arrow' && candidate.kind !== 'line'
+      ? candidate
+      : undefined
+  }
+  const start = target(element.startId)
+  const end = target(element.endId)
   const center = (target: BoardElement | undefined, fallback: BoardPoint) =>
     target
       ? { x: target.x + target.width / 2, y: target.y + target.height / 2 }
@@ -229,7 +237,32 @@ export function connectorPoints(
       target.angle ?? 0
     )
   }
+  if (element.connectorStyle && element.connectorStyle !== 'straight') {
+    const horizontal = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y)
+    const towardA = horizontal ? { x: b.x, y: a.y } : { x: a.x, y: b.y }
+    const towardB = horizontal ? { x: a.x, y: b.y } : { x: b.x, y: a.y }
+    return Object.assign(
+      [edge(start, a, towardA), edge(end, b, towardB)] as [BoardPoint, BoardPoint],
+      {
+        axis: horizontal ? ('horizontal' as const) : ('vertical' as const),
+      }
+    )
+  }
   return [edge(start, a, b), edge(end, b, a)]
+}
+export function connectorOutline(
+  element: BoardElement,
+  elements: BoardElement[] | ReadonlyMap<string, BoardElement>,
+  includeLabel = true
+): BoardPoint[] {
+  const route = connectorRoute(connectorPoints(element, elements), element.connectorStyle)
+  if (!includeLabel || !element.text.trim()) return route.points
+  const label = connectorLabel(element.text, route.middle)
+  return [
+    ...route.points,
+    { x: label.x, y: label.y },
+    { x: label.x + label.width, y: label.y + label.height },
+  ]
 }
 export function normalizedStroke(points: BoardPoint[]) {
   if (!points.length) return { x: 0, y: 0, width: 1, height: 1, points: [] }
