@@ -1,70 +1,267 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Praxis · Post-its de teste</title></head><body><div id="app"></div>
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1"
+    />
+    <title>Praxis · Post-its de teste</title>
+  </head>
+  <body>
+    <div id="app"></div>
 
-<script type="module">
+    <script type="module">
+      import { createApp, defineComponent, defineAsyncComponent, h, reactive } from 'vue'
 
-import { createApp, defineComponent, h } from 'vue'
+      import { createPinia } from 'pinia'
 
-import { createPinia } from 'pinia'
+      import { createRouter, createMemoryHistory } from 'vue-router'
 
-import { createRouter, createMemoryHistory } from 'vue-router'
+      import { i18n } from '/src/shared/lib/i18n/i18n.ts'
 
-import { i18n } from '/src/shared/lib/i18n/i18n.ts'
+      import { applyTheme } from '/src/shared/lib/theme/theme.service.ts'
 
-import { applyTheme } from '/src/shared/lib/theme/theme.service.ts'
+      import '/src/app/styles/main.css'
+      import '/src/app/styles/theme.css'
 
-import '/src/app/styles/main.css'
-import '/src/app/styles/theme.css'
+      import PostitsPage from '/src/pages/postits/PostitsPage.vue'
 
-import PostitsPage from '/src/pages/postits/PostitsPage.vue'
+      import PostitWindow from '/src/features/postits/components/PostitWindow.vue'
 
-import PostitWindow from '/src/features/postits/components/PostitWindow.vue'
+      import HelpPage from '/src/pages/help/HelpPage.vue'
+      const SettingsPage = defineAsyncComponent(
+        () => import('/src/pages/settings/SettingsPage.vue')
+      )
+      import { useVaultStore } from '/src/stores/vault.store.ts'
+      import { useAppStore } from '/src/stores/app.store.ts'
+      import { useBadgeStore } from '/src/stores/badge.store.ts'
+      import { useNotificationStore } from '/src/stores/notification.store.ts'
+      import AppAside from '/src/app/shell/AppAside.vue'
 
-import AppAside from '/src/app/shell/AppAside.vue'
+      const frame = reactive({ width: 180, height: 40 })
+      const groups = []
+      const notes = [
+        {
+          record: {
+            id: 'fixture-ideas',
+            title: 'Ideias para amanhã',
+            body: 'Rever o desenho da tela.\nExperimentar uma solução mais simples.',
+            revision: 1,
+            pinned: true,
+            preferredMode: 'micro',
+            collapsed: true,
+            archived: false,
+            color: 'yellow',
+          },
+          title: 'Ideias para amanhã',
+        },
 
-const notes=[
+        {
+          record: {
+            id: 'fixture-books',
+            title: 'Para ler',
+            body: 'Anotar referências sobre desenho e criatividade.',
+            revision: 1,
+            pinned: false,
+            collapsed: false,
+            archived: false,
+            color: 'pink',
+          },
+          title: 'Para ler',
+        },
+      ]
 
-{record:{id:'fixture-ideas',title:'Ideias para amanhã',body:'Rever o desenho da tela.\nExperimentar uma solução mais simples.',revision:1,pinned:true,collapsed:false,archived:false,color:'yellow'},title:'Ideias para amanhã'},
+      window.__TAURI_INTERNALS__ = {
+        transformCallback: () => 1,
+        invoke: async (command, args = {}) => {
+          if (command === 'list_postits') return structuredClone({ notes, groups })
 
-{record:{id:'fixture-books',title:'Para ler',body:'Anotar referências sobre desenho e criatividade.',revision:1,pinned:false,collapsed:false,archived:false,color:'pink'},title:'Para ler'}]
+          if (command === 'get_postit_window')
+            return structuredClone([
+              { notes: [notes[0]], group: null },
+              { language: 'pt-BR', theme: 'light' },
+            ])
 
-window.__TAURI_INTERNALS__={transformCallback:()=>1,invoke:async(command,args={})=>{
+          if (command === 'change_postit') {
+            const { id, expectedRevision, ...patch } = args.change
 
-  if(command==='list_postits')return structuredClone({notes})
+            let note = notes.find((n) => n.record.id === id)
 
-  if(command==='get_postit_window')return structuredClone([notes[0],{language:'pt-BR',theme:'light'}])
+            if (!note) {
+              note = {
+                record: {
+                  id,
+                  revision: 0,
+                  pinned: false,
+                  collapsed: false,
+                  archived: false,
+                  color: 'yellow',
+                  title: '',
+                  body: '',
+                },
+                title: '',
+              }
+              notes.push(note)
+            }
 
-  if(command==='change_postit'){
+            if (note.record.revision !== expectedRevision) throw 'O post-it mudou.'
 
-    const {id,expectedRevision,...patch}=args.change;
+            if (patch.completed !== undefined) {
+              note.record.archived = patch.completed
+              note.record.completedAt = patch.completed ? Date.now() : null
+              delete patch.completed
+            }
+            Object.assign(note.record, patch)
+            if (note.record.archived) note.record.pinned = false
 
-    let note=notes.find(n=>n.record.id===id);
+            note.title = note.record.title
+            note.record.revision++
+            if (patch.preferredMode)
+              Object.assign(
+                frame,
+                patch.preferredMode === 'micro'
+                  ? { width: 180, height: 40 }
+                  : patch.preferredMode === 'compact'
+                    ? { width: 248, height: 132 }
+                    : { width: 340, height: 380 }
+              )
+            return
+          }
 
-    if(!note){note={record:{id,revision:0,pinned:false,collapsed:false,archived:false,color:'yellow',title:'',body:''},title:''};notes.push(note)}
+          if (command === 'present_postit') {
+            const mode = args.editing
+              ? 'expanded'
+              : (args.mode ?? notes[0].record.preferredMode ?? 'micro')
+            Object.assign(
+              frame,
+              mode === 'micro'
+                ? { width: 180, height: 40 }
+                : mode === 'compact'
+                  ? { width: 248, height: 132 }
+                  : (notes[0].record.expandedSize ?? { width: 340, height: 380 })
+            )
+            return
+          }
+          if (command === 'preview_postit_size') {
+            Object.assign(frame, args)
+            return
+          }
+          if (command === 'resize_postit') {
+            notes[0].record.expandedSize = { width: args.width, height: args.height }
+            return
+          }
+          if (command === 'change_postit_group') {
+            const c = args.change
+            if (c.ungroup) {
+              const i = groups.findIndex((g) => g.id === c.id)
+              if (i < 0 || groups[i].revision !== c.expectedRevision) throw 'Pilha mudou'
+              groups.splice(i, 1)
+              for (const n of notes)
+                if (n.record.groupId === c.id) {
+                  n.record.groupId = null
+                  n.record.revision++
+                }
+              return
+            }
+            if (c.expectedRevision !== 0) throw 'Pilha mudou'
+            for (const m of c.members)
+              if (
+                !notes.some(
+                  (n) => n.record.id === m.id && n.record.revision === m.revision
+                )
+              )
+                throw 'Nota mudou'
+            groups.push({ id: c.id, name: c.name, revision: 1 })
+            for (const m of c.members) {
+              const n = notes.find((n) => n.record.id === m.id)
+              n.record.groupId = c.id
+              n.record.revision++
+            }
+            return
+          }
+          if (
+            command === 'sync_postits' ||
+            command === 'open_postit' ||
+            command === 'drag_postit'
+          )
+            return
 
-    if(note.record.revision!==expectedRevision)throw 'O post-it mudou.';
+          if (command.startsWith('plugin:event|')) return 1
 
-    if(patch.completed!==undefined){note.record.archived=patch.completed;note.record.completedAt=patch.completed?Date.now():null;delete patch.completed} Object.assign(note.record,patch);if(note.record.archived)note.record.pinned=false;
+          throw Error('Unmocked fixture command: ' + command)
+        },
+      }
 
-    note.title=note.record.title;note.record.revision++;return
+      i18n.global.locale.value = 'pt-BR'
+      applyTheme('light')
 
-  }
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/', name: 'postits', component: PostitsPage }],
+      })
 
-  if(command==='sync_postits'||command==='open_postit'||command==='drag_postit')return
+      const preview = new URLSearchParams(location.search).has('note')
 
-  if(command.startsWith('plugin:event|'))return 1
+      const demoPage = new URLSearchParams(location.search).has('help')
+        ? HelpPage
+        : new URLSearchParams(location.search).has('settings')
+          ? SettingsPage
+          : PostitsPage
+      const pinia = createPinia()
+      const demoVault = useVaultStore(pinia)
+      demoVault.active = true
+      demoVault.dataFileUpdatedAt = '2026-10-21T12:00:00Z'
+      demoVault.hydrate = async () => {}
+      demoVault.hydrateSafetyCopies = async () => {}
+      const demoApp = useAppStore(pinia)
+      demoApp.config = {
+        language: 'pt-BR',
+        theme: 'light',
+        startWithWindows: false,
+        startMinimized: true,
+        minimizeToTrayWhenUnlocked: true,
+        notificationsEnabled: true,
+        badgeEnabled: true,
+        completedTaskRetentionDays: 730,
+        favoritePaperPens: [],
+        postitPreferences: {
+          desktopEnabled: true,
+          desktopLimit: 3,
+          pinNew: true,
+          color: 'yellow',
+        },
+      }
+      demoApp.hydrateConfig = async () => {}
+      demoApp.updateConfig = async (patch) => {
+        demoApp.config = { ...demoApp.config, ...patch }
+        return true
+      }
+      useBadgeStore(pinia).hydrate = async () => {}
+      useNotificationStore(pinia).hydrate = async () => {}
+      const Root = defineComponent({
+        render: () =>
+          preview
+            ? h(
+                'div',
+                {
+                  style: {
+                    width: frame.width + 'px',
+                    height: frame.height + 'px',
+                    margin: '40px',
+                  },
+                },
+                [h(PostitWindow)]
+              )
+            : h('div', { class: 'grid grid-cols-12 min-h-screen bg-paper text-ink' }, [
+                h('aside', { class: 'col-span-2 border-r border-border bg-surface' }, [
+                  h(AppAside),
+                ]),
+                h('main', { class: 'col-span-10 p-8' }, [h(demoPage)]),
+              ]),
+      })
 
-  throw Error('Unmocked fixture command: '+command)
-
-}}
-
-i18n.global.locale.value='pt-BR';applyTheme('light')
-
-const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',name:'postits',component:PostitsPage}]})
-
-const preview=new URLSearchParams(location.search).has('note')
-
-const Root=defineComponent({render:()=>preview?h('div',{style:'width:248px;height:210px;margin:40px'},[h(PostitWindow)]):h('div',{class:'grid grid-cols-12 min-h-screen bg-paper text-ink'},[h('aside',{class:'col-span-2 border-r border-border bg-surface'},[h(AppAside)]),h('main',{class:'col-span-10 p-8'},[h(PostitsPage)])])})
-
-createApp(Root).use(createPinia()).use(i18n).use(router).mount('#app')
-
-</script></body></html>
+      createApp(Root).use(pinia).use(i18n).use(router).mount('#app')
+    </script>
+  </body>
+</html>

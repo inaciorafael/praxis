@@ -69,10 +69,6 @@ const wheel = [Pencil, PenTool, MousePointer2, Hand, Type, FilePenLine]
                 (stage === 'text' && index === 4) ||
                 (stage === 'organize' && index === 2),
             }"
-            :style="{
-              left: `${30 + 24 * Math.sin((index * Math.PI) / 3)}px`,
-              top: `${30 - 24 * Math.cos((index * Math.PI) / 3)}px`,
-            }"
             ><component
               :is="icon"
               :size="12"
@@ -224,22 +220,21 @@ const wheel = [Pencil, PenTool, MousePointer2, Hand, Type, FilePenLine]
 .example-wheel {
   position: absolute;
   z-index: 1;
-  top: 65px;
-  left: 10px;
-  width: 70px;
-  height: 70px;
-  border: 1px solid #e5e0d5;
-  border-radius: 50%;
-  background: #fff;
+  top: 42px;
+  left: 0;
+  width: 36px;
+  display: grid;
+  gap: 3px;
+  padding: 5px;
+  border-right: 1px solid #e5e0d5;
+  background: #faf9f5;
 }
 .example-wheel > span {
-  position: absolute;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
+  width: 25px;
+  height: 27px;
+  border-radius: 3px;
 }
 .example-active {
   background: #f5e6c8;

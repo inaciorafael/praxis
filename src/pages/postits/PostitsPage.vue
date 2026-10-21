@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch, computed, nextTick } from 'vue'
+import PostitModeControls from '@/features/postits/components/PostitModeControls.vue'
+import { usePostitDraft } from '@/features/postits/composables/usePostitDraft'
 import { Plus, StickyNote, Check, Search } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import type {
   PostitList,
   PostitView,
@@ -15,7 +17,14 @@ import {
   onPostitsChanged,
   onPostitError,
   syncPostits,
+  changePostitGroup,
 } from '@/shared/lib/postits/postit.service'
+import { useAppStore } from '@/stores/app.store'
+import { DEFAULT_POSTIT_PREFERENCES } from '@/shared/lib/postits/postit-preferences'
+const app = useAppStore()
+const preferences = computed(
+  () => app.config?.postitPreferences ?? DEFAULT_POSTIT_PREFERENCES
+)
 const { t, locale } = useI18n()
 const bodyInput = ref<HTMLTextAreaElement | null>(null)
 const search = ref('')
@@ -25,7 +34,6 @@ const route = useRoute(),
 const list = ref<PostitList>({ notes: [] })
 const error = ref(''),
   busy = ref(false),
-  editing = ref(false),
   archived = ref(false)
 const draft = ref({
   id: '',
@@ -48,6 +56,7 @@ const visible = computed(() => {
     .filter(
       (note) =>
         note.record.archived === archived.value &&
+        (!groupFilter.value || note.record.groupId === groupFilter.value) &&
         (!query ||
           (note.title + ' ' + note.record.body).toLocaleLowerCase().includes(query)) &&
         (archived.value ||
@@ -70,12 +79,19 @@ function expiry(note: PostitView) {
     }).format(note.record.completedAt + 7 * 86400000),
   })
 }
-const desktopIds = computed(() =>
-  list.value.notes
-    .filter((note) => note.record.pinned && !note.record.archived)
-    .slice(0, 3)
-    .map((note) => note.record.id)
-)
+const desktopIds = computed(() => {
+  if (!preferences.value.desktopEnabled) return []
+  const keys: string[] = []
+  const notes = list.value.notes.filter((n) => n.record.pinned && !n.record.archived)
+  for (const note of notes) {
+    const key = note.record.groupId ?? note.record.id
+    if (!keys.includes(key)) keys.push(key)
+  }
+  const shown = keys.slice(0, preferences.value.desktopLimit)
+  return notes
+    .filter((n) => shown.includes(n.record.groupId ?? n.record.id))
+    .map((n) => n.record.id)
+})
 let stops: (() => void)[] = [],
   disposed = false
 async function refresh() {
@@ -108,42 +124,148 @@ function patch(note: PostitView, values: Partial<PostitChange>) {
     })
   )
 }
+const selected = ref<string[]>([])
+const groupName = ref('')
+const groupFilter = ref('')
+const groups = computed(() => list.value.groups ?? [])
+const editor = usePostitDraft(async (values) => {
+  await changePostit({
+    id: draft.value.id,
+    ...values,
+    color: draft.value.color,
+    pinned: draft.value.pinned,
+    ...(values.expectedRevision === 0 ? { preferredMode: 'compact' as const } : {}),
+  })
+  await refresh()
+  const note = list.value.notes.find((n) => n.record.id === draft.value.id)
+  if (!note) throw new Error(t('postits.adaptive.unavailable'))
+  return note
+})
+const editing = editor.editing
+watch(
+  () => list.value.notes.find((n) => n.record.id === draft.value.id),
+  (note) => {
+    if (note) editor.receive(note)
+  }
+)
 async function create() {
   draft.value = {
     id: crypto.randomUUID(),
     expectedRevision: 0,
     title: '',
     body: '',
-    color: 'yellow',
-    pinned: true,
+    color: preferences.value.color,
+    pinned: preferences.value.pinNew,
   }
-  editing.value = true
+  editor.begin({
+    title: '',
+    record: { ...draft.value, revision: 0, collapsed: false, archived: false },
+  })
   await nextTick()
   bodyInput.value?.focus()
 }
 async function edit(note: PostitView) {
-  const record = note.record
+  if (editing.value) return
   draft.value = {
-    id: record.id,
-    expectedRevision: record.revision,
-    title: record.title,
-    body: record.body,
-    color: record.color,
-    pinned: record.pinned,
+    id: note.record.id,
+    expectedRevision: note.record.revision,
+    title: note.record.title,
+    body: note.record.body,
+    color: note.record.color,
+    pinned: note.record.pinned,
   }
-  editing.value = true
+  editor.begin(note)
   await nextTick()
   bodyInput.value?.focus()
 }
 async function save() {
-  if (busy.value) return
+  if (
+    !editor.draft.title.trim() &&
+    !editor.draft.body.trim() &&
+    draft.value.expectedRevision === 0 &&
+    !list.value.notes.some((n) => n.record.id === draft.value.id)
+  ) {
+    editing.value = false
+    return
+  }
+  if (!(await editor.flush())) {
+    error.value = editor.error.value.startsWith('postits.')
+      ? t(editor.error.value)
+      : editor.error.value
+    return
+  }
+  const note = list.value.notes.find((n) => n.record.id === draft.value.id)
+  if (
+    note &&
+    (note.record.color !== draft.value.color || note.record.pinned !== draft.value.pinned)
+  ) {
+    await action(() =>
+      changePostit({
+        id: note.record.id,
+        expectedRevision: note.record.revision,
+        color: draft.value.color,
+        pinned: draft.value.pinned,
+      })
+    )
+    if (error.value) return
+  }
+  editing.value = false
+}
+async function groupSelected() {
+  const members = list.value.notes.filter(
+    (n) => selected.value.includes(n.record.id) && !n.record.archived && !n.record.groupId
+  )
   await action(() =>
-    changePostit({
-      ...draft.value,
-      ...(draft.value.expectedRevision === 0 ? { collapsed: true } : {}),
+    changePostitGroup({
+      id: crypto.randomUUID(),
+      expectedRevision: 0,
+      name: groupName.value,
+      members: members.map((n) => ({ id: n.record.id, revision: n.record.revision })),
     })
   )
-  if (!error.value) editing.value = false
+  if (!error.value) {
+    selected.value = []
+    groupName.value = ''
+  }
+}
+function ungroup(id: string, revision: number) {
+  void action(() => changePostitGroup({ id, expectedRevision: revision, ungroup: true }))
+}
+function toggleSelected(id: string, checked: boolean) {
+  selected.value = checked
+    ? [...selected.value, id]
+    : selected.value.filter((value) => value !== id)
+}
+function groupTitle(id?: string | null) {
+  return groups.value.find((g) => g.id === id)?.name
+}
+function highlighted(value: string) {
+  const query = search.value.trim()
+  if (!query) return [{ text: value, match: false }]
+  const lower = value.toLocaleLowerCase(),
+    needle = query.toLocaleLowerCase()
+  const parts: { text: string; match: boolean }[] = []
+  let offset = 0,
+    index = lower.indexOf(needle)
+  while (index >= 0) {
+    parts.push(
+      { text: value.slice(offset, index), match: false },
+      { text: value.slice(index, index + query.length), match: true }
+    )
+    offset = index + query.length
+    index = lower.indexOf(needle, offset)
+  }
+  parts.push({ text: value.slice(offset), match: false })
+  return parts
+}
+onBeforeRouteLeave(async () => {
+  if (!editing.value) return true
+  await save()
+  return !editing.value
+})
+function reloadDraft() {
+  const current = list.value.notes.find((n) => n.record.id === draft.value.id)
+  if (current) editor.begin(current)
 }
 function openRequested() {
   if (editing.value) return
@@ -216,12 +338,13 @@ onBeforeUnmount(() => {
       @submit.prevent="save"
       @keydown.ctrl.enter.prevent="save"
       @keydown.meta.enter.prevent="save"
+      @keydown.esc.prevent="save"
     >
       <label for="postit-body">{{ t('postits.content') }}</label>
       <textarea
         id="postit-body"
         ref="bodyInput"
-        v-model="draft.body"
+        v-model="editor.draft.body"
         maxlength="10000"
         rows="5"
         :disabled="busy"
@@ -229,7 +352,7 @@ onBeforeUnmount(() => {
       <label for="postit-title">{{ t('postits.name') }}</label>
       <input
         id="postit-title"
-        v-model="draft.title"
+        v-model="editor.draft.title"
         maxlength="200"
         :disabled="busy"
       />
@@ -260,18 +383,50 @@ onBeforeUnmount(() => {
       <div>
         <button
           type="submit"
-          :disabled="busy || (!draft.title.trim() && !draft.body.trim())"
+          :disabled="busy || (!editor.draft.title.trim() && !editor.draft.body.trim())"
         >
           {{ t('postits.save') }} <kbd>Ctrl+Enter</kbd>
         </button>
         <button
           type="button"
           :disabled="busy"
-          @click="editing = false"
+          @click="save"
         >
-          {{ t('postits.cancel') }}
+          {{ t('postits.adaptive.finish') }}
         </button>
       </div>
+      <p role="status">
+        {{
+          editor.saving.value
+            ? t('postits.adaptive.saving')
+            : editor.dirty.value
+              ? t('postits.adaptive.pending')
+              : t('postits.adaptive.saved')
+        }}
+      </p>
+      <p
+        v-if="editor.error.value"
+        role="alert"
+      >
+        {{
+          editor.error.value.startsWith('postits.')
+            ? t(editor.error.value)
+            : editor.error.value
+        }}<button
+          v-if="editor.error.value !== 'postits.adaptive.conflict'"
+          type="button"
+          @click="editor.retry"
+        >
+          {{ t('postits.adaptive.retry') }}
+        </button>
+        <button
+          v-if="editor.error.value === 'postits.adaptive.conflict'"
+          type="button"
+          @click="reloadDraft"
+        >
+          {{ t('postits.adaptive.reloadDraft') }}
+        </button>
+      </p>
     </form>
     <div
       role="group"
@@ -330,12 +485,89 @@ onBeforeUnmount(() => {
       <StickyNote :size="28" />
       <p>{{ t('postits.empty') }}</p>
     </div>
+    <p
+      v-if="!preferences.desktopEnabled"
+      class="postits-hint"
+    >
+      {{ t('postits.desktopDisabled') }}
+    </p>
+    <div
+      v-if="!archived"
+      class="postit-groups"
+    >
+      <label
+        >{{ t('postits.adaptive.pileFilter') }}
+        <select v-model="groupFilter">
+          <option value="">{{ t('postits.everywhere') }}</option>
+          <option
+            v-for="group in groups"
+            :key="group.id"
+            :value="group.id"
+          >
+            {{ group.name }} ({{
+              list.notes.filter(
+                (n) => !n.record.archived && n.record.groupId === group.id
+              ).length
+            }})
+          </option>
+        </select></label
+      >
+      <div
+        v-for="group in groups"
+        :key="group.id"
+        class="postit-group-row"
+      >
+        <button
+          :aria-pressed="groupFilter === group.id"
+          @click="groupFilter = groupFilter === group.id ? '' : group.id"
+        >
+          {{ group.name }} ·
+          {{
+            list.notes.filter((n) => !n.record.archived && n.record.groupId === group.id)
+              .length
+          }}
+        </button>
+        <button
+          :disabled="busy || editing"
+          @click="ungroup(group.id, group.revision)"
+        >
+          {{ t('postits.adaptive.ungroup') }}
+        </button>
+      </div>
+      <form
+        v-if="selected.length"
+        class="postit-group-create"
+        @submit.prevent="groupSelected"
+      >
+        <span>{{ t('postits.adaptive.selected', { count: selected.length }) }}</span>
+        <input
+          v-model="groupName"
+          :aria-label="t('postits.adaptive.pileName')"
+          :placeholder="t('postits.adaptive.pileName')"
+          maxlength="100"
+          required
+        />
+        <button :disabled="busy || editing || selected.length < 2 || !groupName.trim()">
+          {{ t('postits.adaptive.group') }}
+        </button>
+        <button
+          type="button"
+          @click="selected = []"
+        >
+          {{ t('postits.adaptive.clearSelection') }}
+        </button>
+      </form>
+    </div>
     <div class="postit-grid">
       <article
         v-for="note in visible"
         :key="note.record.id"
         class="postit-row"
         :data-completed="note.record.archived"
+        :class="{
+          'search-match': !!search.trim(),
+          selected: selected.includes(note.record.id),
+        }"
       >
         <div
           class="postit-color"
@@ -343,8 +575,50 @@ onBeforeUnmount(() => {
           aria-hidden="true"
         ></div>
         <div class="postit-row-content">
-          <h2>{{ note.title || t('postits.untitled') }}</h2>
-          <p class="note-preview">{{ note.record.body }}</p>
+          <label
+            v-if="!note.record.archived && !note.record.groupId"
+            class="postit-select"
+            ><input
+              type="checkbox"
+              :checked="selected.includes(note.record.id)"
+              :disabled="editing || busy"
+              @change="
+                toggleSelected(
+                  note.record.id,
+                  ($event.target as HTMLInputElement).checked
+                )
+              "
+            />{{ t('postits.adaptive.select') }}</label
+          >
+          <small v-if="note.record.groupId">{{ groupTitle(note.record.groupId) }}</small>
+          <h2>
+            <template
+              v-for="(part, index) in highlighted(
+                note.title || note.record.body.split('\\n')[0] || t('postits.untitled')
+              )"
+              :key="index"
+              ><mark v-if="part.match">{{ part.text }}</mark
+              ><template v-else>{{ part.text }}</template></template
+            >
+          </h2>
+          <p class="note-preview">
+            <template
+              v-for="(part, index) in highlighted(note.record.body)"
+              :key="index"
+              ><mark v-if="part.match">{{ part.text }}</mark
+              ><template v-else>{{ part.text }}</template></template
+            >
+          </p>
+          <PostitModeControls
+            v-if="!note.record.archived"
+            :mode="
+              note.record.preferredMode ?? (note.record.collapsed ? 'micro' : 'expanded')
+            "
+            :locked="note.record.modeLocked"
+            :disabled="busy || editing"
+            @mode="patch(note, { preferredMode: $event })"
+            @lock="patch(note, { modeLocked: $event })"
+          />
           <small v-if="note.record.archived">{{ expiry(note) }}</small>
           <small v-else>{{
             t(
@@ -371,7 +645,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               :disabled="busy"
-              @click="patch(note, { pinned: !note.record.pinned, collapsed: true })"
+              @click="patch(note, { pinned: !note.record.pinned })"
             >
               {{ t(note.record.pinned ? 'postits.unpin' : 'postits.pin') }}
             </button>
@@ -621,5 +895,49 @@ kbd {
   opacity: 0.6;
   margin-left: 6px;
   font-family: inherit;
+}
+</style>
+<style scoped>
+.postit-groups {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.postit-group-row {
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--border);
+}
+.postit-group-create {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+  padding: 12px;
+  background: var(--surface);
+}
+.postit-select {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+.postit-row.selected,
+.postit-row.search-match {
+  outline: 2px solid var(--ink-soft);
+  outline-offset: 2px;
+}
+.postit-row-content {
+  display: grid;
+  gap: 6px;
+}
+mark {
+  background: #ffe17c;
+  color: #38382b;
 }
 </style>

@@ -1,167 +1,82 @@
 # Praxis
 
-Praxis is a private desktop workspace for understanding work, preserving its context, and completing it without forgetting decisions or commitments.
+**Think on digital paper. Remember what matters. Turn ideas into action.**
 
-Most task apps become project management systems. Praxis goes the other way. It is focused on daily execution, simple planning, reminders, pending counts, and a calm interface inspired by e-ink screens.
+Praxis is a private desktop workspace that brings visual thinking, daily tasks and small desktop notes into one encrypted local vault. Its interface takes inspiration from calm e-ink screens.
 
-![Praxis reminders view](docs/assets/praxis-reminders.png)
+## Three spaces, one workspace
 
-## Why Praxis exists
+| Space | What it is for |
+| --- | --- |
+| **Papéis / Papers** | Infinite digital sheets for ideas, sketches, diagrams, wireframes and presentations. |
+| **Tasks and reminders** | Actions with dates, checklists, tags and notifications. |
+| **Post-its** | Independent text notes pinned on your desktop until you finish them. |
 
-Praxis is for people who do not want a complex productivity ritual before doing the work.
+**Papéis** is the Portuguese product name: literally sheets of paper. In English the name is **Papers**; singular **Papel / Paper**. A Paper is a flexible digital sheet, not a task-specific refinement template. Post-its are separate notes and do not require a task or scheduled reminder.
 
-The app is designed around a simple loop:
+## Papéis · Papers
 
-1. Capture what needs to be done.
-2. Decide if it matters today, this week, or later.
-3. Add a due date or reminder when needed.
-4. Keep the pending count visible.
-5. Complete tasks until the day is clear.
+![Infinite digital paper with side atelier and sketch tools](docs/assets/praxis-papers.png)
 
-The badge, reminders, overdue views, and weekly planning are not decorative features. They exist to make pending work visible enough that it is hard to ignore, but calm enough that the app does not become another source of noise.
+- Infinite canvas with a side atelier and a contextual top bar.
+- Pen, pencil, graphite, fountain pen and ink for handwriting and sketches.
+- Straight lines, rectangles, ellipses, triangles, hexagons, arrows and connectors.
+- Editable text with four quick font sizes, bold, italic, alignment and hand-drawn annotations.
+- Plain, grid, ruled and dotted backgrounds in light or dark appearance.
+- Layers, groups, lasso selection, smart alignment guides, copy/paste and undo/redo.
+- Notebook organization, content previews and a personal reusable component library.
+- Presentation scenes, laser pointer, focus mode and image export.
+- Optional task links preserve context without duplicating the Paper.
 
-## Product philosophy
+![Reusable drawings in the personal library](docs/assets/praxis-paper-library.png)
 
-Praxis is guided by four principles:
+Papers support personal use, screen sharing and explicit export. See [the product concept](docs/PAPER_CONCEPT.md), [tools and shortcuts](docs/PAPER_TOOL_EXPERIENCE.md) and [usage limits](docs/BOARDS.md).
 
-- **Local first**: your task file is the source of truth.
-- **Private by default**: the vault is encrypted before it is written to disk.
-- **Daily clarity**: the most important view is what needs attention now.
-- **Low friction**: create, update, complete, and move on.
+## Post-its on your desktop
 
-Praxis brings flexible visual thinking and daily execution together: drawings, open questions, decisions, tasks, and reminders stay connected in an encrypted local vault.
+![Post-it organization with active notes and completion controls](docs/assets/praxis-postits.png)
 
-## Screenshots
+Write a free note and choose Micro, Compact or Expanded per note. Micro uses a single colored line with its title; hover or keyboard focus opens a temporary preview. Edit directly without reopening the organizer.
 
-### My week
+- **Alt+N** in Post-its starts a note with focus on the text.
+- Text autosaves after a short pause; **Ctrl+Enter** or **Escape** finishes editing. The title is optional.
+- Choose and lock the preferred mode, drag the grip, or resize Expanded notes. Temporary previews preserve saved positions.
+- Select notes in the organizer to create named piles. A pile uses one desktop window and opens its members on demand; ungrouping preserves them.
+- Search title and body across individual and grouped notes, with highlighted matches.
+- **Done** removes the window and keeps the note recoverable for seven days.
+- **Reopen** cancels the removal deadline. Active notes do not expire.
+- Completed notes are removed from the active vault after seven days; if the vault is closed, cleanup runs when it opens again. Existing encrypted safety copies keep their separate retention policy.
 
-Plan the next seven days starting tomorrow. Tasks stay grouped by day, completed tasks remain visible in context, and the badge counts only pending tasks in the visible week.
+Desktop notes require Praxis to be running with an unlocked vault. Settings controls whether they are displayed, the visible limit (one to three), automatic pinning and the default color. A pile counts as one window. Additional pinned notes wait in the queue.
 
-![Praxis week view](docs/assets/praxis-week.png)
+## Tasks, planning and reminders
 
-### Overdue and task editor
+![Praxis weekly planning](docs/assets/praxis-week.png)
 
-Select a task to open a right-side editor with title, notes, status, due date, reminder, tags, checklist, and timeline.
+- My day, the next seven days, pending work, overdue tasks and reminders.
+- Task notes, tags, checklists and lifecycle history.
+- Checklists describe execution steps; dates and reminders belong to the task.
+- Taskbar badge and background reminders keep pending work visible.
+- Closing the main window while the vault is unlocked keeps Praxis resident.
 
-![Praxis task editor](docs/assets/praxis-editor.png)
+![Task details, checklist and written context](docs/assets/praxis-editor.png)
 
-### Reminders
+## Settings and illustrated Help
 
-Reminders are grouped by urgency, including overdue reminders, today, tomorrow, this week, and later.
+Settings groups appearance, language, notifications, startup, task retention and the new **Papers and Post-its** preferences. Favorite drawing pens can be cleared there; each Paper keeps its own background and appearance.
 
-![Praxis reminders grouped](docs/assets/praxis-reminders.png)
+![Local preferences for Papers and Post-its](docs/assets/praxis-settings.png)
 
-## Features
+Help includes illustrated, interactive walkthroughs for Papers and Post-its: creating, drawing, writing, organizing, sharing, pinning, editing and completing notes. The illustrations use sample content and do not write to your vault.
 
-### Papers for visual thinking
+## Local and private
 
-A Paper is an infinite digital sheet for exploring ideas before, during and after a task. Keep it independent, or link the same document to several tasks. Task notes preserve written context; tasks hold actions and reminders. Papers live in the main **Think** navigation, alongside **Act** task views. See [the Paper product concept](docs/PAPER_CONCEPT.md).
+Your data lives in an encrypted **.praxis** file that you choose. You can place it in a synchronized folder such as OneDrive or Dropbox without giving Praxis a cloud account. The vault remains the source of truth.
 
-- Draw flows using text, notes, rectangles, ellipses, frames, connectors, and freehand strokes.
-- Use pencil/pen strokes, locally bundled Caveat handwriting, and sketch-style text highlights on a white canvas.
-- Import local PNG/JPEG/WebP images or paste screenshots.
-- Start with a blank canvas and a compact drawing toolbar; use focus mode for more space.
-- Sketch freely; optionally create or link official Praxis tasks from the element details.
-- Open a task with its current checklist, or return from the task editor to its board context.
-- Pan/zoom, select multiple elements, resize, duplicate, change layer order, and undo/redo drawing changes.
-- Save board content in the encrypted vault, with explicit save/error states and safeguards when leaving or locking.
-- Export a PNG through the native save dialog to share with your team.
-
-Papers currently support personal use and screen sharing. See [Paper usage and limits](docs/BOARDS.md).
-
-### Task management
-
-- Create tasks with title and optional notes.
-- Mark tasks as pending or completed.
-- Keep completed tasks visible in contextual views such as Today and Week.
-- Delete tasks when they are no longer useful.
-- Sort tasks by practical urgency: overdue first, then nearest due date, then pending tasks without dates, then completed tasks.
-
-### Today-first workflow
-
-- **My day** shows tasks planned for today, due today, overdue tasks, and completed work from the day.
-- The app badge counts pending tasks that matter today.
-- The goal is to make the daily pending count easy to see and easy to clear.
-
-### Week planning
-
-- **My week** shows a seven-day window starting tomorrow.
-- Each day has a compact calendar tile and task count.
-- Clicking a day filters tasks for that specific date.
-- Weekly badge counts only pending tasks inside the visible week.
-
-### Reminders and notifications
-
-- Tasks can have reminder date and time.
-- Reminder tasks are listed separately.
-- Native notifications can fire while the app is running in the background.
-- The app can keep running in the tray after the user closes the window while the vault is open.
-
-### Due dates and overdue state
-
-- Tasks can have precise due date and time.
-- Overdue tasks are separated into their own view.
-- Overdue detection respects date and time, not only the day.
-
-### Tags
-
-- Tags can be assigned to tasks.
-- Tags have colors for quick visual scanning.
-- Tags are stored as entities, so future rename/color changes can reflect across tasks.
-
-### Checklist inside tasks
-
-- A task can contain checklist items.
-- Checklist items are visual helpers, not separate scheduled tasks.
-- The parent task exposes progress such as completed items and percentage.
-- When all checklist items are completed, the parent task can be completed automatically.
-
-### Lifecycle timeline
-
-Praxis tracks meaningful events in the life of a task, such as:
-
-- task created
-- title or note updated
-- due date changed or removed
-- reminder changed or removed
-- task completed
-- task reopened
-- tag added or removed
-- checklist item added, renamed, completed, or reopened
-
-This makes the task detail panel useful as a small history of what happened, not just a form.
-
-### Badge and tray behavior
-
-- The app can show a pending count in the taskbar icon.
-- The badge is designed to represent work that still needs attention.
-- When the vault is open, closing the window can minimize the app to the tray.
-- When the vault is closed, closing the window exits the app.
-
-### Private encrypted vault
-
-Praxis stores data in a `.praxis` vault file.
-
-- Data is local.
-- The vault is encrypted.
-- The user chooses where the vault file lives.
-- The file can be placed in a sync folder such as Google Drive, OneDrive, Dropbox, or another provider.
-- Praxis reads and writes from that file as the source of truth.
-
-This model keeps the product simple: Praxis does not need a cloud account to be useful, and the user remains in control of the data file.
-
-## E-ink inspired interface
-
-Praxis uses a calm e-ink inspired visual direction:
-
-- paper-like background
-- soft ink text
-- muted status colors
-- high readability
-- low visual noise
-- desktop-first layout
-
-The goal is to feel like a focused task instrument, not a colorful dashboard competing for attention.
+- Local-first storage with Argon2id and XChaCha20-Poly1305.
+- Optional trusted-device unlock.
+- Conflict detection and encrypted safety copies before writes.
+- Device preferences stay separate from the vault; Post-it text is not copied into local settings.
 
 ## Tech stack
 
@@ -187,6 +102,9 @@ src/
 src-tauri/
   src/
     app_config.rs          app preferences and health
+    boards.rs              digital Papers, scenes and task links
+    postits.rs             independent desktop notes and retention
+    paper_library.rs       reusable drawing components
     badge.rs               taskbar badge count
     checklist.rs           checklist item commands and parent progress
     lifecycle.rs           task timeline events

@@ -20,6 +20,7 @@ const APP_CONFIG_FILE: &str = "app-config.json";
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
 pub struct AppConfig {
+    pub postit_preferences: PostitPreferences,
     pub postit_positions: Vec<PostitPosition>,
     pub favorite_paper_pens: Vec<FavoritePaperPen>,
     pub language: AppLanguage,
@@ -30,6 +31,33 @@ pub struct AppConfig {
     pub notifications_enabled: bool,
     pub badge_enabled: bool,
     pub completed_task_retention_days: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
+pub struct PostitPreferences {
+    pub desktop_enabled: bool,
+    pub desktop_limit: usize,
+    pub pin_new: bool,
+    pub color: String,
+}
+impl Default for PostitPreferences {
+    fn default() -> Self {
+        Self {
+            desktop_enabled: true,
+            desktop_limit: 3,
+            pin_new: true,
+            color: "yellow".into(),
+        }
+    }
+}
+fn validate_postit_preferences(value: &PostitPreferences) -> Result<(), String> {
+    if !(1..=3).contains(&value.desktop_limit)
+        || !["yellow", "pink", "green", "blue"].contains(&value.color.as_str())
+    {
+        return Err("Invalid Post-it preferences.".into());
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,6 +114,7 @@ pub enum AppLanguage {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            postit_preferences: PostitPreferences::default(),
             postit_positions: Vec::new(),
             favorite_paper_pens: Vec::new(),
             language: AppLanguage::En,
@@ -103,6 +132,7 @@ impl Default for AppConfig {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfigPatch {
+    postit_preferences: Option<PostitPreferences>,
     favorite_paper_pens: Option<Vec<FavoritePaperPen>>,
     language: Option<AppLanguage>,
     theme: Option<AppTheme>,
@@ -178,6 +208,11 @@ pub fn update_app_config(app: AppHandle, patch: AppConfigPatch) -> Result<AppCon
         .lock()
         .map_err(|_| "Configuracoes indisponiveis.")?;
     let mut config = load_app_config(&app)?;
+    let postits_changed = patch.postit_preferences.is_some();
+    if let Some(preferences) = patch.postit_preferences {
+        validate_postit_preferences(&preferences)?;
+        config.postit_preferences = preferences;
+    }
     if let Some(pens) = patch.favorite_paper_pens {
         validate_favorite_pens(&pens)?;
         config.favorite_paper_pens = pens;
@@ -217,6 +252,9 @@ pub fn update_app_config(app: AppHandle, patch: AppConfigPatch) -> Result<AppCon
 
     apply_autostart(&app, config.start_with_windows)?;
     save_app_config(&app, &config)?;
+    if postits_changed {
+        crate::postits::schedule_sync(&app);
+    }
     Ok(config)
 }
 
@@ -495,4 +533,35 @@ pub(crate) fn save_postit_position(
         y,
     });
     save_app_config(app, &config)
+}
+
+#[cfg(test)]
+mod postit_preferences_tests {
+    use super::*;
+    #[test]
+    fn legacy_defaults_and_roundtrip() {
+        let config: AppConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(config.postit_preferences.desktop_limit, 3);
+        assert!(config.postit_preferences.desktop_enabled);
+        assert!(config.postit_preferences.pin_new);
+        let mut value = config.postit_preferences;
+        value.color = "pink".into();
+        value.desktop_limit = 1;
+        validate_postit_preferences(&value).unwrap();
+        let parsed: PostitPreferences =
+            serde_json::from_value(serde_json::to_value(value).unwrap()).unwrap();
+        assert_eq!(parsed.color, "pink");
+        assert_eq!(parsed.desktop_limit, 1);
+    }
+    #[test]
+    fn rejects_unbounded_or_invalid_preferences() {
+        let mut value = PostitPreferences::default();
+        value.desktop_limit = 0;
+        assert!(validate_postit_preferences(&value).is_err());
+        value.desktop_limit = 4;
+        assert!(validate_postit_preferences(&value).is_err());
+        value.desktop_limit = 3;
+        value.color = "red".into();
+        assert!(validate_postit_preferences(&value).is_err());
+    }
 }

@@ -808,3 +808,8 @@ Device geometry contains opaque keys and coordinates only, through AppConfig. No
 Colors approximate familiar adhesive paper (classic yellow and soft pink/green/blue), not certified brand color values.
 
 Completed Post-its use archived as their compatibility status and completedAt as a UTC epoch-millisecond timestamp. Seven days after completion they are removed from the active vault; reopen clears the timestamp. Native synchronization performs atomic cleanup and the frontend schedules one timeout for the next expiry. Closed vaults are cleaned on next open. Legacy archived notes receive a deadline on first sync. Existing encrypted safety copies retain their separate policy.
+
+
+### Adaptive desktop Post-its
+
+Optional desktopPostits fields: preferredMode (micro/compact/expanded), modeLocked (false by default), expandedSize ({width,height}, bounded), groupId. Missing modes are derived from the legacy collapsed boolean on read without a hydration write. New notes default to compact. Optional postitGroups stores {id,name,revision}; membership changes validate both the group revision and each selected note revision inside the existing atomic encrypted mutation. Ungrouping clears associations without deleting members. Native temporary previews and editing state never enter the vault. Existing per-note position keys remain unchanged; piles have separate keys.

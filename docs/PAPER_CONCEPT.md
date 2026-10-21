@@ -34,3 +34,7 @@ Nenhuma ideia precisa virar tarefa. O Paper não recebe prazo, status de execuç
 Esta organização usa `boards`, `paperLinks` e referências de elementos existentes. Não introduz pastas, projetos, cópias anexadas, entidades de anotação ou lembretes próprios de Paper. Remover um vínculo ou concluir uma tarefa preserva o documento. A biblioteca permanece única para todos os canvases antigos e novos.
 
 As buscas de tarefa são explícitas e limitadas a 25 resultados. A biblioteca ordena apenas os resumos já carregados; não carrega as cenas de todos os Papers nem faz uma consulta de contexto por card. Desenhos continuam no cofre criptografado, com autosave, revisão e tratamento de conflitos existentes.
+
+## Nome no produto
+
+O nome em portugues e **Papeis** (com acento: **Papéis**), singular **Papel**. Em ingles, **Papers**, singular **Paper**. Sao folhas digitais infinitas; os nomes internos de rotas e contratos permanecem compativeis.

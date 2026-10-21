@@ -1,16 +1,10 @@
 <script setup lang="ts">
-import { ref, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  Check,
-  Minus,
-  X,
-  ChevronDown,
-  StickyNote,
-  Pencil,
-  GripVertical,
-} from '@lucide/vue'
-import type { PostitView } from '@/shared/types/postit'
+import { Check, X, Pencil, GripVertical, ArrowUpRight, Minimize2 } from '@lucide/vue'
+import type { PostitView, PostitMode, PostitSize } from '@/shared/types/postit'
+import PostitModeControls from './PostitModeControls.vue'
+import { usePostitDraft, type PostitTextChange } from '../composables/usePostitDraft'
 const props = defineProps<{
   note: PostitView
   busy?: boolean
@@ -18,180 +12,381 @@ const props = defineProps<{
   desktop?: boolean
 }>()
 const emit = defineEmits<{
-  collapse: []
   unpin: []
   complete: []
   drag: []
-  save: [values: { title: string; body: string; expectedRevision: number }]
+  mode: [mode: PostitMode]
+  lock: [locked: boolean]
+  present: [mode: PostitMode | null, editing: boolean]
+  resize: [size: PostitSize]
+  resizePreview: [size: PostitSize]
+  save: [values: PostitTextChange, settled: (value: PostitView | string) => void]
 }>()
 const { t } = useI18n()
-const editing = ref(false)
+const editor = usePostitDraft(
+  (value) =>
+    new Promise((resolve, reject) => {
+      emit('save', value, (result) =>
+        typeof result === 'string' ? reject(result) : resolve(result)
+      )
+    })
+)
+const { draft, editing, saving, error: draftError } = editor
 const input = ref<HTMLTextAreaElement | null>(null)
-const draft = ref({ title: '', body: '', expectedRevision: 0 })
+const root = ref<HTMLElement | null>(null)
+const preview = ref<PostitMode | null>(null)
+const sticky = ref(false),
+  dragging = ref(false)
+const preferred = computed(
+  () =>
+    props.note.record.preferredMode ??
+    (props.note.record.collapsed ? 'micro' : 'expanded')
+)
+const mode = computed(() =>
+  editing.value ? 'expanded' : (preview.value ?? preferred.value)
+)
+const title = computed(
+  () => props.note.title || props.note.record.body.split('\n')[0] || t('postits.untitled')
+)
+let previewCooldown = 0
+let hover: ReturnType<typeof setTimeout> | undefined
+let leave: ReturnType<typeof setTimeout> | undefined
+function present(value: PostitMode | null, persistent = false) {
+  clearTimeout(hover)
+  clearTimeout(leave)
+  if (value === null) previewCooldown = performance.now() + 700
+  sticky.value = persistent
+  preview.value = value
+  emit('present', value, editing.value)
+  // The Micro/Compact opener is removed during expansion. Restore DOM focus
+  // to the article so Escape and Enter still work after a mouse activation.
+  if (persistent) void nextTick(() => root.value?.focus())
+}
+function enter(event?: MouseEvent | FocusEvent) {
+  clearTimeout(hover)
+  if (performance.now() < previewCooldown) return
+  if (event instanceof MouseEvent && event.buttons === 0) dragging.value = false
+  clearTimeout(leave)
+  if (mode.value === 'micro' && !props.note.record.modeLocked && !dragging.value)
+    hover = setTimeout(() => present('compact'), 300)
+}
+function exit(event?: FocusEvent) {
+  clearTimeout(hover)
+  if (event?.relatedTarget && root.value?.contains(event.relatedTarget as Node)) return
+  if (!sticky.value && !editing.value) leave = setTimeout(() => present(null), 180)
+}
 async function startEditing() {
-  if (props.busy) return
-  draft.value = {
-    title: props.note.record.title,
-    body: props.note.record.body,
-    expectedRevision: props.note.record.revision,
-  }
-  editing.value = true
+  if (props.busy || editing.value) return
+  clearTimeout(hover)
+  clearTimeout(leave)
+  editor.begin(props.note)
+  emit('present', 'expanded', true)
   await nextTick()
   input.value?.focus()
 }
-function save() {
-  if (props.busy || (!draft.value.title.trim() && !draft.value.body.trim())) return
-  emit('save', { ...draft.value })
+async function finish() {
+  if (await editor.finish()) {
+    present(null)
+    await nextTick()
+    root.value?.focus()
+  }
+}
+function escape() {
+  if (editing.value) void finish()
+  else {
+    present(null)
+    root.value?.focus()
+  }
+}
+function drag() {
+  if (!props.desktop || editing.value) return
+  clearTimeout(hover)
+  clearTimeout(leave)
+  dragging.value = true
+  present(null)
+  // Parent serializes restoring the preferred frame before starting native drag.
+  emit('drag')
+}
+function changeMode(value: PostitMode) {
+  present(null)
+  emit('mode', value)
+}
+function keyboard(event: KeyboardEvent) {
+  if (event.target !== root.value) return
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    void startEditing()
+  }
+  if (event.key === ' ') {
+    event.preventDefault()
+    present('expanded', true)
+  }
 }
 watch(
   () => props.note.record.revision,
-  (revision) => {
-    if (
-      editing.value &&
-      revision > draft.value.expectedRevision &&
-      props.note.record.title === draft.value.title.trim() &&
-      props.note.record.body === draft.value.body
-    )
-      editing.value = false
-  }
+  () => editor.receive(props.note)
 )
+let resizeStart: { x: number; y: number; width: number; height: number } | null = null
+let resizeFrame = 0
+let latest: PostitSize | null = null
+function startResize(event: PointerEvent) {
+  if (!props.desktop || saving.value) return
+  const bounds = root.value!.getBoundingClientRect()
+  resizeStart = {
+    x: event.screenX,
+    y: event.screenY,
+    width: bounds.width,
+    height: bounds.height,
+  }
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+}
+function resizing(event: PointerEvent) {
+  if (!resizeStart) return
+  latest = {
+    width: Math.round(
+      Math.max(280, Math.min(600, resizeStart.width + event.screenX - resizeStart.x))
+    ),
+    height: Math.round(
+      Math.max(220, Math.min(700, resizeStart.height + event.screenY - resizeStart.y))
+    ),
+  }
+  if (!resizeFrame)
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = 0
+      if (latest) emit('resizePreview', latest)
+    })
+}
+function endResize() {
+  if (!resizeStart) return
+  cancelAnimationFrame(resizeFrame)
+  resizeFrame = 0
+  resizeStart = null
+  if (latest) emit('resize', latest)
+  latest = null
+}
+defineExpose({ finish, focus: () => root.value?.focus() })
+onBeforeUnmount(() => {
+  clearTimeout(hover)
+  clearTimeout(leave)
+  cancelAnimationFrame(resizeFrame)
+})
 </script>
 <template>
   <article
+    ref="root"
     class="postit-note"
-    :class="[note.record.color, { compact: note.record.collapsed }]"
-    :aria-label="t('postits.note', { title: note.title })"
+    :class="[note.record.color, mode]"
+    tabindex="0"
+    :aria-label="t('postits.note', { title })"
+    @mouseenter="enter"
+    @mouseleave="exit()"
+    @focusin="enter"
+    @focusout="exit"
+    @keydown="keyboard"
+    @keydown.esc.stop.prevent="escape"
+    @pointerup="dragging = false"
   >
     <div
-      v-if="note.record.collapsed"
+      v-if="mode === 'micro'"
       class="postit-tab"
     >
-      <span
-        class="postit-grip"
-        aria-hidden="true"
-        @pointerdown.left="desktop && emit('drag')"
-        ><GripVertical :size="14"
-      /></span>
       <button
-        type="button"
-        class="postit-tab-open"
-        :disabled="busy"
-        :aria-label="t('postits.reveal', { title: note.title || t('postits.untitled') })"
-        :aria-expanded="false"
-        @click="emit('collapse')"
+        class="postit-grip"
+        :aria-label="t('postits.adaptive.move')"
+        @pointerdown.left="drag"
       >
-        <StickyNote
-          :size="21"
-          :stroke-width="1.8"
-          aria-hidden="true"
-        />
-        <span>Post-it</span>
-        <ChevronDown
-          :size="14"
-          aria-hidden="true"
-        />
+        <GripVertical :size="14" />
+      </button>
+      <button
+        class="postit-tab-open"
+        :aria-label="t('postits.reveal', { title })"
+        :aria-expanded="false"
+        @click="present('expanded', true)"
+        @dblclick="startEditing"
+      >
+        <span>{{ title }}</span
+        ><ArrowUpRight :size="14" />
       </button>
     </div>
-    <header
-      v-else
-      @pointerdown.left="
-        desktop && !($event.target as HTMLElement).closest('button') && emit('drag')
-      "
-    >
-      <span class="postit-brand">{{ t('postits.title') }}</span>
-      <div class="postit-header-actions">
+    <template v-else>
+      <header>
         <button
-          type="button"
-          :disabled="busy || editing"
-          :aria-label="t('postits.collapse')"
-          @click="emit('collapse')"
+          class="postit-grip"
+          :disabled="editing"
+          :aria-label="t('postits.adaptive.move')"
+          @pointerdown.left="drag"
         >
-          <Minus :size="15" />
+          <GripVertical :size="14" />
         </button>
-        <button
-          type="button"
-          :disabled="busy || editing"
-          :aria-label="t('postits.unpin')"
-          @click="emit('unpin')"
-        >
-          <X :size="14" />
-        </button>
-      </div>
-    </header>
-    <div
-      v-if="!note.record.collapsed"
-      class="postit-body"
-    >
-      <form
-        v-if="editing"
-        class="postit-inline-editor"
-        @submit.prevent="save"
-        @keydown.ctrl.enter.prevent="save"
-        @keydown.meta.enter.prevent="save"
-      >
-        <input
-          v-model="draft.title"
-          :aria-label="t('postits.name')"
-          :placeholder="t('postits.name')"
-          maxlength="200"
-          :disabled="busy"
-        />
-        <textarea
-          ref="input"
-          v-model="draft.body"
-          :aria-label="t('postits.content')"
-          maxlength="10000"
-          :disabled="busy"
-        />
-        <footer>
+        <span class="postit-brand">Post-it</span>
+        <div class="postit-header-actions">
           <button
-            type="button"
+            :disabled="editing || busy"
+            :aria-label="t('postits.collapse')"
+            @click="preview ? present(null) : changeMode('micro')"
+          >
+            <Minimize2 :size="14" />
+          </button>
+          <button
+            :disabled="editing || busy"
+            :aria-label="t('postits.unpin')"
+            @click="emit('unpin')"
+          >
+            <X :size="14" />
+          </button>
+        </div>
+      </header>
+      <div class="postit-body">
+        <form
+          v-if="editing"
+          class="postit-inline-editor"
+          @submit.prevent="finish"
+          @keydown.ctrl.enter.prevent="finish"
+          @keydown.meta.enter.prevent="finish"
+        >
+          <input
+            v-model="draft.title"
+            :aria-label="t('postits.name')"
+            :placeholder="t('postits.name')"
+            maxlength="200"
+          />
+          <textarea
+            ref="input"
+            v-model="draft.body"
+            :aria-label="t('postits.content')"
+            maxlength="10000"
+          />
+          <div
+            class="postit-save-status"
+            role="status"
+          >
+            {{
+              saving
+                ? t('postits.adaptive.saving')
+                : editor.dirty.value
+                  ? t('postits.adaptive.pending')
+                  : t('postits.adaptive.saved')
+            }}
+          </div>
+          <footer>
+            <button
+              type="submit"
+              :disabled="saving"
+            >
+              <Check :size="14" />{{ t('postits.adaptive.finish') }}
+            </button>
+          </footer>
+        </form>
+        <template v-else>
+          <div
+            class="postit-reading"
+            @dblclick="startEditing"
+          >
+            <h2>{{ title }}</h2>
+            <p class="postit-content">{{ note.record.body }}</p>
+          </div>
+          <PostitModeControls
+            v-if="mode === 'expanded'"
+            :mode="preferred"
+            :locked="note.record.modeLocked"
             :disabled="busy"
-            @click="editing = false"
+            @mode="changeMode"
+            @lock="emit('lock', $event)"
+          />
+          <div
+            v-if="desktop && mode === 'expanded'"
+            class="postit-size"
           >
-            {{ t('postits.cancel') }}
-          </button>
-          <button
-            type="submit"
-            :disabled="busy || (!draft.title.trim() && !draft.body.trim())"
-            :title="t('postits.saveShortcut')"
-          >
-            <Check :size="14" />{{ t('postits.save') }}
-          </button>
-        </footer>
-      </form>
-      <template v-else>
-        <h2 @dblclick="startEditing">{{ note.title }}</h2>
-        <p
-          class="postit-content"
-          @dblclick="startEditing"
-        >
-          {{ note.record.body }}
-        </p>
-      </template>
-      <footer v-if="!editing">
-        <button
-          type="button"
-          :disabled="busy"
-          @click="emit('complete')"
-        >
-          <Check :size="15" />{{ t('postits.complete') }}
-        </button>
-        <button
-          type="button"
-          :disabled="busy"
-          @click="startEditing"
-        >
-          <Pencil :size="14" />{{ t('postits.edit') }}
-        </button>
-      </footer>
-    </div>
+            <label
+              >{{ t('postits.adaptive.width')
+              }}<input
+                type="number"
+                min="280"
+                max="600"
+                step="10"
+                :value="note.record.expandedSize?.width ?? 340"
+                @change="
+                  emit('resize', {
+                    width: Math.max(
+                      280,
+                      Math.min(600, Number(($event.target as HTMLInputElement).value))
+                    ),
+                    height: note.record.expandedSize?.height ?? 380,
+                  })
+                "
+            /></label>
+            <label
+              >{{ t('postits.adaptive.height')
+              }}<input
+                type="number"
+                min="220"
+                max="700"
+                step="10"
+                :value="note.record.expandedSize?.height ?? 380"
+                @change="
+                  emit('resize', {
+                    height: Math.max(
+                      220,
+                      Math.min(700, Number(($event.target as HTMLInputElement).value))
+                    ),
+                    width: note.record.expandedSize?.width ?? 340,
+                  })
+                "
+            /></label>
+          </div>
+          <footer>
+            <button
+              :disabled="busy"
+              @click="emit('complete')"
+            >
+              <Check :size="14" />{{ t('postits.complete') }}
+            </button>
+            <button
+              v-if="mode === 'compact'"
+              :aria-label="t('postits.adaptive.read')"
+              @click="present('expanded', true)"
+            >
+              <ArrowUpRight :size="15" />
+            </button>
+            <button
+              :disabled="busy"
+              @click="startEditing"
+            >
+              <Pencil :size="14" />{{ t('postits.edit') }}
+            </button>
+          </footer>
+        </template>
+      </div>
+      <button
+        v-if="desktop && mode === 'expanded'"
+        class="postit-resize"
+        :aria-label="t('postits.adaptive.resize')"
+        @pointerdown.prevent="startResize"
+        @pointermove="resizing"
+        @pointerup="endResize"
+        @pointercancel="endResize"
+      >
+        ◢
+      </button>
+    </template>
     <p
-      v-if="error"
+      v-if="error || draftError"
       class="postit-error"
       role="alert"
     >
-      {{ error }}
+      {{ error || (draftError.startsWith('postits.') ? t(draftError) : draftError)
+      }}<button
+        v-if="draftError && draftError !== 'postits.adaptive.conflict'"
+        @click="editor.retry"
+      >
+        {{ t('postits.adaptive.retry') }}
+      </button>
+      <button
+        v-if="draftError === 'postits.adaptive.conflict'"
+        @click="editor.begin(note)"
+      >
+        {{ t('postits.adaptive.reloadDraft') }}
+      </button>
     </p>
   </article>
 </template>
@@ -207,12 +402,14 @@ watch(
     sans-serif;
   width: 100%;
   height: 100%;
-  min-height: 48px;
+  min-height: 40px;
   box-sizing: border-box;
   overflow: hidden;
   position: relative;
-  border: 1px solid #5c52231c;
+  border: 1px solid #5c522330;
   border-radius: 2px;
+  display: flex;
+  flex-direction: column;
 }
 .pink {
   --note-paper: #f8d6df;
@@ -232,25 +429,20 @@ watch(
 header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 5px 8px;
-  min-height: 34px;
-  box-sizing: border-box;
+  gap: 4px;
+  padding: 2px 6px;
+  min-height: 28px;
   background: var(--note-top);
-  cursor: grab;
   user-select: none;
-  touch-action: none;
+  flex-shrink: 0;
 }
 .postit-brand {
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.04em;
-  color: #57533d;
 }
 .postit-header-actions {
   display: flex;
-  flex-shrink: 0;
-  gap: 2px;
+  margin-left: auto;
 }
 button {
   border: 0;
@@ -262,14 +454,14 @@ button {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 4px;
-  border-radius: 3px;
+  padding: 3px 5px;
+  border-radius: 2px;
   min-height: 26px;
 }
 button:hover {
-  background: #423d2510;
+  background: #423d2514;
 }
-button:focus-visible {
+:focus-visible {
   outline: 2px solid #5d583b;
   outline-offset: -2px;
 }
@@ -278,80 +470,99 @@ button:disabled {
   cursor: default;
 }
 .postit-body {
-  padding: 11px 14px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
 }
-.postit-date {
-  font-size: 11px;
-  color: #625e48;
+.postit-reading {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 h2 {
-  font-size: 17px;
-  font-weight: 500;
-  margin: 0 0 6px;
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  line-height: 1.3;
   overflow-wrap: anywhere;
+}
+.postit-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-size: 13px;
 }
 footer {
   display: flex;
   justify-content: space-between;
   gap: 4px;
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
+  flex-shrink: 0;
 }
 footer button {
   font-size: 12px;
-  padding: 5px;
 }
 footer button:first-child {
   background: #4b452010;
 }
-.compact {
+.compact .postit-body {
+  gap: 3px;
+  padding: 5px 10px;
+}
+.compact .postit-reading {
+  overflow: hidden;
+}
+.compact h2 {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.compact .postit-content {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.micro {
   background: var(--note-tab);
   border-color: #40340040;
 }
 .postit-tab {
   display: flex;
   align-items: stretch;
-  height: 46px;
-  position: relative;
-}
-.postit-tab::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 10px;
-  height: 10px;
-  background: #ffffff60;
-  clip-path: polygon(100% 0, 100% 100%, 0 100%);
-  pointer-events: none;
+  height: 38px;
+  flex: 1;
+  min-width: 0;
 }
 .postit-tab-open {
   flex: 1;
   min-width: 0;
+  justify-content: space-between;
   gap: 6px;
-  padding: 0 8px 0 2px;
+  padding: 0 7px 0 0;
   font-size: 13px;
-  font-weight: 650;
-  border-radius: 0;
+  font-weight: 600;
 }
-.postit-tab-open:hover {
-  background: #ffffff30;
+.postit-tab-open span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.postit-tab-open svg {
+  flex-shrink: 0;
 }
 .postit-grip {
-  width: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #38382b80;
+  width: 20px;
+  flex-shrink: 0;
+  color: #38382b99;
   cursor: grab;
   touch-action: none;
+  padding: 0;
 }
 .postit-error {
   background: var(--note-paper);
@@ -361,21 +572,14 @@ footer button:first-child {
   margin: 0;
   padding: 4px;
   border: 1px solid #815a38;
+  z-index: 2;
 }
-.postit-content {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  max-height: 70px;
-  overflow: auto;
-  margin: 0;
-  font-size: 13px;
-}
-</style>
-
-<style scoped>
 .postit-inline-editor {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+  min-height: 0;
 }
 .postit-inline-editor input,
 .postit-inline-editor textarea {
@@ -385,21 +589,50 @@ footer button:first-child {
   background: #ffffff35;
   color: #38382b;
   font: inherit;
-  padding: 5px;
+  padding: 6px;
   border-radius: 2px;
 }
 .postit-inline-editor input {
-  font-size: 13px;
   font-weight: 600;
 }
 .postit-inline-editor textarea {
   resize: none;
-  height: 78px;
-  font-size: 13px;
-  line-height: 1.4;
+  flex: 1;
+  min-height: 60px;
+  line-height: 1.5;
 }
-.postit-inline-editor :focus-visible {
-  outline: 2px solid #5d583b;
-  outline-offset: 0;
+.postit-save-status {
+  font-size: 11px;
+  opacity: 0.75;
+}
+.postit-resize {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  min-height: 16px;
+  font-size: 13px;
+  padding: 0 2px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.expanded footer {
+  padding-right: 12px;
+}
+.postit-size {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+}
+.postit-size label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.postit-size input {
+  width: 54px;
+  background: transparent;
+  border: 1px solid #38382b40;
+  color: inherit;
+  padding: 2px;
 }
 </style>

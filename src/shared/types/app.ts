@@ -1,66 +1,73 @@
-export type AppTheme = "light" | "dark" | "sepia" | "forest" | "midnight";
-export type AppLanguage = "en" | "pt-BR";
+export type AppTheme = 'light' | 'dark' | 'sepia' | 'forest' | 'midnight'
+export type AppLanguage = 'en' | 'pt-BR'
 
 export type FavoritePaperPen = {
-  instrument: 'pencil' | 'pen' | 'graphite' | 'fountain' | 'ink';
-  width: number;
-  opacity: number;
-  color: 'neutral' | 'amber' | 'sage' | 'blue' | 'rose' | 'purple';
-  customColor: string | null;
-};
+  instrument: 'pencil' | 'pen' | 'graphite' | 'fountain' | 'ink'
+  width: number
+  opacity: number
+  color: 'neutral' | 'amber' | 'sage' | 'blue' | 'rose' | 'purple'
+  customColor: string | null
+}
+export type PostitPreferences = {
+  desktopEnabled: boolean
+  desktopLimit: number
+  pinNew: boolean
+  color: import('./postit').PostitColor
+}
 export type AppConfig = {
-  favoritePaperPens?: FavoritePaperPen[];
-	language: AppLanguage;
-	theme: AppTheme;
-	startWithWindows: boolean;
-	startMinimized: boolean;
-	minimizeToTrayWhenUnlocked: boolean;
-	notificationsEnabled: boolean;
-	badgeEnabled: boolean;
-	completedTaskRetentionDays: number | null;
-};
+  postitPreferences?: PostitPreferences
+  favoritePaperPens?: FavoritePaperPen[]
+  language: AppLanguage
+  theme: AppTheme
+  startWithWindows: boolean
+  startMinimized: boolean
+  minimizeToTrayWhenUnlocked: boolean
+  notificationsEnabled: boolean
+  badgeEnabled: boolean
+  completedTaskRetentionDays: number | null
+}
 
-export type AppConfigPatch = Partial<AppConfig>;
+export type AppConfigPatch = Partial<AppConfig>
 
 export type RuntimeSnapshot = {
-	platform: string;
-	processId: number;
-	appVersion: string;
-	autostartEnabled: boolean;
-};
+  platform: string
+  processId: number
+  appVersion: string
+  autostartEnabled: boolean
+}
 
 export type VaultHealth = {
-	active: boolean;
-	activeDataFilePath: string | null;
-	selectedDataFilePath: string | null;
-	fileId: string | null;
-	schemaVersion: number | null;
-	dataFileUpdatedAt: string | null;
-	dataFileModifiedAt: string | null;
-	credentialSaved: boolean;
-	autoUnlockError: string | null;
-};
+  active: boolean
+  activeDataFilePath: string | null
+  selectedDataFilePath: string | null
+  fileId: string | null
+  schemaVersion: number | null
+  dataFileUpdatedAt: string | null
+  dataFileModifiedAt: string | null
+  credentialSaved: boolean
+  autoUnlockError: string | null
+}
 
 export type ReminderHealth = {
-	total: number;
-	scheduled: number;
-	fired: number;
-	cancelled: number;
-	nativeScheduled: number;
-	nativeSupported: boolean;
-};
+  total: number
+  scheduled: number
+  fired: number
+  cancelled: number
+  nativeScheduled: number
+  nativeSupported: boolean
+}
 
 export type SafetyCopyHealth = {
-	count: number;
-	directory: string;
-};
+  count: number
+  directory: string
+}
 
 export type AppHealth = {
-	checkedAt: string;
-	config: AppConfig;
-	runtime: RuntimeSnapshot;
-	vault: VaultHealth;
-	badgeCount: number;
-	reminders: ReminderHealth;
-	safetyCopies: SafetyCopyHealth;
-};
+  checkedAt: string
+  config: AppConfig
+  runtime: RuntimeSnapshot
+  vault: VaultHealth
+  badgeCount: number
+  reminders: ReminderHealth
+  safetyCopies: SafetyCopyHealth
+}

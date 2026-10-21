@@ -15,6 +15,7 @@ import {
   Settings,
   ShieldCheck,
   Sun,
+  StickyNote,
 } from '@lucide/vue'
 
 import { APP_THEMES } from '@/shared/lib/theme/theme.catalog'
@@ -23,10 +24,17 @@ import HelpSteps from '@/features/help/components/HelpSteps.vue'
 import HelpTaskPreview from '@/features/help/components/HelpTaskPreview.vue'
 import HelpTopic from '@/features/help/components/HelpTopic.vue'
 import HelpCreatorSupport from '@/features/help/components/HelpCreatorSupport.vue'
+import HelpPostitPreview from '@/features/help/components/HelpPostitPreview.vue'
 import HelpPaperPreview from '@/features/help/components/HelpPaperPreview.vue'
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useRoute } from 'vue-router'
+const route = useRoute()
+onMounted(async () => {
+  await nextTick()
+  if (['#papers', '#postits'].includes(route.hash)) scrollToTopic(route.hash.slice(1))
+})
 const { t } = useI18n()
 const topics = computed(() => [
   { id: 'comece', label: t('help.topics.start'), icon: KeyRound },
@@ -34,6 +42,7 @@ const topics = computed(() => [
   { id: 'visoes', label: t('help.topics.views'), icon: CalendarDays },
   { id: 'lembretes', label: t('help.topics.reminders'), icon: Bell },
   { id: 'detalhes', label: t('help.topics.details'), icon: Hash },
+  { id: 'postits', label: t('help.topics.postits'), icon: StickyNote },
   { id: 'papers', label: t('help.topics.papers'), icon: FilePenLine },
   { id: 'concluir', label: t('help.topics.complete'), icon: CheckCircle2 },
   { id: 'privacidade', label: t('help.topics.privacy'), icon: ShieldCheck },
@@ -52,6 +61,8 @@ const reminderSteps = computed(() => [
   t('help.reminder.steps.2'),
 ])
 
+const postitStage = ref<'capture' | 'edit' | 'done'>('capture')
+const postitStages = ['capture', 'edit', 'done'] as const
 const paperStages = ['create', 'draw', 'text', 'organize', 'link', 'share'] as const
 const paperStage = ref<(typeof paperStages)[number]>('create')
 const paperShortcuts = computed(
@@ -318,6 +329,66 @@ function scrollToTopic(topicId: string) {
               show-checklist
             />
           </template>
+        </HelpTopic>
+
+        <HelpTopic
+          id="postits"
+          :eyebrow="t('help.postits.eyebrow')"
+          :title="t('help.postits.title')"
+          :description="t('help.postits.description')"
+          :icon="StickyNote"
+        >
+          <div class="grid gap-4">
+            <div
+              class="flex flex-wrap gap-2"
+              role="group"
+              :aria-label="t('help.postits.stepsLabel')"
+            >
+              <button
+                v-for="stage in postitStages"
+                :key="stage"
+                type="button"
+                class="border px-3 py-2 text-small"
+                :class="
+                  postitStage === stage
+                    ? 'border-ink bg-hover text-ink'
+                    : 'border-border text-ink-soft'
+                "
+                :aria-pressed="postitStage === stage"
+                @click="postitStage = stage"
+              >
+                {{ t('help.postits.' + stage + '.title') }}
+              </button>
+            </div>
+            <div
+              aria-live="polite"
+              class="grid gap-3"
+            >
+              <h3 class="text-body font-semibold text-ink">
+                {{ t('help.postits.' + postitStage + '.title') }}
+              </h3>
+              <p class="text-body leading-6 text-ink-soft">
+                {{ t('help.postits.' + postitStage + '.body') }}
+              </p>
+            </div>
+            <HelpKey
+              :keys="['Alt', 'N']"
+              :label="t('help.postits.newShortcut')"
+            />
+            <HelpKey
+              :keys="['Ctrl', 'Enter']"
+              :label="t('help.postits.saveShortcut')"
+            />
+            <p class="text-small leading-5 text-ink-muted">
+              {{ t('help.postits.preferences') }}
+            </p>
+            <RouterLink
+              to="/app/postits"
+              class="w-fit border border-accent bg-accent px-4 py-2 text-body font-semibold text-on-accent"
+              >{{ t('help.postits.open') }}</RouterLink
+            >
+          </div>
+          <template #visual><HelpPostitPreview :stage="postitStage" /></template>
         </HelpTopic>
 
         <HelpTopic

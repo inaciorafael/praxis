@@ -855,7 +855,23 @@
     "forest": "Forest",
     "forestHint": "Soft greens",
     "midnight": "Midnight",
-    "midnightHint": "Deep blue"
+    "midnightHint": "Deep blue",
+    "workspace": {
+      "title": "Papers and Post-its",
+      "description": "Preferences on this computer for thinking and remembering without interrupting work.",
+      "desktop": "Show Post-its on desktop",
+      "desktopHint": "Hide windows without completing or deleting notes. Enable again to restore them.",
+      "limit": "Post-its visible at once",
+      "visibleCount": "{count} note(s)",
+      "color": "New note color",
+      "pinNew": "Pin new Post-its automatically",
+      "pinNewHint": "Disable to create stored notes and pin them when needed.",
+      "papers": "Favorite pens for Papers",
+      "paperHint": "Save up to six pens in the side atelier. Plain, grid, ruled, dotted and light/dark backgrounds belong to each Paper and are changed with Background in the editor.",
+      "favoriteCount": "{count} of 6 pens saved",
+      "clearFavorites": "Clear favorite pens",
+      "guide": "Open the Papers guide"
+    }
   },
   "tags": {
     "title": "Tags",
@@ -896,38 +912,38 @@
         },
         "create": {
           "title": "Create your first Paper",
-          "body": "Open Papers in the navigation and choose New Paper. Click its name at the top to give your drawing a title. Start freely: you do not need to create a task to have a Paper.",
+          "body": "Open Papers and create a free sheet. Group Papers in notebooks by project or subject. Content thumbnails help you recognize each idea.",
           "caption": "The library brings all your Papers together. New Paper opens a blank canvas, and its header name identifies your ideas."
         },
         "draw": {
           "title": "Draw and choose a stroke",
-          "body": "Use the tool wheel to choose Pencil or Pen and drag on the sheet to draw. The wheel center opens width, color and opacity settings. Shapes and tools contains rectangles, circles, arrows, images and frames.",
-          "caption": "Pencil and pen remain active between strokes. Shapes help structure a flow, and arrows connect the elements."
+          "body": "Use the side atelier to choose a pen, pencil, graphite, fountain pen or ink. Color, width and adjustments are in the top bar. Pause at the end of a stroke to regularize shapes when Hold to correct is enabled.",
+          "caption": "Tools in the side atelier; adjustments in the top bar."
         },
         "text": {
           "title": "Write and highlight ideas",
-          "body": "Choose Text or press T, then click the sheet. Write in the editor and use its toolbar to change font, size, color, alignment and highlighting. Select words to format only that passage. To edit later, double-click the text or select it and press Enter.",
+          "body": "Choose Text and edit freely. Pick one of four quick sizes, bold, italic, color and alignment. Select a passage to underline, circle or highlight with hand-drawn annotations and choose their color.",
           "caption": "Text can remain transparent over the sheet. In Adjust stroke, you can also choose a rectangle or oval background and position text inside it."
         },
         "organize": {
           "title": "Arrange and navigate the sheet",
-          "body": "Use Select to move elements. Drag handles to resize; hold Shift or Ctrl to keep proportions. The handle above the selection rotates it. Use Pan to explore the canvas and the zoom controls to enlarge or fit the content.",
+          "body": "Select with a click, box or lasso. Group elements through the context menu and align with smart guides. Control visibility and locking in layers; save drawings to your personal library for reuse in other Papers.",
           "caption": "Handles identify the selection. Position, size and rotation let you reorganize ideas without drawing them again."
         },
         "link": {
           "title": "Connect a Paper to a task",
-          "body": "In task details, use Linked Papers to create a Paper or attach an existing one. In the Paper itself, open Free Paper or Linked tasks and search for the task to link. When opened from a task, Back to task restores its details alongside the drawing.",
+          "body": "A Paper can stand alone or link to several tasks. Linking preserves the same drawing without creating copies. Task notes hold written context; tasks still own dates, checklists and reminders.",
           "caption": "The link points to the same Paper without creating a copy. Dates, checklists and reminders still belong to the task."
         },
         "share": {
           "title": "Save, focus and share",
-          "body": "Changes save automatically to your vault. Check the save status in the header when visible. The maximize button opens distraction-free mode; Esc returns to the studio. To share, open More actions (⋯), choose Export Paper as PNG and select where to save the image.",
+          "body": "Use focus mode to fill the workspace. Define scenes and present with the laser pointer, or export your drawing. Background offers plain, grid, ruled or dotted sheets in light or dark appearance.",
           "caption": "Export creates an image of the Paper content to share with your team. The editable document remains in your vault."
         }
       },
       "eyebrow": "06 · Think visually",
       "title": "How to use a Paper",
-      "description": "Papers are infinite digital sheets for sketching ideas, drawing flows and freely arranging images and text.",
+      "description": "Papers are infinite digital sheets for writing, drawing and organizing ideas. The Portuguese name is Papéis.",
       "roles": "A task defines what to do. Notes record information in text. A Paper gives you space to explore ideas visually. A reminder tells you when to return to the task.",
       "steps": [
         "Open Papers and create a sheet, even before defining a task.",
@@ -957,7 +973,8 @@
       "details": "Checklist and tags",
       "complete": "Complete and archive",
       "privacy": "Vault and settings",
-      "support": "About and support"
+      "support": "About and support",
+      "postits": "Post-its"
     },
     "access": {
       "eyebrow": "01 · access",
@@ -1056,6 +1073,34 @@
         "Thu",
         "Fri"
       ]
+    },
+    "postits": {
+      "eyebrow": "Desktop notes",
+      "title": "Post-its: remember, resolve, complete",
+      "description": "Free notes independent from tasks, reminders and Papers. No date required and no notification scheduling.",
+      "stepsLabel": "Post-it tutorial",
+      "illustration": "Interactive demo · no data saved",
+      "newShortcut": "New note in the Post-its section",
+      "saveShortcut": "Save a note or edit",
+      "preferences": "Settings → Papers and Post-its defines initial color, pinning and window limit. In Post-its, select notes to group them into piles; search also finds grouped content.",
+      "open": "Open Post-its",
+      "exampleTitle": "Something to remember",
+      "exampleBody": "Gather ideas for the next conversation.",
+      "capture": {
+        "title": "Create and pin",
+        "body": "Open Post-its and use New Post-it or Alt+N. Text saves automatically. Finish with Ctrl+Enter or Escape: new notes default to Compact. Choose Micro to use just one line; the title is optional.",
+        "caption": "Click the illustrated tab to reveal the content. Additional notes wait in the queue."
+      },
+      "edit": {
+        "title": "Edit in the note",
+        "body": "Hover or focus a Micro note to preview it. Space opens reading; Enter, double-click or Edit opens editing. Escape saves and returns to the preferred mode. In Expanded, adjust the size and Keep mode to prevent automatic previews.",
+        "caption": "Try Edit: this illustration only changes the demo, leaving your vault untouched."
+      },
+      "done": {
+        "title": "Complete and move on",
+        "body": "When finished, click Done on the desktop or in Post-its. The window disappears. You can reopen the note for seven days, then it is removed from the active vault. If the vault is closed at expiry, cleanup runs when it opens again.",
+        "caption": "Active notes do not expire. Completed notes have seven-day retention independent from task archives."
+      }
     }
   },
   "support": {
@@ -1137,6 +1182,37 @@
     "location": "Post-it location",
     "everywhere": "All active",
     "fixed": "Pinned on desktop",
-    "saveShortcut": "Save · Ctrl+Enter"
+    "saveShortcut": "Save · Ctrl+Enter",
+    "desktopDisabled": "Desktop display is paused in Settings. Your notes remain saved.",
+    "adaptive": {
+      "mode": "Presentation",
+      "micro": "Micro",
+      "compact": "Compact",
+      "expanded": "Expanded",
+      "keepMode": "Keep mode",
+      "move": "Move note",
+      "read": "Read full note",
+      "resize": "Resize note",
+      "finish": "Finish editing",
+      "saved": "Saved automatically",
+      "saving": "Saving…",
+      "pending": "Pending changes",
+      "conflict": "This note changed in another window. Your draft is preserved; copy it before reopening the editor.",
+      "unavailable": "Note unavailable. Your draft is preserved.",
+      "back": "Back to pile",
+      "close": "Close pile",
+      "pileFilter": "Piles",
+      "ungroup": "Ungroup",
+      "selected": "{count} selected",
+      "pileName": "Pile name",
+      "group": "Group",
+      "clearSelection": "Clear selection",
+      "select": "Select",
+      "width": "Width",
+      "height": "Height",
+      "retry": "Retry saving",
+      "empty": "Write something in the note before finishing.",
+      "reloadDraft": "Discard draft and reload"
+    }
   }
 }

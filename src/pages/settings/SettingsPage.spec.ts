@@ -14,9 +14,14 @@ describe('Settings theme chooser', () => {
     i18n.global.locale.value = 'en'
     const app = useAppStore()
     app.config = {
-      theme: 'light', language: 'en', startWithWindows: false,
-      startMinimized: false, minimizeToTrayWhenUnlocked: true,
-      notificationsEnabled: true, badgeEnabled: true, completedTaskRetentionDays: null,
+      theme: 'light',
+      language: 'en',
+      startWithWindows: false,
+      startMinimized: false,
+      minimizeToTrayWhenUnlocked: true,
+      notificationsEnabled: true,
+      badgeEnabled: true,
+      completedTaskRetentionDays: null,
     }
     vi.spyOn(app, 'hydrateConfig').mockResolvedValue(undefined)
     vi.spyOn(useVaultStore(), 'hydrate').mockResolvedValue(undefined)
@@ -26,7 +31,9 @@ describe('Settings theme chooser', () => {
   })
 
   function mountPage() {
-    return shallowMount(SettingsPage, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
+    return shallowMount(SettingsPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    })
   }
 
   it('offers all five themes and identifies the saved selection', async () => {
@@ -34,11 +41,19 @@ describe('Settings theme chooser', () => {
     await flushPromises()
     const choices = wrapper.findAll('[role="group"] button')
     expect(choices).toHaveLength(5)
-    expect(choices.map(button => button.find('.font-semibold').text())).toEqual([
-      'Paper', 'Dark', 'Sepia', 'Forest', 'Midnight',
+    expect(choices.map((button) => button.find('.font-semibold').text())).toEqual([
+      'Paper',
+      'Dark',
+      'Sepia',
+      'Forest',
+      'Midnight',
     ])
-    expect(choices.map(button => button.find('.text-small').text())).toEqual([
-      'Soft and matte', 'Low light', 'Warm paper tones', 'Soft greens', 'Deep blue',
+    expect(choices.map((button) => button.find('.text-small').text())).toEqual([
+      'Soft and matte',
+      'Low light',
+      'Warm paper tones',
+      'Soft greens',
+      'Deep blue',
     ])
     expect(choices[0]!.attributes('aria-pressed')).toBe('true')
     expect(choices[4]!.attributes('aria-pressed')).toBe('false')
@@ -48,8 +63,10 @@ describe('Settings theme chooser', () => {
   it('locks choices while saving and selects the persisted theme after success', async () => {
     const app = useAppStore()
     let finish!: () => void
-    const update = vi.spyOn(app, 'updateConfig').mockImplementation(async patch => {
-      await new Promise<void>(resolve => { finish = resolve })
+    const update = vi.spyOn(app, 'updateConfig').mockImplementation(async (patch) => {
+      await new Promise<void>((resolve) => {
+        finish = resolve
+      })
       app.config = { ...app.config!, ...patch }
       return true
     })
@@ -57,11 +74,19 @@ describe('Settings theme chooser', () => {
     await flushPromises()
     await wrapper.findAll('[role="group"] button')[4]!.trigger('click')
     expect(update).toHaveBeenCalledWith({ theme: 'midnight' })
-    expect(wrapper.findAll('[role="group"] button').every(button => button.attributes('disabled') !== undefined)).toBe(true)
+    expect(
+      wrapper
+        .findAll('[role="group"] button')
+        .every((button) => button.attributes('disabled') !== undefined)
+    ).toBe(true)
     finish()
     await flushPromises()
-    expect(wrapper.findAll('[role="group"] button')[4]!.attributes('aria-pressed')).toBe('true')
-    expect(wrapper.findAll('[role="group"] button')[4]!.attributes('disabled')).toBeUndefined()
+    expect(wrapper.findAll('[role="group"] button')[4]!.attributes('aria-pressed')).toBe(
+      'true'
+    )
+    expect(
+      wrapper.findAll('[role="group"] button')[4]!.attributes('disabled')
+    ).toBeUndefined()
     wrapper.unmount()
   })
 
@@ -76,7 +101,26 @@ describe('Settings theme chooser', () => {
     await wrapper.findAll('[role="group"] button')[2]!.trigger('click')
     await flushPromises()
     expect(wrapper.find('[role="alert"]').text()).toBe('Unable to save settings')
-    expect(wrapper.findAll('[role="group"] button')[0]!.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.findAll('[role="group"] button')[0]!.attributes('aria-pressed')).toBe(
+      'true'
+    )
+    wrapper.unmount()
+  })
+  it('persists desktop limits without losing the other Post-it preferences', async () => {
+    const app = useAppStore()
+    const update = vi.spyOn(app, 'updateConfig').mockResolvedValue(true)
+    const wrapper = mountPage()
+    await flushPromises()
+    await wrapper.findAll('select')[0]!.setValue('1')
+    await flushPromises()
+    expect(update).toHaveBeenCalledWith({
+      postitPreferences: {
+        desktopEnabled: true,
+        desktopLimit: 1,
+        pinNew: true,
+        color: 'yellow',
+      },
+    })
     wrapper.unmount()
   })
 })
