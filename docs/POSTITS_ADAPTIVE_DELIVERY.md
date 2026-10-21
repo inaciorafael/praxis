@@ -12,7 +12,7 @@ Frontend:
 - src/shared/types/postit.ts — contratos opcionais compatíveis.
 - src/shared/lib/postits/postit.service.ts — fronteira Tauri.
 - src/features/postits/components/PostitNote.vue — três modos, prévia, teclado, edição e redimensionamento.
-- src/features/postits/components/PostitModeControls.vue — escolha de modo e fixação.
+- O antigo PostitModeControls.vue foi removido; apresentação segue os estados de interação.
 - src/features/postits/components/PostitWindow.vue — uma janela por nota/pilha, montagem sob demanda, geometria temporária.
 - src/features/postits/composables/usePostitDraft.ts — autosave serializado, revisão, tratamento de conflito e preservação de rascunhos.
 - src/pages/postits/PostitsPage.vue — criação com foco/autosave, seleção múltipla, pilhas e busca.
@@ -33,7 +33,7 @@ As alterações de Configurações, Papéis e documentação já presentes no in
 
 ## Migração
 
-A leitura antiga permanece sem escrita. collapsed=true vira Micro e collapsed=false vira Expandido em memória. Campos novos opcionais são persistidos junto da próxima alteração. Notas novas começam em Compacto. Texto, cores, revisões e posição não são descartados. As notas permanecem no cofre criptografado existente; posições continuam nas configurações locais. Pilhas usam chaves próprias, sem substituir as chaves dos membros.
+A leitura antiga permanece sem escrita. collapsed=true vira Micro e collapsed=false vira Expandido em memória. Campos novos opcionais são persistidos junto da próxima alteração. Todas as notas ficam pequenas em repouso; as antigas preferências de modo são preservadas apenas por compatibilidade e ignoradas na apresentação. Texto, cores, revisões e posição não são descartados. As notas permanecem no cofre criptografado existente; posições continuam nas configurações locais. Pilhas usam chaves próprias, sem substituir as chaves dos membros.
 
 ## Validação
 

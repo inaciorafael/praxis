@@ -3,20 +3,18 @@ import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, X, Pencil, GripVertical, ArrowUpRight, Minimize2 } from '@lucide/vue'
 import type { PostitView, PostitMode, PostitSize } from '@/shared/types/postit'
-import PostitModeControls from './PostitModeControls.vue'
 import { usePostitDraft, type PostitTextChange } from '../composables/usePostitDraft'
 const props = defineProps<{
   note: PostitView
   busy?: boolean
   error?: string
   desktop?: boolean
+  initiallyOpen?: boolean
 }>()
 const emit = defineEmits<{
   unpin: []
   complete: []
   drag: []
-  mode: [mode: PostitMode]
-  lock: [locked: boolean]
   present: [mode: PostitMode | null, editing: boolean]
   resize: [size: PostitSize]
   resizePreview: [size: PostitSize]
@@ -34,17 +32,10 @@ const editor = usePostitDraft(
 const { draft, editing, saving, error: draftError } = editor
 const input = ref<HTMLTextAreaElement | null>(null)
 const root = ref<HTMLElement | null>(null)
-const preview = ref<PostitMode | null>(null)
-const sticky = ref(false),
+const preview = ref<PostitMode | null>(props.initiallyOpen ? 'expanded' : null)
+const sticky = ref(!!props.initiallyOpen),
   dragging = ref(false)
-const preferred = computed(
-  () =>
-    props.note.record.preferredMode ??
-    (props.note.record.collapsed ? 'micro' : 'expanded')
-)
-const mode = computed(() =>
-  editing.value ? 'expanded' : (preview.value ?? preferred.value)
-)
+const mode = computed(() => (editing.value ? 'expanded' : (preview.value ?? 'micro')))
 const title = computed(
   () => props.note.title || props.note.record.body.split('\n')[0] || t('postits.untitled')
 )
@@ -67,7 +58,7 @@ function enter(event?: MouseEvent | FocusEvent) {
   if (performance.now() < previewCooldown) return
   if (event instanceof MouseEvent && event.buttons === 0) dragging.value = false
   clearTimeout(leave)
-  if (mode.value === 'micro' && !props.note.record.modeLocked && !dragging.value)
+  if (mode.value === 'micro' && !dragging.value)
     hover = setTimeout(() => present('compact'), 300)
 }
 function exit(event?: FocusEvent) {
@@ -104,12 +95,8 @@ function drag() {
   clearTimeout(leave)
   dragging.value = true
   present(null)
-  // Parent serializes restoring the preferred frame before starting native drag.
+  // Parent serializes restoring the idle frame before starting native drag.
   emit('drag')
-}
-function changeMode(value: PostitMode) {
-  present(null)
-  emit('mode', value)
 }
 function keyboard(event: KeyboardEvent) {
   if (event.target !== root.value) return
@@ -223,7 +210,7 @@ onBeforeUnmount(() => {
           <button
             :disabled="editing || busy"
             :aria-label="t('postits.collapse')"
-            @click="preview ? present(null) : changeMode('micro')"
+            @click="present(null)"
           >
             <Minimize2 :size="14" />
           </button>
@@ -284,55 +271,6 @@ onBeforeUnmount(() => {
           >
             <h2>{{ title }}</h2>
             <p class="postit-content">{{ note.record.body }}</p>
-          </div>
-          <PostitModeControls
-            v-if="mode === 'expanded'"
-            :mode="preferred"
-            :locked="note.record.modeLocked"
-            :disabled="busy"
-            @mode="changeMode"
-            @lock="emit('lock', $event)"
-          />
-          <div
-            v-if="desktop && mode === 'expanded'"
-            class="postit-size"
-          >
-            <label
-              >{{ t('postits.adaptive.width')
-              }}<input
-                type="number"
-                min="280"
-                max="600"
-                step="10"
-                :value="note.record.expandedSize?.width ?? 340"
-                @change="
-                  emit('resize', {
-                    width: Math.max(
-                      280,
-                      Math.min(600, Number(($event.target as HTMLInputElement).value))
-                    ),
-                    height: note.record.expandedSize?.height ?? 380,
-                  })
-                "
-            /></label>
-            <label
-              >{{ t('postits.adaptive.height')
-              }}<input
-                type="number"
-                min="220"
-                max="700"
-                step="10"
-                :value="note.record.expandedSize?.height ?? 380"
-                @change="
-                  emit('resize', {
-                    height: Math.max(
-                      220,
-                      Math.min(700, Number(($event.target as HTMLInputElement).value))
-                    ),
-                    width: note.record.expandedSize?.width ?? 340,
-                  })
-                "
-            /></label>
           </div>
           <footer>
             <button
@@ -617,22 +555,5 @@ footer button:first-child {
 }
 .expanded footer {
   padding-right: 12px;
-}
-.postit-size {
-  display: flex;
-  gap: 8px;
-  font-size: 11px;
-}
-.postit-size label {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-.postit-size input {
-  width: 54px;
-  background: transparent;
-  border: 1px solid #38382b40;
-  color: inherit;
-  padding: 2px;
 }
 </style>

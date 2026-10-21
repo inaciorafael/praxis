@@ -8,16 +8,14 @@ const props = defineProps<{ stage: 'capture' | 'edit' | 'done' }>()
 const { t } = useI18n()
 
 const revision = ref(1)
-const preferred = ref<PostitMode>('micro')
-const temporary = ref<PostitMode | null>(null)
-const expanded = computed(() => (temporary.value ?? preferred.value) === 'expanded')
+const presentation = ref<PostitMode>('micro')
+const expanded = computed(() => presentation.value === 'expanded')
 const body = ref<string | null>(null)
 const title = ref<string | null>(null)
 watch(
   () => props.stage,
   (stage) => {
-    preferred.value = stage === 'edit' ? 'expanded' : 'micro'
-    temporary.value = null
+    presentation.value = stage === 'edit' ? 'expanded' : 'micro'
     body.value = null
     title.value = null
     revision.value = 1
@@ -34,7 +32,6 @@ const note = computed(() => ({
     color: 'yellow' as const,
     pinned: true,
     collapsed: !expanded.value,
-    preferredMode: preferred.value,
     archived: false,
   },
 }))
@@ -71,28 +68,19 @@ function save(
       <div
         v-else
         :style="{
-          width:
-            expanded || temporary === 'expanded'
-              ? '340px'
-              : temporary === 'compact' || preferred === 'compact'
-                ? '248px'
-                : '180px',
-          height:
-            expanded || temporary === 'expanded'
-              ? '380px'
-              : temporary === 'compact' || preferred === 'compact'
-                ? '132px'
-                : '40px',
+          width: expanded ? '280px' : presentation === 'compact' ? '248px' : '180px',
+          height: expanded ? '260px' : presentation === 'compact' ? '132px' : '40px',
           maxWidth: '100%',
         }"
       >
         <PostitNote
+          :key="stage"
           :note="note"
-          @present="temporary = $event"
-          @mode="preferred = $event"
+          :initially-open="stage === 'edit'"
+          @present="presentation = $event ?? 'micro'"
           @save="save"
-          @unpin="preferred = 'micro'"
-          @complete="preferred = 'micro'"
+          @unpin="presentation = 'micro'"
+          @complete="presentation = 'micro'"
         />
       </div>
     </div>

@@ -41,8 +41,8 @@ pub fn size(mode: PostitMode, expanded: Option<FrameSize>, group: bool) -> Frame
             height: if group { 240.0 } else { 132.0 },
         },
         PostitMode::Expanded => expanded.filter(|s| s.valid()).unwrap_or(FrameSize {
-            width: 340.0,
-            height: 380.0,
+            width: 280.0,
+            height: 260.0,
         }),
     }
 }
@@ -67,7 +67,7 @@ mod tests {
             size(PostitMode::Expanded, None, false),
             (-1920.0, 0.0, 1920.0, 1080.0),
         );
-        assert_eq!(expanded, (-340.0, 700.0));
+        assert_eq!(expanded, (-280.0, 820.0));
         assert_eq!(anchor, (-80.0, 960.0));
         assert_eq!(
             anchored(

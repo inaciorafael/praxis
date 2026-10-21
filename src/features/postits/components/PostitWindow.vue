@@ -206,11 +206,10 @@ onBeforeUnmount(() => {
       v-if="note"
       :key="note.record.id"
       :note="note"
+      :initially-open="!!entry.group"
       :busy="busy"
       :error="error"
       desktop
-      @mode="patch({ preferredMode: $event })"
-      @lock="patch({ modeLocked: $event })"
       @unpin="patch({ pinned: false })"
       @complete="patch({ completed: true })"
       @save="saveInline"

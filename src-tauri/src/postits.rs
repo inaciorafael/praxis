@@ -207,7 +207,7 @@ fn change_document(document: &mut Value, change: PostitChange) -> Result<(), Str
                     archived: false,
                     completed_at: None,
                     color: "yellow".into(),
-                    preferred_mode: Some(PostitMode::Compact),
+                    preferred_mode: Some(PostitMode::Micro),
                     mode_locked: false,
                     expanded_size: None,
                     group_id: None,
@@ -557,15 +557,15 @@ fn sync_native(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 fn entry_mode(entry: &DesktopPostit) -> (PostitMode, Option<FrameSize>) {
-    if entry.group.is_some() {
-        (PostitMode::Micro, None)
-    } else {
-        let n = &entry.notes[0].record;
-        (
-            n.preferred_mode.unwrap_or(PostitMode::Compact),
-            n.expanded_size,
-        )
-    }
+    // Presentation follows interaction, never a stored user preference.
+    (
+        PostitMode::Micro,
+        if entry.group.is_some() {
+            None
+        } else {
+            entry.notes[0].record.expanded_size
+        },
+    )
 }
 fn monitor_area(m: &tauri::Monitor) -> (f64, f64, f64, f64) {
     monitor_area_at_scale(m, m.scale_factor())
@@ -646,14 +646,13 @@ fn apply_frame(
     if frame.resizing {
         return Ok(());
     }
-    let (mut base, mut expanded) = entry_mode(entry);
+    let (base, mut expanded) = entry_mode(entry);
     if let Some(note) = entry
         .notes
         .iter()
         .find(|n| Some(&n.record.id) == frame.active_note.as_ref())
     {
         expanded = note.record.expanded_size;
-        base = note.record.preferred_mode.unwrap_or(PostitMode::Compact);
     }
     let mode = if frame.editing {
         PostitMode::Expanded
@@ -1034,6 +1033,14 @@ mod tests {
         assert_eq!(reread.expanded_size.unwrap().width, 410.0);
         assert_eq!(reread.body, "Body");
         assert_eq!(reread.color, "pink");
+        let entry = DesktopPostit {
+            notes: vec![PostitView {
+                title: reread.title.clone(),
+                record: reread,
+            }],
+            group: None,
+        };
+        assert_eq!(entry_mode(&entry).0, PostitMode::Micro);
     }
     #[test]
     fn piles_use_one_desktop_entry_and_restore_member_keys() {

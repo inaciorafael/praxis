@@ -813,3 +813,5 @@ Completed Post-its use archived as their compatibility status and completedAt as
 ### Adaptive desktop Post-its
 
 Optional desktopPostits fields: preferredMode (micro/compact/expanded), modeLocked (false by default), expandedSize ({width,height}, bounded), groupId. Missing modes are derived from the legacy collapsed boolean on read without a hydration write. New notes default to compact. Optional postitGroups stores {id,name,revision}; membership changes validate both the group revision and each selected note revision inside the existing atomic encrypted mutation. Ungrouping clears associations without deleting members. Native temporary previews and editing state never enter the vault. Existing per-note position keys remain unchanged; piles have separate keys.
+
+Legacy preferredMode/modeLocked/collapsed values remain readable for compatibility, but no longer control native or Vue presentation. All notes idle as Micro; preview, reading and editing are transient interaction states. No presentation selector or mode lock is exposed.

@@ -1088,12 +1088,12 @@
       "exampleBody": "Separar as ideias para a próxima conversa.",
       "capture": {
         "title": "Criar e fixar",
-        "body": "Abra Post-its e use Novo Post-it ou Alt+N. O texto é salvo automaticamente. Conclua com Ctrl+Enter ou Escape: a nota nova fica Compacta. Escolha Micro para ocupar apenas uma linha; o título é opcional.",
+        "body": "Abra Post-its e use Novo Post-it ou Alt+N. O texto é salvo automaticamente. Conclua com Ctrl+Enter ou Escape: a nota se recolhe automaticamente em uma pequena aba com título.",
         "caption": "Clique na aba da ilustração para revelar o conteúdo. As notas excedentes aguardam na fila."
       },
       "edit": {
         "title": "Editar na própria nota",
-        "body": "Passe o mouse ou dê foco à nota Micro para consultar a prévia. Espaço abre a leitura; Enter, duplo clique ou Editar abre a edição na própria janela. Escape salva e volta ao modo preferido. Em Expandido, ajuste tamanho e ative Manter modo para evitar prévias automáticas.",
+        "body": "Passe o mouse ou dê foco à aba para consultar a prévia. Clique ou pressione Espaço para ler; Enter, duplo clique ou Editar abre a edição na própria janela. Escape salva e recolhe a nota. Esses estados são automáticos, sem configurações de modo.",
         "caption": "Experimente Editar: esta ilustração muda apenas a demonstração, sem tocar no seu cofre."
       },
       "done": {
@@ -1185,11 +1185,9 @@
     "saveShortcut": "Salvar · Ctrl+Enter",
     "desktopDisabled": "A exibição no desktop está pausada nas Configurações. Suas notas continuam salvas.",
     "adaptive": {
-      "mode": "Apresentação",
       "micro": "Micro",
       "compact": "Compacto",
       "expanded": "Expandido",
-      "keepMode": "Manter modo",
       "move": "Mover nota",
       "read": "Ler nota completa",
       "resize": "Redimensionar nota",

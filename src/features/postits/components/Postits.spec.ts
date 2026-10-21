@@ -61,27 +61,32 @@ async function page() {
 }
 afterEach(() => vi.useRealTimers())
 describe('Independent Post-its', () => {
-  it('separates archive, removal from screen, and collapse', async () => {
+  it('separates completion, removal and temporary closing without saving a mode', async () => {
     const wrapper = mount(PostitNote, { props: { note }, global: { plugins: [i18n] } })
+    await wrapper.get('[aria-expanded="false"]').trigger('click')
     expect(wrapper.text()).toContain('Independent text')
+    expect(wrapper.find('select').exists()).toBe(false)
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
     await wrapper.get('[aria-label="Remove from screen"]').trigger('click')
     expect(wrapper.emitted('unpin')).toHaveLength(1)
     expect(wrapper.emitted('complete')).toBeUndefined()
-    await wrapper.get('[aria-label="Collapse"]').trigger('click')
-    expect(wrapper.emitted('mode')).toEqual([['micro']])
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === 'Done')!
+      .find((b) => b.text() === 'Done')!
       .trigger('click')
     expect(wrapper.emitted('complete')).toHaveLength(1)
+    await wrapper.get('[aria-label="Collapse"]').trigger('click')
+    expect(wrapper.emitted('present')?.slice(-1)[0]).toEqual([null, false])
+    expect(wrapper.find('.postit-content').exists()).toBe(false)
     wrapper.unmount()
   })
-  it('identifies Micro notes and opens a temporary view without changing preference', async () => {
+  it('identifies Micro notes and opens a temporary view without storing presentation state', async () => {
     const wrapper = mount(PostitNote, {
       props: { note: { ...note, record: { ...note.record, collapsed: true } } },
       global: { plugins: [i18n] },
     })
     expect(wrapper.text()).not.toContain('Independent text')
+    expect(wrapper.find('select').exists()).toBe(false)
     expect(wrapper.text()).toContain('My note')
     await wrapper.get('[aria-expanded="false"]').trigger('click')
     expect(wrapper.emitted('present')?.some((value) => value[0] === 'expanded')).toBe(
@@ -179,10 +184,7 @@ describe('Independent Post-its', () => {
   })
   it('edits directly in the desktop note and keeps the original revision while typing', async () => {
     const wrapper = mount(PostitNote, { props: { note }, global: { plugins: [i18n] } })
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === 'Edit')!
-      .trigger('click')
+    await wrapper.get('article').trigger('keydown', { key: 'Enter' })
     await wrapper.get('textarea').setValue('Quick edit')
     expect(wrapper.get('[aria-label="Collapse"]').attributes('disabled')).toBeDefined()
     await wrapper.setProps({ note: { ...note, record: { ...note.record, revision: 3 } } })
@@ -219,7 +221,7 @@ describe('Independent Post-its', () => {
     await wrapper.get('#postit-body').trigger('keydown', { key: 'Enter', ctrlKey: true })
     await flushPromises()
     expect(service.changePostit).toHaveBeenCalledWith(
-      expect.objectContaining({ title: '', body: 'Fast note', preferredMode: 'compact' })
+      expect.objectContaining({ title: '', body: 'Fast note' })
     )
     wrapper.unmount()
   })
@@ -256,7 +258,7 @@ describe('Independent Post-its', () => {
     expect(wrapper.text()).toContain('Desktop display is paused')
     wrapper.unmount()
   })
-  it('opens a delayed keyboard preview and Escape restores the preferred mode', async () => {
+  it('opens a delayed keyboard preview and Escape restores idle state', async () => {
     vi.useFakeTimers()
     const wrapper = mount(PostitNote, {
       props: { note: { ...note, record: { ...note.record, preferredMode: 'micro' } } },
@@ -273,7 +275,7 @@ describe('Independent Post-its', () => {
     expect(wrapper.emitted('mode')).toBeUndefined()
     wrapper.unmount()
   })
-  it('keeps a locked Micro note unchanged on hover', async () => {
+  it('uses automatic preview even for notes with legacy mode locks', async () => {
     vi.useFakeTimers()
     const wrapper = mount(PostitNote, {
       props: {
@@ -286,8 +288,8 @@ describe('Independent Post-its', () => {
     })
     await wrapper.get('article').trigger('mouseenter')
     await vi.advanceTimersByTimeAsync(1000)
-    expect(wrapper.find('.postit-content').exists()).toBe(false)
-    expect(wrapper.emitted('present')).toBeUndefined()
+    expect(wrapper.find('.postit-content').exists()).toBe(true)
+    expect(wrapper.emitted('present')).toEqual([['compact', false]])
     wrapper.unmount()
   })
   it('autosaves once after typing and Escape finishes without dropping text', async () => {

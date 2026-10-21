@@ -1088,12 +1088,12 @@
       "exampleBody": "Gather ideas for the next conversation.",
       "capture": {
         "title": "Create and pin",
-        "body": "Open Post-its and use New Post-it or Alt+N. Text saves automatically. Finish with Ctrl+Enter or Escape: new notes default to Compact. Choose Micro to use just one line; the title is optional.",
+        "body": "Open Post-its and use New Post-it or Alt+N. Text saves automatically. Finish with Ctrl+Enter or Escape: the note automatically folds into a small titled tab.",
         "caption": "Click the illustrated tab to reveal the content. Additional notes wait in the queue."
       },
       "edit": {
         "title": "Edit in the note",
-        "body": "Hover or focus a Micro note to preview it. Space opens reading; Enter, double-click or Edit opens editing. Escape saves and returns to the preferred mode. In Expanded, adjust the size and Keep mode to prevent automatic previews.",
+        "body": "Hover or focus the tab to preview it. Click or press Space to read; Enter, double-click or Edit opens editing in the same window. Escape saves and folds the note. These states are automatic, with no mode settings.",
         "caption": "Try Edit: this illustration only changes the demo, leaving your vault untouched."
       },
       "done": {
@@ -1185,11 +1185,9 @@
     "saveShortcut": "Save · Ctrl+Enter",
     "desktopDisabled": "Desktop display is paused in Settings. Your notes remain saved.",
     "adaptive": {
-      "mode": "Presentation",
       "micro": "Micro",
       "compact": "Compact",
       "expanded": "Expanded",
-      "keepMode": "Keep mode",
       "move": "Move note",
       "read": "Read full note",
       "resize": "Resize note",

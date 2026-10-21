@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch, computed, nextTick } from 'vue'
-import PostitModeControls from '@/features/postits/components/PostitModeControls.vue'
 import { usePostitDraft } from '@/features/postits/composables/usePostitDraft'
 import { Plus, StickyNote, Check, Search } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
@@ -134,7 +133,6 @@ const editor = usePostitDraft(async (values) => {
     ...values,
     color: draft.value.color,
     pinned: draft.value.pinned,
-    ...(values.expectedRevision === 0 ? { preferredMode: 'compact' as const } : {}),
   })
   await refresh()
   const note = list.value.notes.find((n) => n.record.id === draft.value.id)
@@ -609,16 +607,6 @@ onBeforeUnmount(() => {
               ><template v-else>{{ part.text }}</template></template
             >
           </p>
-          <PostitModeControls
-            v-if="!note.record.archived"
-            :mode="
-              note.record.preferredMode ?? (note.record.collapsed ? 'micro' : 'expanded')
-            "
-            :locked="note.record.modeLocked"
-            :disabled="busy || editing"
-            @mode="patch(note, { preferredMode: $event })"
-            @lock="patch(note, { modeLocked: $event })"
-          />
           <small v-if="note.record.archived">{{ expiry(note) }}</small>
           <small v-else>{{
             t(

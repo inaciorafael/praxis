@@ -51,7 +51,7 @@ beforeEach(() => {
   })
 })
 describe('Desktop Post-it pile', () => {
-  it('opens one member editor lazily and restores its preferred mode after saving', async () => {
+  it('opens one member editor lazily and returns to idle after saving', async () => {
     const wrapper = mount(PostitWindow, { global: { plugins: [i18n] } })
     await flushPromises()
     expect(wrapper.find('textarea').exists()).toBe(false)

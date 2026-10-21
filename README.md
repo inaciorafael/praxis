@@ -36,11 +36,11 @@ Papers support personal use, screen sharing and explicit export. See [the produc
 
 ![Post-it organization with active notes and completion controls](docs/assets/praxis-postits.png)
 
-Write a free note and choose Micro, Compact or Expanded per note. Micro uses a single colored line with its title; hover or keyboard focus opens a temporary preview. Edit directly without reopening the organizer.
+Write a free note. It automatically folds into a small titled tab when idle, previews on hover or keyboard focus, and opens for reading or editing when activated. There are no presentation mode settings.
 
 - **Alt+N** in Post-its starts a note with focus on the text.
 - Text autosaves after a short pause; **Ctrl+Enter** or **Escape** finishes editing. The title is optional.
-- Choose and lock the preferred mode, drag the grip, or resize Expanded notes. Temporary previews preserve saved positions.
+- Drag the grip or resize an open note. Escape closes reading or saves and finishes editing, returning to the small tab. Temporary previews preserve saved positions.
 - Select notes in the organizer to create named piles. A pile uses one desktop window and opens its members on demand; ungrouping preserves them.
 - Search title and body across individual and grouped notes, with highlighted matches.
 - **Done** removes the window and keeps the note recoverable for seven days.

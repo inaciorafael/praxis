@@ -124,22 +124,20 @@
                   ? { width: 180, height: 40 }
                   : patch.preferredMode === 'compact'
                     ? { width: 248, height: 132 }
-                    : { width: 340, height: 380 }
+                    : { width: 280, height: 260 }
               )
             return
           }
 
           if (command === 'present_postit') {
-            const mode = args.editing
-              ? 'expanded'
-              : (args.mode ?? notes[0].record.preferredMode ?? 'micro')
+            const mode = args.editing ? 'expanded' : (args.mode ?? 'micro')
             Object.assign(
               frame,
               mode === 'micro'
                 ? { width: 180, height: 40 }
                 : mode === 'compact'
                   ? { width: 248, height: 132 }
-                  : (notes[0].record.expandedSize ?? { width: 340, height: 380 })
+                  : (notes[0].record.expandedSize ?? { width: 280, height: 260 })
             )
             return
           }
